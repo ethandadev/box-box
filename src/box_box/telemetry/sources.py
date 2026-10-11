@@ -24,13 +24,32 @@ class _Queueing(asyncio.DatagramProtocol):
             self.queue.put_nowait(data)
 
 
-async def udp_source(port: int = DEFAULT_PORT, host: str = "0.0.0.0") -> AsyncIterator[bytes]:
+class PortUnavailable(OSError):
+    """The UDP port is taken (another telemetry app?) or reserved by Windows."""
+
+    def __init__(self, port: int, cause: OSError) -> None:
+        super().__init__(cause.errno, f"can't listen on UDP port {port}: {cause.strerror or cause}")
+        self.port = port
+        self.cause = cause
+
+
+def bind_udp(port: int = DEFAULT_PORT, host: str = "0.0.0.0") -> socket.socket:
+    """Open the listening socket up front, so a taken port fails before anything else starts."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # No SO_REUSEADDR: on Windows it collides with apps that hold the port exclusively (WinError 10013),
+    # and on Linux it would let two listeners silently split the packets.
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
+    try:
+        sock.bind((host, port))
+    except OSError as e:
+        sock.close()
+        raise PortUnavailable(port, e) from e
+    return sock
+
+
+async def udp_source(sock: socket.socket) -> AsyncIterator[bytes]:
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=4096)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
-    sock.bind((host, port))
     transport, _ = await loop.create_datagram_endpoint(lambda: _Queueing(queue), sock=sock)
     try:
         while True:

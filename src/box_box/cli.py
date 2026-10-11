@@ -24,7 +24,7 @@ from box_box.state.model import World
 from box_box.telemetry import names
 from box_box.telemetry.packets import Decoder
 from box_box.telemetry.rawfile import RawWriter
-from box_box.telemetry.sources import DEFAULT_PORT, file_source, udp_source
+from box_box.telemetry.sources import DEFAULT_PORT, PortUnavailable, bind_udp, file_source, udp_source
 
 
 def _status_line(world: World) -> str:
@@ -62,16 +62,16 @@ async def _watch(source: AsyncIterator[bytes], quiet: bool) -> None:
             print(_status_line(world), file=sys.stderr)
 
 
-async def _record(port: int, out: Path) -> None:
+async def _record(sock: socket.socket, out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     decoder = Decoder()
     world = World()
     start = time.monotonic_ns()
     last = 0.0
     with RawWriter(out) as writer:
-        print(f"Recording UDP :{port} -> {out}  (Ctrl+C to stop)")
+        print(f"Recording UDP :{sock.getsockname()[1]} -> {out}  (Ctrl+C to stop)")
         try:
-            async for data in udp_source(port):
+            async for data in udp_source(sock):
                 writer.write(time.monotonic_ns() - start, data)
                 packet = decoder.decode(data)
                 if packet:
@@ -91,6 +91,23 @@ async def _replay(path: Path, host: str, port: int, speed: float) -> None:
         sock.sendto(data, (host, port))
         n += 1
     print(f"Sent {n} packets to {host}:{port}")
+
+
+def _port_help(err: PortUnavailable) -> str:
+    port = err.port
+    return f"""
+Can't listen for telemetry on UDP port {port} ({err.cause}).
+Another program is already using it, or Windows has reserved it. Try, in order:
+
+  1. Close other telemetry apps (SimHub, Crew Chief, F1 Laps, dashboards, another box-box window), run again.
+  2. Find who has the port:
+       netstat -ano -p udp | findstr :{port}
+       tasklist /fi "PID eq <the number at the end of that line>"
+  3. Check whether Windows reserved it (Hyper-V / WSL / Docker do this):
+       netsh int ipv4 show excludedportrange protocol=udp
+  4. Or just use another port: in F1 25 set Telemetry > UDP Port to {port + 1}, then run
+       uv run box-box {{cmd}} --port {port + 1}
+"""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -119,13 +136,17 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.cmd == "record":
+            sock = bind_udp(args.port)
             out = args.out or Path("recordings") / f"{datetime.now():%Y%m%d-%H%M%S}.f1raw"
-            asyncio.run(_record(args.port, out))
+            asyncio.run(_record(sock, out))
         elif args.cmd == "watch":
-            source = file_source(args.file, args.speed) if args.file else udp_source(args.port)
+            source = file_source(args.file, args.speed) if args.file else udp_source(bind_udp(args.port))
             asyncio.run(_watch(source, args.quiet))
         elif args.cmd == "replay":
             asyncio.run(_replay(args.file, args.host, args.port, args.speed))
+    except PortUnavailable as e:
+        print(_port_help(e).replace("{cmd}", args.cmd), file=sys.stderr)
+        return 1
     except KeyboardInterrupt:
         pass
     return 0
