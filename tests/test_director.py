@@ -155,3 +155,13 @@ def test_garage_counts_as_free_to_talk() -> None:
     d.on_telemetry(sim.world)
     d.offer([call("greet")])
     assert d.poll(sim.world, None) is not None
+
+
+def test_quali_lap_time_gets_through_just_after_the_line() -> None:
+    d, clock, sim, _ = setup(callouts={"straights_only": False})
+    sim.set_session(session_type=5)
+    sim.lap(0, driver_status=1, current_lap_ms=2500)  # 2.5 s into the next push lap
+    sim.tick()
+    d.offer([call("lap", category="lap_feedback")])
+    got = d.poll(sim.world, None)
+    assert got and got.call.key == "lap"

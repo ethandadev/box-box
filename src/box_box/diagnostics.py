@@ -162,7 +162,7 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
     stt = st["stt"]
     if stt["ready"]:
         detail = f"Speech recognition {stt['status']}."
-        if stt["device"] == "cpu" and gpu_name():
+        if stt["device"] == "cpu" and gpu_name() and engine.stt.gpu_libraries_missing:
             out.append(
                 check(
                     "stt",

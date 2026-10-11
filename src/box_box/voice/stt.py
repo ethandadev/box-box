@@ -55,6 +55,21 @@ def add_nvidia_dll_dirs() -> list[str]:
     return added
 
 
+def cuda_libraries_ok() -> bool:
+    """On Windows, CTranslate2 needs cuBLAS and cuDNN DLLs; check before downloading a GPU model for nothing."""
+    if sys.platform != "win32":
+        return True
+    import ctypes
+
+    add_nvidia_dll_dirs()
+    for dll in ("cublas64_12.dll", "cudnn_ops64_9.dll"):
+        try:
+            ctypes.WinDLL(dll)
+        except OSError:
+            return False
+    return True
+
+
 def cuda_devices() -> int:
     try:
         import ctranslate2
@@ -91,6 +106,7 @@ class SpeechToText:
         self.model_name = ""
         self.error: str | None = None
         self.extra_vocab = ""
+        self.gpu_libraries_missing = False
 
     @property
     def ready(self) -> bool:
@@ -110,8 +126,13 @@ class SpeechToText:
             add_nvidia_dll_dirs()
             cpu_model = model if model not in ("auto", "large-v3-turbo") else "small.en"
             attempts: list[tuple[str, str, str]] = []
+            self.gpu_libraries_missing = False
             if device != "cpu" and cuda_devices() > 0:
-                attempts.append((model if model != "auto" else "large-v3-turbo", "cuda", "float16"))
+                if cuda_libraries_ok():
+                    attempts.append((model if model != "auto" else "large-v3-turbo", "cuda", "float16"))
+                else:
+                    self.gpu_libraries_missing = True
+                    log.info("NVIDIA GPU found but cuBLAS/cuDNN aren't installed; speech recognition will use the CPU")
             attempts.append((cpu_model, "cpu", "int8"))  # always keep a CPU fallback
             errors = []
             for name, dev, compute in attempts:

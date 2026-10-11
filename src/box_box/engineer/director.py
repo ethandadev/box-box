@@ -28,6 +28,7 @@ BUDGET_PER_LAP = {Verbosity.QUIET: 2, Verbosity.NORMAL: 4, Verbosity.CHATTY: 7}
 MIN_SPACING_S = {Verbosity.QUIET: 8.0, Verbosity.NORMAL: 4.0, Verbosity.CHATTY: 2.5}
 STRAIGHT_HOLD_S = 0.35  # how long the car must have been "on a straight" before we start talking
 PUSH_LAP_ALLOWED = {"traffic", "flags"}
+LINE_WINDOW_MS = 6000  # just after the line on back-to-back push laps: time for the lap time and position
 
 _seq = itertools.count()
 
@@ -135,13 +136,15 @@ class RadioDirector:
         s = self._settings()
         verbosity = Verbosity.parse(s.engineer.verbosity)
         on_straight = self._driver_free(world, s, now)
+        me = world.player if world is not None else None
         push_lap = bool(
             s.callouts.quiet_on_push_laps
             and world is not None
             and world.is_qualifying
-            and world.player is not None
-            and world.player.driver_status == DriverStatus.FLYING_LAP
+            and me is not None
+            and me.driver_status == DriverStatus.FLYING_LAP
         )
+        just_crossed = bool(push_lap and me and me.lap and me.lap.current_lap_ms < LINE_WINDOW_MS)
 
         for q in list(self._queue):
             call = q.call
@@ -154,7 +157,9 @@ class RadioDirector:
                 if now < self._hold_until or now < self.muted_until:
                     continue
                 if push_lap and call.category not in PUSH_LAP_ALLOWED:
-                    continue
+                    line_call = call.category == "lap_feedback" or call.key == "quali_pos"
+                    if not (just_crossed and line_call):
+                        continue
             if not safety and not reply and call.priority >= Priority.INFO:
                 if self._spoken_this_lap >= BUDGET_PER_LAP[verbosity]:
                     continue
