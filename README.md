@@ -22,7 +22,7 @@ straights, and only when it matters. Hold a button on your wheel to talk back.
    | UDP Broadcast Mode | Off |
    | UDP IP Address | 127.0.0.1 |
    | UDP Port | 20777 |
-   | UDP Send Rate | 60Hz |
+   | UDP Send Rate | 20Hz (plenty for the engineer; keeps recordings small) |
    | UDP Format | **2026** (2025 also works, without the 2026 data) |
 
 3. Allow Python through Windows Firewall the first time it asks (private networks are enough).
@@ -31,13 +31,20 @@ straights, and only when it matters. Hold a button on your wheel to talk back.
 
 ```powershell
 uv run box-box watch                 # live: status line + the engineer's radio calls
-uv run box-box record                # save the session to recordings/<timestamp>.f1raw
-uv run box-box watch -f recordings\x.f1raw -s 4    # what would he have said? (4x speed)
-uv run box-box replay recordings\x.f1raw           # resend a recording over UDP as if the game were running
+uv run box-box record                # save the session to recordings\<timestamp>.f1raw.gz (Ctrl+C stops)
+uv run box-box watch -f recordings\x.f1raw.gz -s 4    # what would he have said? (4x speed)
+uv run box-box replay recordings\x.f1raw.gz           # resend a recording over UDP as if the game were running
 ```
 
 **Please record a few sessions.** One practice session with traffic around you and one full race give the
 best test data for tuning the engineer. Then the engineer can be developed without the game running.
+Recordings are compressed (about 1 MB per minute at 20Hz). Share them by committing them:
+
+```powershell
+git add recordings
+git commit -m "Add recordings"
+git push
+```
 
 Example radio calls from a practice out-lap:
 

@@ -81,7 +81,11 @@ async def _record(sock: socket.socket, out: Path) -> None:
                     writer.flush()
                     print(f"{writer.count:8d} packets | {_status_line(world)}", end="\r")
         finally:
-            print(f"\nSaved {writer.count} packets to {out}")
+            writer.close()
+            mb = out.stat().st_size / 1e6
+            print(f"\nSaved {writer.count} packets to {out} ({mb:.1f} MB)")
+            if mb > 95:
+                print("Too big for GitHub (100 MB limit): set UDP Send Rate to 20Hz or record a shorter session.")
 
 
 async def _replay(path: Path, host: str, port: int, speed: float) -> None:
@@ -137,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "record":
             sock = bind_udp(args.port)
-            out = args.out or Path("recordings") / f"{datetime.now():%Y%m%d-%H%M%S}.f1raw"
+            out = args.out or Path("recordings") / f"{datetime.now():%Y%m%d-%H%M%S}.f1raw.gz"
             asyncio.run(_record(sock, out))
         elif args.cmd == "watch":
             source = file_source(args.file, args.speed) if args.file else udp_source(bind_udp(args.port))

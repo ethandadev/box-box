@@ -94,3 +94,18 @@ def test_rawfile_roundtrip_ignores_truncated_tail(tmp_path: Path) -> None:
     with open(path, "ab") as f:
         f.write(b"\x03\x00\x00\x00\x00\x00\x00\x00\x09\x00par")  # record cut off mid-body
     assert list(read_records(path)) == [(1, b"abc"), (2, b"defg")]
+
+
+def test_gzip_recording_roundtrip_and_killed_mid_write(tmp_path: Path) -> None:
+    src = FIXTURES / "race-2026-monza-finish.f1raw"
+    path = tmp_path / "x.f1raw.gz"
+    with RawWriter(path) as w:
+        for t, data in read_records(src):
+            w.write(t, data)
+    assert path.stat().st_size < src.stat().st_size / 4
+    assert list(read_records(path)) == list(read_records(src))
+    # A recording killed mid-write has no gzip trailer: keep everything readable before the cut.
+    cut = tmp_path / "cut.f1raw.gz"
+    cut.write_bytes(path.read_bytes()[: path.stat().st_size // 2])
+    partial = list(read_records(cut))
+    assert 0 < len(partial) < len(list(read_records(src)))
