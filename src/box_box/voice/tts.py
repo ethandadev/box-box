@@ -6,14 +6,17 @@ from several threads), and results are cached so repeated phrases are instant.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import os
+import queue
 import sys
 import tempfile
 import threading
+import time
 import wave
 from collections import OrderedDict
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from pathlib import Path
 
 import numpy as np
@@ -121,15 +124,27 @@ def read_wav(path: Path) -> Audio:
     return data, sr
 
 
+URGENT, PREFETCH = 0, 1
+PREFETCH_MAX_AGE_S = 20.0  # a prefetch still queued after this long is for a call that's gone stale
+
+
 class TTS:
-    """Picks an engine from settings with automatic fallback, caches results, runs off the event loop."""
+    """Picks an engine from settings with automatic fallback, caches results, runs off the event loop.
+
+    One worker thread drains a priority queue: audio that's about to be played jumps ahead of prefetching,
+    identical requests share one synthesis, and old prefetches are dropped instead of piling up.
+    """
 
     def __init__(self, engines: dict[str, Engine] | None = None, cache_size: int = 300) -> None:
         self.engines = engines or {"kokoro": KokoroEngine(), "windows": WindowsEngine(), "off": SilentEngine()}
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts")
+        self._queue: queue.PriorityQueue = queue.PriorityQueue()
+        self._seq = itertools.count()
+        self._inflight: dict[tuple, Future[Audio]] = {}
         self._cache: OrderedDict[tuple, Audio] = OrderedDict()
         self._cache_size = cache_size
         self._lock = threading.Lock()
+        self._worker = threading.Thread(target=self._run, name="tts", daemon=True)
+        self._worker.start()
         self.active: str = "off"
         self.status: str = "not started"
         self.error: str | None = None
@@ -155,7 +170,7 @@ class TTS:
         self.active, self.status = "off", "no voice engine available"
         return "off"
 
-    def submit(self, text: str, voice: str, speed: float) -> Future[Audio]:
+    def submit(self, text: str, voice: str, speed: float, urgent: bool = True) -> Future[Audio]:
         key = (self.active, voice, round(speed, 2), text)
         with self._lock:
             cached = self._cache.get(key)
@@ -164,27 +179,59 @@ class TTS:
                 fut: Future[Audio] = Future()
                 fut.set_result(cached)
                 return fut
-        return self._executor.submit(self._synth, key, text, voice, speed)
+            existing = self._inflight.get(key)
+            if existing is not None:
+                if urgent:  # promote: queue it again at the front; the worker skips whichever runs second
+                    self._queue.put((URGENT, next(self._seq), time.monotonic(), key, text, voice, speed))
+                return existing
+            fut = Future()
+            self._inflight[key] = fut
+        self._queue.put((URGENT if urgent else PREFETCH, next(self._seq), time.monotonic(), key, text, voice, speed))
+        return fut
+
+    def _run(self) -> None:
+        while True:
+            priority, _, queued_at, key, text, voice, speed = self._queue.get()
+            if key is None:
+                return
+            with self._lock:
+                fut = self._inflight.get(key)
+            if fut is None or fut.done():
+                continue  # already synthesized via a promoted copy
+            if priority == PREFETCH and time.monotonic() - queued_at > PREFETCH_MAX_AGE_S:
+                with self._lock:
+                    self._inflight.pop(key, None)
+                fut.cancel()
+                continue
+            try:
+                audio = self._synth(key, text, voice, speed)
+            except Exception as e:  # noqa: BLE001
+                with self._lock:
+                    self._inflight.pop(key, None)
+                if not fut.done():
+                    fut.set_exception(e)
+                continue
+            with self._lock:
+                self._inflight.pop(key, None)
+                self._cache[key] = audio
+                while len(self._cache) > self._cache_size:
+                    self._cache.popitem(last=False)
+            if not fut.done():
+                fut.set_result(audio)
 
     def _synth(self, key: tuple, text: str, voice: str, speed: float) -> Audio:
-        engine = self.engines[self.active]
+        engine = self.engines.get(key[0]) or self.engines["off"]
         try:
-            audio = engine.synthesize(text, voice, speed)
+            return engine.synthesize(text, voice, speed)
         except Exception as e:
             log.exception("speech synthesis failed with %s", engine.name)
             self.error = f"{engine.name}: {e}"
             if engine.name != "windows" and "windows" in self.engines:
                 try:
-                    audio = self.engines["windows"].synthesize(text, voice, speed)
+                    return self.engines["windows"].synthesize(text, voice, speed)
                 except Exception:  # noqa: BLE001
                     raise e from None
-            else:
-                raise
-        with self._lock:
-            self._cache[key] = audio
-            while len(self._cache) > self._cache_size:
-                self._cache.popitem(last=False)
-        return audio
+            raise
 
     def shutdown(self) -> None:
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        self._queue.put((-1, next(self._seq), 0.0, None, "", "", 1.0))

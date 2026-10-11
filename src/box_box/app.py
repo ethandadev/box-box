@@ -222,7 +222,7 @@ class Engine:
             for c in calls:
                 self.bus.publish("queued", text=c.text, priority=c.priority.name, category=c.category)
             self.director.offer(calls)
-            self.speaker.prefetch(self.director.pending()[:3])
+            self.speaker.prefetch(self.director.pending()[:2])
 
     def _lifecycle(self, changes: list, events: list) -> None:
         world = self.world
@@ -504,6 +504,19 @@ class Engine:
             except Exception:
                 log.exception("status snapshot failed")
 
+    def _fastest_info(self, me) -> dict[str, Any] | None:  # type: ignore[no-untyped-def]
+        best = self.world.best_lap_overall()
+        if best is None:
+            return None
+        car, ms = best
+        mine = me.session_best_ms
+        return {
+            "name": car.name,
+            "time": lap_time(ms),
+            "delta": round((mine - ms) / 1000, 3) if mine else None,
+            "is_me": car is me,
+        }
+
     def status(self) -> dict[str, Any]:
         w = self.world
         s = w.session
@@ -539,6 +552,7 @@ class Engine:
                 "battery": round(me.status.ers_store_j / 4e6 * 100) if me.status else None,
                 "best_lap": lap_time(me.session_best_ms) if me.session_best_ms else None,
                 "last_lap": lap_time(me.lap.last_lap_ms) if me.lap.last_lap_ms else None,
+                "fastest": self._fastest_info(me) if not w.is_race else None,
                 "ahead": {"name": ahead.name, "gap": round(w.race_gap_s(ahead, me) or 0, 1)} if ahead else None,
                 "behind": {"name": behind.name, "gap": round(w.race_gap_s(me, behind) or 0, 1)} if behind else None,
                 "status": {0: "Garage", 1: "Push lap", 2: "In lap", 3: "Out lap", 4: "On track"}.get(

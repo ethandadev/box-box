@@ -39,7 +39,7 @@ class Speaker:
             return
         voice, speed = self._voice()
         for c in calls:
-            self.tts.submit(for_speech(c.text), voice, speed)
+            self.tts.submit(for_speech(c.text), voice, speed, urgent=False)
 
     def stop(self) -> None:
         """Barge-in: cut the engineer off mid-sentence."""
@@ -62,9 +62,16 @@ class Speaker:
             future = self.tts.submit(for_speech(call.text), voice, speed)
             try:
                 samples, sr = await asyncio.wait_for(asyncio.wrap_future(future), SYNTH_TIMEOUT_S)
+            except TimeoutError:
+                log.error("voice took over %ss for %r", SYNTH_TIMEOUT_S, call.text)
+                self.bus.publish(
+                    "warning",
+                    message="The voice is taking too long. Your CPU may be busy; try the Windows voice in Settings > Voice.",
+                )
+                return False
             except Exception as e:  # noqa: BLE001
                 log.error("couldn't synthesize %r: %s", call.text, e)
-                self.bus.publish("warning", message=f"Voice failed: {e}")
+                self.bus.publish("warning", message=f"Voice failed: {e or type(e).__name__}")
                 return False
             if generation != self._generation or len(samples) == 0:
                 return False

@@ -64,6 +64,16 @@ def cuda_devices() -> int:
         return 0
 
 
+def _explain(e: Exception) -> str:
+    text = str(e) or type(e).__name__
+    low = text.lower()
+    if any(k in low for k in ("403", "connect", "timed out", "resolve", "offline", "network", "ssl")):
+        return f"couldn't download the speech model ({text}). Check your internet connection, then click Fix"
+    if "cublas" in low or "cudnn" in low or ".dll" in low or "cuda" in low:
+        return f"NVIDIA libraries missing ({text})"
+    return text
+
+
 @dataclass
 class Transcript:
     text: str
@@ -120,7 +130,7 @@ class SpeechToText:
                     return
                 except Exception as e:  # noqa: BLE001
                     log.warning("speech recognition %s on %s failed: %s", name, dev, e)
-                    errors.append(f"{name} on {dev}: {e}")
+                    errors.append(f"{name} on {dev.upper()}: {_explain(e)}")
             self.status, self.error = "failed to load", "; ".join(errors)
 
     def transcribe_async(self, audio: np.ndarray) -> Future[Transcript]:

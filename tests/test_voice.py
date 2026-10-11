@@ -167,3 +167,36 @@ def test_downloader_resumes_and_verifies(server, tmp_path: Path, monkeypatch) ->
     prog = dl2.progress()
     assert prog["state"] == "error" and "corrupt" in prog["error"]
     assert not (tmp_path / "bad.bin").exists()
+
+
+def test_tts_queue_prioritises_and_dedupes() -> None:
+    import threading
+    import time
+
+    order: list[str] = []
+    gate = threading.Event()
+
+    class Slow(Engine):
+        name = "kokoro"
+
+        def synthesize(self, text, voice, speed):  # type: ignore[no-untyped-def]
+            gate.wait(2)
+            order.append(text)
+            return np.zeros(10, dtype=np.float32), 24_000
+
+    tts = TTS({"kokoro": Slow(), "off": SilentEngine()})
+    tts.choose("kokoro")
+    first = tts.submit("blocker", "v", 1.0, urgent=False)  # occupies the worker
+    time.sleep(0.05)
+    p1 = tts.submit("prefetch one", "v", 1.0, urgent=False)
+    p2 = tts.submit("prefetch two", "v", 1.0, urgent=False)
+    now = tts.submit("say this now", "v", 1.0)
+    again = tts.submit("prefetch two", "v", 1.0)  # same text: shares the future, promoted
+    assert again is p2
+    gate.set()
+    for f in (first, p1, p2, now):
+        f.result(5)
+    assert order[0] == "blocker" and order[1] in ("say this now", "prefetch two")
+    assert order.index("say this now") < order.index("prefetch one")
+    assert order.count("prefetch two") == 1
+    tts.shutdown()

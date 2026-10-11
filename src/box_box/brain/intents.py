@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from box_box.brain import tools
-from box_box.engineer.radio import gap, lap_time
+from box_box.engineer.radio import gap, lap_time, tenths
 from box_box.state.model import World
 
 
@@ -105,8 +105,11 @@ def _gap(t: str, w: World, a: Actions, me: str) -> Answer | None:
         if g.get("fastest") and g.get("my_best"):
             if g["fastest"]["name"] == (w.player.name if w.player else ""):
                 return Answer(f"You're quickest, {g['my_best']}.")
-            return Answer(f"Your best is {g['my_best']}, {g['off_fastest_s']:.3f} off {g['fastest']['name']}.")
-        return Answer("No lap time yet.")
+            return Answer(f"Your best is {g['my_best']}, {tenths(g['off_fastest_s'])} off {g['fastest']['name']}.")
+        best = w.best_lap_overall()
+        if best:
+            return Answer(f"No lap time for you yet. {best[0].name} is quickest, {lap_time(best[1])}.")
+        return Answer("No lap times yet.")
     want_behind = bool(re.search(r"behind|back|following", t))
     want_ahead = bool(re.search(r"ahead|front|in front|leader", t)) or not want_behind
     parts = []
