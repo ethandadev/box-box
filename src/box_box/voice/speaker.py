@@ -26,7 +26,7 @@ class Speaker:
         self._settings = settings
         self.bus = bus or Bus()
         self.speaking: RadioCall | None = None
-        self._cut = False
+        self._generation = 0  # bumped by stop(); a call whose generation is stale must not play
         self.spoken = 0
 
     def _voice(self) -> tuple[str, float]:
@@ -43,14 +43,14 @@ class Speaker:
 
     def stop(self) -> None:
         """Barge-in: cut the engineer off mid-sentence."""
-        self._cut = True
+        self._generation += 1
         self.player.stop()
 
     async def say(self, call: RadioCall) -> bool:
         """Speak one call. Returns True if it played to the end."""
         s = self._settings()
         self.speaking = call
-        self._cut = False
+        generation = self._generation
         self.bus.publish(
             "radio", id=call.id, text=call.text, priority=call.priority.name, category=call.category, source=call.source
         )
@@ -66,13 +66,18 @@ class Speaker:
                 log.error("couldn't synthesize %r: %s", call.text, e)
                 self.bus.publish("warning", message=f"Voice failed: {e}")
                 return False
-            if self._cut or len(samples) == 0:
+            if generation != self._generation or len(samples) == 0:
                 return False
-            audio = fx.radio(samples, sr, s.voice.radio_effect, beeps=s.voice.beeps)
+            try:
+                audio = fx.radio(samples, sr, s.voice.radio_effect, beeps=s.voice.beeps)
+            except Exception:  # noqa: BLE001 - a broken effect must never silence the engineer
+                log.exception("radio effect failed; playing the dry voice")
+                audio = samples
             self.player.volume = s.voice.volume
             done = await asyncio.wrap_future(self.player.play(audio, sr))
             self.spoken += 1
-            return bool(done) and not self._cut
+            return bool(done) and generation == self._generation
         finally:
-            self.speaking = None
+            if self.speaking is call:  # an interrupting call may already have taken over
+                self.speaking = None
             self.bus.publish("radio_done", id=call.id)

@@ -26,7 +26,7 @@ def _bandpass(x: np.ndarray, sr: int, low: float, high: float) -> np.ndarray:
 
 
 def _envelope(x: np.ndarray, sr: int, ms: float) -> np.ndarray:
-    win = max(1, int(sr * ms / 1000))
+    win = max(1, min(len(x), int(sr * ms / 1000)))  # never longer than the clip (np.convolve "same" grows)
     kernel = np.ones(win, dtype=np.float32) / win
     return np.convolve(np.abs(x), kernel, mode="same")
 
@@ -68,7 +68,7 @@ def radio(samples: np.ndarray, sr: int, intensity: float, beeps: bool = True, se
     rng = np.random.default_rng(seed)
     x = _normalize(np.asarray(samples, dtype=np.float32))
     i = float(np.clip(intensity, 0.0, 1.0))
-    if i > 0:
+    if i > 0 and len(x) >= 16:
         low, high = 200 + 250 * i, 6500 - 3300 * i
         wet = _bandpass(x, sr, low, high)
         wet = _compress(wet, sr)

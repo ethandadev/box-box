@@ -33,6 +33,12 @@ def test_normalizer(text: str, spoken: str) -> None:
     assert for_speech(text) == spoken
 
 
+@pytest.mark.parametrize("n", [0, 1, 50, 240, 359, 361])
+def test_radio_effect_handles_tiny_clips(n: int) -> None:
+    out = fx.radio(np.full(n, 0.2, dtype=np.float32), 24_000, 1.0, seed=1)
+    assert not np.isnan(out).any()
+
+
 def test_radio_effect_band_limits_and_stays_in_range() -> None:
     sr = 24_000
     t = np.arange(sr) / sr

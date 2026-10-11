@@ -16,7 +16,7 @@ class Bus:
 
     def publish(self, kind: str, **payload: Any) -> None:
         event = {"type": kind, "at": time.time(), **payload}
-        if kind in ("radio", "driver", "status_change", "warning"):
+        if kind in ("radio", "driver", "queued", "warning", "transcript"):
             self.history.append(event)
         for q in list(self._subscribers):
             with contextlib.suppress(asyncio.QueueFull):
