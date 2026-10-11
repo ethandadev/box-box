@@ -125,8 +125,21 @@ def compound_name(visual_compound: int) -> str:
 
 
 def surname(full_name: str) -> str:
-    """'Max VERSTAPPEN' -> 'Verstappen'. The game sends AI names in this form; online names pass through."""
-    parts = full_name.split()
-    if len(parts) >= 2 and parts[-1].isupper():
-        return parts[-1].capitalize()
-    return full_name
+    """How a driver is said on the radio.
+
+    F1 25 sends AI drivers as an uppercase surname ("NORRIS", "PÉREZ"), sometimes with a first name
+    ("Max VERSTAPPEN"). Online players' names pass through unchanged.
+    """
+    name = full_name.strip()
+    if not name:
+        return name
+    words = name.split()
+    upper = [w for w in words if w.isupper() and any(ch.isalpha() for ch in w)]
+    if upper:
+        # Surname is the run of uppercase words ("DE VRIES"); title-case it, keeping particles natural.
+        return " ".join(_title(w) for w in upper)
+    return name
+
+
+def _title(word: str) -> str:
+    return "-".join(part[:1].upper() + part[1:].lower() for part in word.split("-"))

@@ -389,6 +389,33 @@ class Event:
 
 
 @dataclass(frozen=True, slots=True)
+class HistoryLap:
+    lap_ms: int
+    sector1_ms: int
+    sector2_ms: int
+    sector3_ms: int
+    valid: bool  # whole lap valid (bit 0 of the lap's valid flags)
+
+
+@dataclass(frozen=True, slots=True)
+class SessionHistory:
+    """One car's lap history. The game sends one car per packet, cycling through the field."""
+
+    car_index: int
+    laps: tuple[HistoryLap, ...]  # completed and in-progress laps, oldest first
+    best_lap_num: int  # 1-based, 0 = none
+    best_sector_laps: tuple[int, int, int]
+    stints: tuple[tuple[int, int, int], ...]  # (end lap, actual compound, visual compound); end 255 = current
+
+    @property
+    def best_lap_ms(self) -> int | None:
+        if 1 <= self.best_lap_num <= len(self.laps):
+            ms = self.laps[self.best_lap_num - 1].lap_ms
+            return ms or None
+        return None
+
+
+@dataclass(frozen=True, slots=True)
 class Packet:
     header: Header
     id: PacketId
@@ -660,6 +687,31 @@ def _session(data: bytes, fmt: int) -> Session:
     )
 
 
+_HISTORY_HEAD = struct.Struct("<7B")
+_HISTORY_LAP = struct.Struct("<IHBHBHBB")  # 14 bytes
+_HISTORY_STINT = struct.Struct("<3B")
+
+
+def _session_history(data: bytes) -> SessionHistory:
+    car, num_laps, num_stints, best, b1, b2, b3 = _HISTORY_HEAD.unpack_from(data, HEADER.size)
+    base = HEADER.size + _HISTORY_HEAD.size
+    laps = []
+    for i in range(min(num_laps, 100)):
+        v = _HISTORY_LAP.unpack_from(data, base + i * _HISTORY_LAP.size)
+        laps.append(
+            HistoryLap(
+                lap_ms=v[0],
+                sector1_ms=v[2] * 60_000 + v[1],
+                sector2_ms=v[4] * 60_000 + v[3],
+                sector3_ms=v[6] * 60_000 + v[5],
+                valid=bool(v[7] & 0x01),
+            )
+        )
+    stint_base = base + 100 * _HISTORY_LAP.size
+    stints = tuple(_HISTORY_STINT.unpack_from(data, stint_base + i * 3) for i in range(min(num_stints, 8)))
+    return SessionHistory(car, tuple(laps), best, (b1, b2, b3), stints)
+
+
 _EVENT_DETAILS = HEADER.size + 4
 
 
@@ -727,17 +779,39 @@ def _event(data: bytes, fmt: int) -> Event:
 class Decoder:
     """Turns raw datagrams into `Packet`s. Unknown formats and wrong sizes are dropped with one warning each."""
 
-    def __init__(self) -> None:
+    # What the engineer actually reads. Motion, setups, tyre sets etc. are skipped unless asked for:
+    # at 60 Hz, decoding all 24 cars of every packet type is most of the CPU this app uses.
+    DEFAULT_WANTED = frozenset(
+        {
+            PacketId.SESSION,
+            PacketId.LAP_DATA,
+            PacketId.EVENT,
+            PacketId.PARTICIPANTS,
+            PacketId.CAR_TELEMETRY,
+            PacketId.CAR_STATUS,
+            PacketId.CAR_DAMAGE,
+            PacketId.SESSION_HISTORY,
+            PacketId.CAR_TELEMETRY_2,
+        }
+    )
+
+    def __init__(self, wanted: frozenset[int] | set[int] | None = None) -> None:
+        self.wanted = frozenset(PacketId) if wanted is None else frozenset(wanted)
         self._warned: set[tuple[object, ...]] = set()
         self.last_warning: str | None = None
+        self.packets = 0  # valid packets seen (wanted or not), for the diagnostics page
+        self.dropped = 0
+        self.last_format: int | None = None
 
     def decode(self, data: bytes) -> Packet | None:
         if len(data) < HEADER.size:
+            self.dropped += 1
             self._warn(("short",), f"dropping {len(data)}-byte datagram (shorter than a header)")
             return None
         fmt = data[0] | data[1] << 8
         lay = LAYOUTS.get(fmt)
         if lay is None:
+            self.dropped += 1
             self._warn(("format", fmt), f"unsupported UDP format {fmt}: set UDP Format to 2026 (or 2025) in-game")
             return None
         pid = data[6]
@@ -745,7 +819,12 @@ class Decoder:
         if expected is None:
             return None
         if len(data) != expected:
+            self.dropped += 1
             self._warn(("size", fmt, pid), f"format {fmt} packet {pid}: expected {expected} bytes, got {len(data)}")
+            return None
+        self.packets += 1
+        self.last_format = fmt
+        if pid not in self.wanted:
             return None
 
         header = Header(*HEADER.unpack_from(data))
@@ -770,6 +849,8 @@ class Decoder:
                 return Packet(header, pid, _car_damage(lay, data))
             case PacketId.CAR_TELEMETRY_2:
                 return Packet(header, pid, _car_telemetry_2(lay, data))
+            case PacketId.SESSION_HISTORY:
+                return Packet(header, pid, _session_history(data))
             case _:
                 return Packet(header, pid, None)
 
