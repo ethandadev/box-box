@@ -1,5 +1,7 @@
 import pytest
 
+from box_box.config import Settings
+from box_box.engineer.base import Context
 from box_box.engineer.radio import Phrasebook, Priority, RadioCall
 from box_box.engineer.traffic import TrafficDetector
 from box_box.state.model import World
@@ -11,7 +13,8 @@ FLYING, IN_LAP, OUT_LAP = DriverStatus.FLYING_LAP, DriverStatus.IN_LAP, DriverSt
 
 
 def run(scenario: Scenario, seconds: float, dt: float = 0.1) -> list[RadioCall]:
-    decoder, world, detector = Decoder(), World(), TrafficDetector(phrasebook=Phrasebook(seed=1))
+    decoder, world, detector = Decoder(), World(), TrafficDetector()
+    settings, say = Settings(), Phrasebook(seed=1)
     calls: list[RadioCall] = []
     for data in scenario.setup():
         world.apply(decoder.decode(data))
@@ -19,7 +22,7 @@ def run(scenario: Scenario, seconds: float, dt: float = 0.1) -> list[RadioCall]:
     for _ in range(steps + 1):
         for data in scenario.frame():
             world.apply(decoder.decode(data))
-        calls += detector.update(world)
+        calls += detector.update(Context(world, world.drain_changes(), world.drain_events(), settings, say))
         scenario.step(dt)
     return calls
 

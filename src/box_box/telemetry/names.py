@@ -35,9 +35,9 @@ TRACKS: dict[int, str] = {
 
 SESSION_TYPES: dict[int, str] = {
     0: "Unknown",
-    1: "P1",
-    2: "P2",
-    3: "P3",
+    1: "FP1",
+    2: "FP2",
+    3: "FP3",
     4: "Short Practice",
     5: "Q1",
     6: "Q2",

@@ -38,7 +38,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
-ignore = ["SIM105", "SIM108"]
+ignore = ["SIM105", "SIM108", "E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

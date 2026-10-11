@@ -1,15 +1,21 @@
-"""Traffic management in practice and qualifying: the "car behind on a push lap" and "traffic ahead" calls.
+"""Traffic management in practice and qualifying.
 
-Each encounter with another car is called at most once per stage (early warning, then close), and the
-encounter resets once they're past you or have dropped well back, so the engineer never nags.
+- A car on a push lap closing on you while you're on an out/in lap: an early heads-up, then "let them by".
+- You on a push lap closing on a slow car: "traffic ahead".
+- A car leaving the pit lane just ahead of you.
+
+Each encounter is called at most once per stage and resets once the car is past or well back, so the
+engineer never nags. Cars that are already alongside when they first become relevant (you can see
+them) get no call: tuned on a real practice session where an in-lap car ran wheel to wheel for 40 s.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from box_box.engineer.radio import Phrasebook, Priority, RadioCall, spoken_seconds
-from box_box.state.model import CarState, World
+from box_box.engineer.base import Context, Detector
+from box_box.engineer.radio import Priority, RadioCall, spoken_seconds
+from box_box.state.model import CarState
 from box_box.state.track import gap_seconds, road_offset, time_to_catch
 from box_box.telemetry.packets import DriverStatus
 
@@ -21,6 +27,8 @@ class TrafficConfig:
     behind_early_s: float = 8.0  # first heads-up for a pushing car behind
     behind_close_s: float = 3.0  # "let them by"
     ahead_s: float = 6.0  # slow car ahead while you're on a push lap
+    min_first_ahead_s: float = 1.5  # already this close when it becomes relevant: you can see it, stay quiet
+    pit_exit_s: float = 6.0
     reset_s: float = 15.0  # encounter over once the gap grows past this
     min_speed_kph: float = 60.0  # ignore cars crawling out of the garage or spun
 
@@ -30,17 +38,18 @@ class _Encounter:
     stages: set[str] = field(default_factory=set)
 
 
-class TrafficDetector:
-    def __init__(self, config: TrafficConfig | None = None, phrasebook: Phrasebook | None = None) -> None:
-        self.cfg = config or TrafficConfig()
-        self.say = phrasebook or Phrasebook()
-        self._encounters: dict[int, _Encounter] = {}
-        self._timeline = -1
+class TrafficDetector(Detector):
+    name = "traffic"
 
-    def update(self, world: World) -> list[RadioCall]:
-        if world.timeline != self._timeline:
-            self._encounters.clear()  # flashback/new session: forget who we've already called
-            self._timeline = world.timeline
+    def __init__(self, config: TrafficConfig | None = None) -> None:
+        self.cfg = config or TrafficConfig()
+        super().__init__()
+
+    def reset(self) -> None:
+        self._encounters: dict[int, _Encounter] = {}
+
+    def check(self, ctx: Context) -> list[RadioCall]:
+        world = ctx.world
         if world.is_race or world.track_length <= 0:
             return []
         me = world.player
@@ -49,20 +58,45 @@ class TrafficDetector:
 
         calls: list[RadioCall] = []
         for car in world.others():
-            if not car.on_track or car.speed_kph < self.cfg.min_speed_kph:
+            if car.lap is None:
+                continue
+            if self._leaving_pits(car):
+                call = self._check_pit_exit(ctx, me, car)
+            elif not car.on_track or car.speed_kph < self.cfg.min_speed_kph:
                 self._encounters.pop(car.index, None)
                 continue
-            call = self._check(world, me, car)
+            else:
+                call = self._check(ctx, me, car)
             if call:
                 calls.append(call)
         return calls
 
-    def _check(self, world: World, me: CarState, car: CarState) -> RadioCall | None:
+    @staticmethod
+    def _leaving_pits(car: CarState) -> bool:
+        return bool(
+            car.lap and car.lap.pit_status == 1 and car.lap.driver_status == DriverStatus.OUT_LAP and car.speed_kph > 30
+        )
+
+    def _check_pit_exit(self, ctx: Context, me: CarState, car: CarState) -> RadioCall | None:
         assert me.lap and car.lap
-        offset = road_offset(me.lap.lap_distance, car.lap.lap_distance, world.track_length)
+        enc = self._encounters.setdefault(car.index, _Encounter())
+        if "pit_exit" in enc.stages or me.driver_status != DriverStatus.FLYING_LAP:
+            return None
+        offset = road_offset(me.lap.lap_distance, car.lap.lap_distance, ctx.world.track_length)
+        if offset <= 0:
+            return None
+        gap = gap_seconds(offset, me.speed_kph)
+        if gap is None or gap > self.cfg.pit_exit_s:
+            return None
+        enc.stages |= {"pit_exit", "ahead"}  # one call covers the whole encounter
+        text = ctx.say("pit_exit_ahead", name=car.name)
+        return ctx.call(f"traffic:{car.index}", Priority.STRATEGY, text, ttl=3.0, category="traffic")
+
+    def _check(self, ctx: Context, me: CarState, car: CarState) -> RadioCall | None:
+        assert me.lap and car.lap
+        offset = road_offset(me.lap.lap_distance, car.lap.lap_distance, ctx.world.track_length)
         mine, theirs = me.driver_status, car.driver_status
         enc = self._encounters.setdefault(car.index, _Encounter())
-        now = world.session_time
 
         if offset < 0 and theirs == DriverStatus.FLYING_LAP and mine in NOT_PUSHING:
             gap_m = -offset
@@ -75,29 +109,12 @@ class TrafficDetector:
                 return None
             if gap <= self.cfg.behind_close_s and "behind_close" not in enc.stages:
                 enc.stages |= {"behind_close", "behind_early"}
-                text = self.say.pick(
-                    "behind_close",
-                    [
-                        "{name} right behind, push lap. Let {name} by.",
-                        "Mirrors. {name} on a push lap, right behind you.",
-                        "{name} is on it, right behind. Stay off the line.",
-                    ],
-                    name=car.name,
-                )
-                return RadioCall(f"traffic:{car.index}", Priority.SAFETY, text, now, now + 2.0)
+                text = ctx.say("behind_close", name=car.name)
+                return ctx.call(f"traffic:{car.index}", Priority.SAFETY, text, ttl=2.0, category="traffic")
             if gap <= self.cfg.behind_early_s and not enc.stages:
                 enc.stages.add("behind_early")
-                text = self.say.pick(
-                    "behind_early",
-                    [
-                        "{name} behind on a push lap, {gap}.",
-                        "Car behind on a hot lap, {name}, {gap}.",
-                        "Heads up, {name} pushing behind you, {gap}.",
-                    ],
-                    name=car.name,
-                    gap=spoken_seconds(gap),
-                )
-                return RadioCall(f"traffic:{car.index}", Priority.STRATEGY, text, now, now + 3.0)
+                text = ctx.say("behind_early", name=car.name, gap=spoken_seconds(gap))
+                return ctx.call(f"traffic:{car.index}", Priority.STRATEGY, text, ttl=3.0, category="traffic")
             return None
 
         if offset > 0 and mine == DriverStatus.FLYING_LAP and theirs in NOT_PUSHING:
@@ -106,21 +123,22 @@ class TrafficDetector:
             if gap is None or gap > self.cfg.reset_s:
                 enc.stages.clear()
                 return None
-            if closing and gap <= self.cfg.ahead_s and "ahead" not in enc.stages:
+            if "ahead" in enc.stages:
+                return None
+            if gap < self.cfg.min_first_ahead_s:
+                enc.stages.add("ahead")  # already right there: the driver can see them
+                return None
+            if closing and gap <= self.cfg.ahead_s:
                 enc.stages.add("ahead")
-                lap_kind = "an out lap" if theirs == DriverStatus.OUT_LAP else "a slow lap"
-                text = self.say.pick(
-                    "ahead",
-                    [
-                        "Traffic ahead, {name} on {kind}, {gap}.",
-                        "{name} ahead on {kind}, {gap}. They know you're coming.",
-                        "Slow car ahead, {name}, {gap}.",
-                    ],
-                    name=car.name,
-                    kind=lap_kind,
-                    gap=spoken_seconds(gap),
+                kind = (
+                    "an out lap"
+                    if theirs == DriverStatus.OUT_LAP
+                    else "an in lap"
+                    if theirs == DriverStatus.IN_LAP
+                    else "a slow lap"
                 )
-                return RadioCall(f"traffic:{car.index}", Priority.STRATEGY, text, now, now + 2.5)
+                text = ctx.say("ahead_slow", name=car.name, kind=kind, gap=spoken_seconds(gap))
+                return ctx.call(f"traffic:{car.index}", Priority.STRATEGY, text, ttl=2.5, category="traffic")
             return None
 
         # Neither case applies (they're past, or nobody's pushing): the encounter is over.
