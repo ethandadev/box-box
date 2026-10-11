@@ -149,6 +149,11 @@ class AISettings:
         "Haiku is fastest. Sonnet is smarter but slower to answer on the radio.",
         choices=[("claude-haiku-5-5", "Claude Haiku 5.5 (fast)"), ("claude-sonnet-5-5", "Claude Sonnet 5.5 (smarter)")],
     )
+    fast_answers: bool = opt(
+        True,
+        "Instant answers for common questions",
+        "Gaps, tyres, fuel, position etc. are answered locally with no delay.",
+    )
     debrief: bool = opt(True, "Spoken debrief after sessions", "")
 
 
