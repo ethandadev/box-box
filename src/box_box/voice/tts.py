@@ -58,7 +58,9 @@ class KokoroEngine(Engine):
             from kokoro_onnx import Kokoro
         except Exception as e:  # noqa: BLE001
             raise TTSUnavailable(f"kokoro-onnx isn't installed: {e}") from e
-        self._kokoro = Kokoro(str(self.files.path("kokoro-v1.0.int8.onnx")), str(self.files.path("voices-v1.0.bin")))
+        kokoro = Kokoro(str(self.files.path("kokoro-v1.0.int8.onnx")), str(self.files.path("voices-v1.0.bin")))
+        kokoro.create("Radio check.", voice="am_michael", speed=1.0, lang="en-us")  # warm up: the first call is slow
+        self._kokoro = kokoro
 
     def synthesize(self, text: str, voice: str, speed: float) -> Audio:
         self.load()

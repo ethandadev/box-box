@@ -139,14 +139,19 @@ def test_push_to_talk_question_gets_spoken_answer(tmp_path: Path) -> None:
 
     async def scenario() -> None:
         await engine.start()
-        engine.on_ptt(True)
+        engine.on_ptt(True)  # an accidental tap: ignored
         await asyncio.sleep(0.05)
+        engine.on_ptt(False)
+        await asyncio.sleep(0.5)
+        assert not any(e["type"] == "driver" for e in engine.bus.history)
+        engine.on_ptt(True)
+        await asyncio.sleep(0.5)
         engine.on_ptt(False)
         await asyncio.sleep(1.5)
         await engine.stop()
 
     asyncio.run(scenario())
-    assert "Loud and clear, Ethan." in radio_lines(engine)
+    assert radio_lines(engine).count("Loud and clear, Ethan.") == 1
     kinds = [e["type"] for e in engine.bus.history]
     assert "driver" in kinds
 

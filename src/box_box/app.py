@@ -42,6 +42,7 @@ from box_box.voice.tts import TTS
 log = logging.getLogger(__name__)
 
 RADIO_POLL_S = 0.05
+MIN_PTT_HOLD_S = 0.3
 STATUS_EVERY_S = 0.5
 CONNECTED_WITHIN_S = 3.0
 _reply_ids = itertools.count(1)
@@ -114,6 +115,7 @@ class Engine:
         self._session_db_id: int | None = None
         self._ended_sessions: set[int] = set()
         self._tts_wanted: str | None = None
+        self._ptt_pressed_at = 0.0
         self.started_at = time.time()
         store.on_change(self._settings_changed_from_any_thread)
 
@@ -204,6 +206,8 @@ class Engine:
                 return
             self.world.apply(packet)
             self.world.last_packet_time = time.monotonic()
+            if packet.id == PacketId.PARTICIPANTS:
+                self._update_vocab()
             if packet.id == PacketId.LAP_DATA:
                 self._tick()
         except Exception:
@@ -237,14 +241,24 @@ class Engine:
                     self._session_db_id = self.memory.start_session(
                         world.session_uid, names.track_name(s.track_id), names.session_name(s.session_type)
                     )
-                    track_name = names.track_name(s.track_id)
-                    self.stt.extra_vocab = " ".join(c.name for c in world.cars if c.participant) + f" {track_name}"
-                    self.bus.publish("session", track=track_name, session=names.session_name(s.session_type))
+                    self._update_vocab()
+                    self.bus.publish(
+                        "session", track=names.track_name(s.track_id), session=names.session_name(s.session_type)
+                    )
             elif isinstance(change, LapCompleted) and change.car_index == world.player_index and self._session_db_id:
                 self.memory.record_lap(self._session_db_id, change.record)
         if any(e.code == "SEND" for e in events) and world.session_uid not in self._ended_sessions:
             self._ended_sessions.add(world.session_uid)
             self._end_session()
+
+    def _update_vocab(self) -> None:
+        """Teach speech recognition this session's driver names and track (so 'Hülkenberg' isn't 'hulk and burg')."""
+        s = self.world.session
+        drivers = sorted({c.name for c in self.world.cars if c.participant and c.participant.name})
+        vocab = "Drivers: " + ", ".join(drivers) + "." if drivers else ""
+        if s is not None:
+            vocab += f" Track: {names.track_name(s.track_id)}."
+        self.stt.extra_vocab = vocab
 
     def _end_session(self) -> None:
         me = self.world.player
@@ -336,10 +350,14 @@ class Engine:
         self.bus.publish("ptt", active=pressed)
         self.director.on_ptt(pressed)
         if pressed:
+            self._ptt_pressed_at = time.monotonic()
             self.speaker.stop()
             self.mic.start_recording()
         else:
             audio = self.mic.stop_recording()
+            if time.monotonic() - self._ptt_pressed_at < MIN_PTT_HOLD_S:
+                self.director.release_hold()  # an accidental tap: ignore it rather than "say again?"
+                return
             self._spawn(self._handle_utterance(audio))
 
     async def _handle_utterance(self, audio) -> None:  # type: ignore[no-untyped-def]

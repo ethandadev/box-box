@@ -28,3 +28,15 @@ jobs:
       - name: Doctor (smoke test)
         run: uv run box-box doctor
         continue-on-error: true  # CI runners have no audio devices
+
+  smoke-windows:
+    name: windows smoke test (real voice, speech, engine, UI)
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run python scripts/smoke.py
