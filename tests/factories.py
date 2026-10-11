@@ -21,7 +21,6 @@ from box_box.telemetry.packets import (
     PacketId,
     Participant,
     Session,
-    WeatherSample,
 )
 
 UID = 0xC0FFEE
@@ -156,14 +155,23 @@ def header(pid: PacketId, t: float, player: int = 0) -> Header:
 class Sim:
     """A World plus the detectors under test; mutate cars with `set_*`, then `tick()`."""
 
-    def __init__(self, detectors: list[Detector], *, cars: int = 6, session: Session | None = None, settings: Settings | None = None):
+    def __init__(
+        self,
+        detectors: list[Detector],
+        *,
+        cars: int = 6,
+        session: Session | None = None,
+        settings: Settings | None = None,
+    ):
         self.world = World()
         self.detectors = detectors
         self.settings = settings or Settings()
         self.say = Phrasebook("calm", seed=7)
         self.t = 10.0
         self.n = cars
-        self.laps = [replace(LAP, position=i + 1, grid_position=i + 1, delta_to_leader_ms=i * 1000) for i in range(cars)]
+        self.laps = [
+            replace(LAP, position=i + 1, grid_position=i + 1, delta_to_leader_ms=i * 1000) for i in range(cars)
+        ]
         self.status = [STATUS for _ in range(cars)]
         self.telemetry = [TELEMETRY for _ in range(cars)]
         self.damage = [DAMAGE for _ in range(cars)]
@@ -171,7 +179,9 @@ class Sim:
         self.session = session or SESSION
         self.world.apply(Packet(header(PacketId.SESSION, self.t), PacketId.SESSION, self.session))
         parts = [Participant(i != 0, i, 0, 0, False, i + 1, 0, NAMES[i % len(NAMES)], True) for i in range(cars)]
-        self.world.apply(Packet(header(PacketId.PARTICIPANTS, self.t), PacketId.PARTICIPANTS, parts, num_active_cars=cars))
+        self.world.apply(
+            Packet(header(PacketId.PARTICIPANTS, self.t), PacketId.PARTICIPANTS, parts, num_active_cars=cars)
+        )
         self.calls: list[RadioCall] = []
         self._push()
         self.world.drain_changes()
@@ -227,7 +237,16 @@ class Sim:
         cur = self.laps[i]
         self.lap(i, sector1_ms=s1, sector2_ms=s2, sector=2)
         self.tick()
-        self.lap(i, lap_num=cur.lap_num + 1, last_lap_ms=lap_ms, sector1_ms=0, sector2_ms=0, sector=0, lap_invalid=False, **kw)
+        self.lap(
+            i,
+            lap_num=cur.lap_num + 1,
+            last_lap_ms=lap_ms,
+            sector1_ms=0,
+            sector2_ms=0,
+            sector=0,
+            lap_invalid=False,
+            **kw,
+        )
 
     def texts(self) -> list[str]:
         return [c.text for c in self.calls]
