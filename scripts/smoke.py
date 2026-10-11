@@ -62,8 +62,13 @@ def voices() -> None:
         win = TTS()
         engine = win.choose("windows")
         try:
-            w, wsr = win.submit("Radio check.", "", 1.0).result(60)
-            step("Windows SAPI voice", engine == "windows" and len(w) > 0, f"{len(w) / max(wsr, 1):.1f}s at {wsr} Hz")
+            t = time.time()
+            w, wsr = win.submit("Radio check. Box box.", "", 1.0).result(60)
+            step(
+                "Windows SAPI voice",
+                engine == "windows" and len(w) > wsr // 2,
+                f"{len(w) / max(wsr, 1):.1f}s at {wsr} Hz in {time.time() - t:.1f}s",
+            )
         except Exception as e:  # noqa: BLE001
             step("Windows SAPI voice", False, repr(e))
 
@@ -114,8 +119,12 @@ async def engine_and_ui() -> None:
         )
         step("UI page served", "BOX&nbsp;BOX" in html)
         await engine.respond("radio check")
-        await asyncio.sleep(2)
-        lines = [e["text"] for e in engine.bus.history if e["type"] == "radio"]
+        lines: list[str] = []
+        for _ in range(60):  # the voice may still be finishing an earlier call
+            await asyncio.sleep(0.5)
+            lines = [e["text"] for e in engine.bus.history if e["type"] == "radio"]
+            if any("Loud and clear" in line for line in lines):
+                break
         step("engineer answers", any("Loud and clear" in line for line in lines), "; ".join(lines)[:200])
         st = engine.status()
         print("      status:", json.dumps({k: st[k] for k in ("voice", "mic", "ptt")}, default=str)[:400])

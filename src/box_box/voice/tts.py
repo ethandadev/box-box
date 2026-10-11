@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import itertools
 import logging
-import os
 import queue
 import sys
-import tempfile
 import threading
 import time
 import wave
@@ -71,45 +69,55 @@ class KokoroEngine(Engine):
 
 
 class WindowsEngine(Engine):
-    """The voice built into Windows, via SAPI. Robotic but always there.
+    """The voice built into Windows (SAPI), spoken into an in-memory stream. Robotic but always there.
 
     SAPI is a COM object: it's created on the TTS worker thread (where it's used), never on the loop thread.
     """
 
     name = "windows"
+    SAMPLE_RATE = 22_050
+    SAFT22kHz16BitMono = 22  # SpeechAudioFormatType
 
     def __init__(self) -> None:
-        self._engine = None
+        self._voice = None
 
     def load(self) -> None:
         if sys.platform != "win32":
             raise TTSUnavailable("the Windows voice only exists on Windows")
         try:
-            import pyttsx3  # noqa: F401
+            import comtypes.client  # noqa: F401
         except Exception as e:  # noqa: BLE001
             raise TTSUnavailable(f"Windows speech isn't available: {e}") from e
 
     def _get(self):  # type: ignore[no-untyped-def]
-        if self._engine is None:
+        if self._voice is None:
             import comtypes
-            import pyttsx3
+            import comtypes.client
 
             comtypes.CoInitialize()
-            self._engine = pyttsx3.init()
-        return self._engine
+            voice = comtypes.client.CreateObject("SAPI.SpVoice")
+            if voice.GetVoices().Count == 0:
+                raise TTSUnavailable("no Windows voices are installed (Settings > Time & language > Speech)")
+            self._voice = voice
+        return self._voice
 
     def synthesize(self, text: str, voice: str, speed: float) -> Audio:
         self.load()
-        engine = self._get()
-        fd, name = tempfile.mkstemp(suffix=".wav")
-        os.close(fd)
-        try:
-            engine.setProperty("rate", int(185 * speed))
-            engine.save_to_file(text, name)
-            engine.runAndWait()
-            return read_wav(Path(name))
-        finally:
-            Path(name).unlink(missing_ok=True)
+        import comtypes.client
+
+        sapi = self._get()
+        stream = comtypes.client.CreateObject("SAPI.SpMemoryStream")
+        fmt = comtypes.client.CreateObject("SAPI.SpAudioFormat")
+        fmt.Type = self.SAFT22kHz16BitMono
+        stream.Format = fmt
+        sapi.AudioOutputStream = stream
+        sapi.Rate = max(-10, min(10, round((speed - 1.0) * 10)))
+        sapi.Speak(text, 0)  # synchronous
+        raw = bytes(stream.GetData())
+        samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+        if len(samples) == 0:
+            raise TTSUnavailable("the Windows voice produced no audio")
+        return samples, self.SAMPLE_RATE
 
 
 class SilentEngine(Engine):
