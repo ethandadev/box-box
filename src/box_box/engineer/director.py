@@ -147,10 +147,9 @@ class RadioDirector:
             call = q.call
             safety = call.priority == Priority.SAFETY
             reply = call.source == "reply"
-            if speaking is not None:
-                # Only safety may interrupt, and never another safety call or a reply in progress.
-                if not (safety and speaking.priority != Priority.SAFETY):
-                    continue
+            # While something's playing, only a safety call may cut in (and never over another safety call).
+            if speaking is not None and not (safety and speaking.priority != Priority.SAFETY):
+                continue
             if not safety and not reply:
                 if now < self._hold_until or now < self.muted_until:
                     continue
