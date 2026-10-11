@@ -69,7 +69,7 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
                 "Game telemetry",
                 "warn",
                 detail + " That's normal until you're in a session.",
-                GAME_SETUP.format(port=s.telemetry.port) + " Also allow Python through Windows Firewall.",
+                GAME_SETUP.format(port=s.telemetry.port),
             )
         )
 

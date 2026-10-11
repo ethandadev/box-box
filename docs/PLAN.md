@@ -295,12 +295,12 @@ snapshot compact.
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 ✅ | **Telemetry spine:** UDP parser (2025 and 2026 formats, all cars), recorder, replayer, state model, first detector (out-lap traffic) | A recorded race replays and the state matches the game HUD. *Built and tested on real recordings. Needs one check against your own game.* |
-| M1 | **Reflex engineer:** detectors plus radio director plus pre-rendered TTS plus radio FX | Outlap traffic, flags, and gaps are called out at the right moments, only on straights |
-| M2 | **Talk to him:** wheel PTT learn screen, mic, STT, LLM with tools, streaming TTS | You can ask "gap to the car ahead?" and get a correct spoken answer in ~1 s |
-| M3 | **Personality:** persona prompt, escalation, budget/preferences, session-type behaviour | Blind test: a friend thinks it's a pre-recorded human engineer |
-| M4 | **Strategy:** degradation fit, pit-loss, undercut detection, pit calls | He calls a correct undercut in a real race |
-| M5 | **Memory and polish:** debriefs, cross-session memory, setup UI, packaging | Install on a fresh PC in under 5 minutes |
+| M0 ✅ | **Telemetry spine:** UDP parser (2025 and 2026 formats, all cars), recorder, replayer, state model | Done. Verified on Ethan's practice recording and 7 real game captures |
+| M1 ✅ | **Reflex engineer:** 8 detectors, radio director, Kokoro TTS with prefetch, radio FX | Done. Talks on straights only, safety cuts in, chatter budget per lap |
+| M2 ✅ | **Talk to him:** wheel PTT learn, mic pre-roll, faster-whisper (GPU→CPU), instant intents, Claude with live-data tools, streamed replies | Done. Needs a check on Ethan's PC with his Moza and mic |
+| M3 ✅ | **Personality:** three personalities, phrasebook of real radio lines, verbosity, radio commands | Done. Tune by ear after a few sessions |
+| M4 🟡 | **Strategy:** game pit window + wear-rate tyre life, undercut threat, box calls, fuel | First version done. A full lap-time degradation and pit-loss model is the next step |
+| M5 ✅ | **Memory and polish:** debriefs, SQLite memory, setup wizard, dashboard, diagnostics, double-click launcher, CI | Done |
 
 ---
 
@@ -370,10 +370,10 @@ A first version does it per sector and corner by comparing your laps (speed and 
 
 ---
 
-## 12. Next up (M1)
+## 12. What's next (after v1.0)
 
-1. Ethan records a few sessions with `box-box record` (one practice with traffic, one race) to use as test data.
-2. Radio director: priority queue, workload gate (straights only), staleness, and per-lap budget.
-3. Kokoro TTS plus the radio FX chain, with the phrasebook pre-rendered.
-4. More detectors: flags/SC/VSC, gaps each lap in races, weather change, damage, pit window, and lap/sector feedback in practice.
-5. Corner map per track (auto-built from speed minima on a clean lap, then hand-named), so traffic calls say "into Turn 10".
+1. Ethan drives with it: practice, quali, a race. Tune timing and wording by ear (recordings are saved
+   automatically, so every complaint can be replayed and fixed).
+2. Corner map per track, so traffic calls can say "into Turn 10" instead of the distance.
+3. Proper strategy model: fuel-corrected degradation fit, pit loss per track, undercut and overcut simulation.
+4. More quali coaching: where on the lap time is lost against your best (mini-sector deltas).

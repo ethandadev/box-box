@@ -33,7 +33,7 @@ class PortUnavailable(OSError):
         self.cause = cause
 
 
-def bind_udp(port: int = DEFAULT_PORT, host: str = "0.0.0.0") -> socket.socket:
+def bind_udp(port: int = DEFAULT_PORT, host: str = "127.0.0.1") -> socket.socket:
     """Open the listening socket up front, so a taken port fails before anything else starts."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # No SO_REUSEADDR: on Windows it collides with apps that hold the port exclusively (WinError 10013),

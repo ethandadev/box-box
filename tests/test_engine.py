@@ -116,7 +116,7 @@ def test_practice_session_end_to_end_over_udp(tmp_path: Path) -> None:
         port = engine.settings.telemetry.port
         for i, (_, data) in enumerate(read_records(PRACTICE)):
             sender.sendto(data, ("127.0.0.1", port))
-            if i % 50 == 0:
+            if i % 15 == 0:
                 await asyncio.sleep(0.001)  # let the engine keep up, like a real 60 Hz stream
         await asyncio.sleep(5)  # the director spaces calls ~4 s apart; a 6 min session replays in ~3 s
         await engine.stop()
@@ -172,7 +172,7 @@ def test_voice_commands_change_settings_and_typed_questions_work(tmp_path: Path)
 
 def test_bad_port_is_reported_not_fatal(tmp_path: Path) -> None:
     blocker = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    blocker.bind(("0.0.0.0", 0))
+    blocker.bind(("127.0.0.1", 0))
     engine = make_engine(tmp_path)
     engine.store.update({"telemetry": {"port": blocker.getsockname()[1]}})
 

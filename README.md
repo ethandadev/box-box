@@ -1,20 +1,33 @@
 # Box Box 📻
 
-An AI race engineer for **F1 25 with the 2026 Season Pack**. It reads the game's live telemetry for every car,
-works out what matters, and talks to you over the radio the way a real engineer does: short, timed for the
-straights, and only when it matters. Hold a button on your wheel to talk back.
+**An AI race engineer for F1 25 (2026 Season Pack).** He watches the live telemetry of every car, talks to
+you over a team-radio voice at the right moments, and answers when you hold the button on your wheel.
 
-> Status: **M0, the telemetry spine.** It decodes everything, tracks the session, records and replays, and makes
-> its first radio calls (out-lap traffic in practice and quali) as text. Voice, push-to-talk and the LLM brain come next.
-> See [docs/PLAN.md](docs/PLAN.md) for the full plan.
+![Dashboard](docs/screenshots/dashboard.png)
 
-## Setup (Windows PC)
+- **Talks like a real engineer.** Short, numbers first, on the straights, never in the braking zones.
+  Urgent calls cut in, chatter is rationed, and he goes quiet on your qualifying push lap.
+- **Knows the whole field.** Traffic on out laps, cars leaving the pits, yellow flags ahead, safety car and
+  VSC, gaps and trends, undercut threats, pit window, overtakes, tyres, damage, punctures, fuel, weather,
+  2026 overtake mode and battery, lap and sector feedback, the quali drop zone, the finish.
+- **You can talk back.** Hold a wheel button and ask anything: *"what's the gap?"*, *"how are the tyres?"*,
+  *"where's Leclerc?"*, *"less radio please"*, *"should we try a two-stop?"*
+- **Runs on your PC.** A natural neural voice and speech recognition run locally (GPU if you have one).
+  Claude is optional and adds open conversation, strategy chat and post-session debriefs.
+- **Remembers you.** Every session is recorded and logged; he learns your notes and results over time.
 
-1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then in this folder run:
-   ```powershell
-   uv sync
-   ```
-2. In F1 25, go to **Settings → Telemetry Settings**:
+---
+
+## Quick start (Windows)
+
+1. **Get it.** If you haven't already: `git clone https://github.com/ethandadev/box-box` in your user folder
+   (not `C:\Windows\system32`). Or update an existing copy with **`Update Box Box.bat`**.
+2. **Double-click `Box Box.bat`.** The first start installs everything it needs (Python, the voice, speech
+   recognition), so give it a few minutes. Later starts take seconds.
+   - Optional: double-click **`Create desktop shortcut.bat`** for a Box Box icon on your desktop.
+3. **Follow the setup in your browser** (it opens automatically, about 2 minutes):
+   name and personality → voice → game settings → microphone → push-to-talk button → Claude (optional).
+4. **In F1 25: Settings → Telemetry Settings:**
 
    | Setting | Value |
    |---|---|
@@ -22,58 +35,130 @@ straights, and only when it matters. Hold a button on your wheel to talk back.
    | UDP Broadcast Mode | Off |
    | UDP IP Address | 127.0.0.1 |
    | UDP Port | 20777 |
-   | UDP Send Rate | 20Hz (plenty for the engineer; keeps recordings small) |
-   | UDP Format | **2026** (2025 also works, without the 2026 data) |
+   | UDP Send Rate | 20Hz (or higher) |
+   | UDP Format | **2026** |
 
-3. Allow Python through Windows Firewall the first time it asks (private networks are enough).
+5. **Drive.** Keep the Box Box window open (minimised is fine). He'll do a radio check as you leave the
+   garage.
 
-## Use
+![Setup](docs/screenshots/setup-game.png)
+
+## Talking to your engineer
+
+Hold your push-to-talk button (or click **Hold to talk** on the dashboard, or type in the box) and speak
+normally. Release when you're done. He'll cut himself off when you press the button, like a real radio.
+
+**Instant answers (work offline, no API key):**
+
+| Say | He answers with |
+|---|---|
+| "Radio check" | "Loud and clear, Ethan." |
+| "What's the gap?" / "Gap behind?" | Gaps to the cars around you (in practice: your best vs the fastest) |
+| "Where's Norris?" | Their position and gap to you |
+| "How are the tyres?" | Compound, age, wear, worst corner, temperatures, laps left in them |
+| "Fuel?" / "Damage?" / "Weather?" / "Battery?" | Straight from telemetry |
+| "How many laps left?" / "What was that lap?" | Laps or time remaining / last and best lap |
+| "Box box" / "Stay out" | Confirms (you still box on the MFD) |
+
+**Radio commands:**
+
+| Say | Effect |
+|---|---|
+| "Less radio" / "Only the essentials" | Quiet mode |
+| "Keep me updated" / "More radio" | Chatty mode |
+| "Radio silence for 5 minutes" | Safety calls only for a while |
+| "You can talk again" | Back on |
+| "Gaps every lap" | Changes the gap frequency |
+| "No more tyre info" | Turns off tyre calls |
+| "Remember that I struggle in turn 9" | He'll remember it for future sessions |
+
+**With Claude** (an Anthropic API key in Setup → Claude): anything else, like *"how are we doing against
+Leclerc on tyres?"* or *"would a two-stop work?"*. He looks the data up live, so every number he says is
+real. He also gives a short spoken debrief after each session. It uses Claude Haiku 5.5 and costs cents
+per race.
+
+## What he tells you
+
+| Session | Calls |
+|---|---|
+| **Practice** | Radio check as you leave the garage · cars on push laps behind you on your out/in lap ("let them by") · slow cars ahead on your push lap · cars leaving the pits ahead · lap times, personal bests, where you lost time · purple sectors (chatty) · long-run summary when you pit · time remaining |
+| **Qualifying** | As practice, plus: the drop-zone warning and "you're safe" · "last chance" on your final lap · lap deleted for track limits · **only traffic and safety calls on your push lap** |
+| **Race** | Grid and lap-one summary · gaps and whether you're closing · within a second of the car ahead · overtakes made and lost · cars around you pitting (undercut threat) · pit window and "box box" · your stop time and position · tyre wear, overheating, punctures, damage · fuel saving · rain on the radar, rain starting, wrong tyres · 2026 overtake mode and low battery · safety car / VSC / red flag / green · penalties and track-limit warnings · laps to go · last lap · the result |
+
+Everything is tunable in **Settings**: personality (calm / fired up / dry), how much he talks, which
+categories, gap frequency, only-on-straights, voice, speed, radio effect, devices and more. Changes apply
+instantly.
+
+## Troubleshooting
+
+The **Diagnostics** page checks everything and has **Fix** buttons. **Copy support report** gives you
+something to paste when asking for help.
+
+| Problem | Fix |
+|---|---|
+| Dashboard says "Waiting for the game" | Check the telemetry settings above, then start a session (not just the menus). |
+| "UDP port 20777 is in use" | Another telemetry app (SimHub, Crew Chief…) is using it. Close it, or change the port in both Box Box Settings and F1 25. |
+| He's silent | Check the Voice pill. Pick your headset in Settings → Voice and click **Play a radio check** in Setup. |
+| He doesn't hear me | Pick your mic in Setup → Microphone and watch the level meter. Windows Settings → Privacy → Microphone must allow desktop apps. |
+| Wheel button not detected | Make sure the wheel base is on (it can be plugged in any time), then Setup → **Learn button**. Or bind a wheel button to *UDP Action 1* in F1 25's controls and use that. |
+| Speech recognition is slow | Diagnostics → **Fix** on Speech recognition installs NVIDIA GPU support (about 1 GB, one time). |
+| The voice sounds robotic | That's the Windows backup voice while the natural voice downloads (about 120 MB). It switches automatically when ready. |
+| Game on another PC or a console | Settings → Telemetry → "Accept telemetry from other devices", and send to this PC's IP address. |
+
+Logs live in `%LOCALAPPDATA%\BoxBox\logs` (Diagnostics → **Open logs folder**).
+
+## Privacy & costs
+
+Everything runs on your PC: the voice, speech recognition, recordings and memory (in
+`%LOCALAPPDATA%\BoxBox`). Only if you add a Claude API key are your questions and a short summary of the
+session sent to Anthropic to generate replies. The key is stored only on this PC. The web UI only listens
+on `127.0.0.1`.
+
+---
+
+## For developers
 
 ```powershell
-uv run box-box watch                 # live: status line + the engineer's radio calls
-uv run box-box record                # save the session to recordings\<timestamp>.f1raw.gz (Ctrl+C stops)
-uv run box-box watch -f recordings\x.f1raw.gz -s 4    # what would he have said? (4x speed)
-uv run box-box replay recordings\x.f1raw.gz           # resend a recording over UDP as if the game were running
+uv sync
+uv run box-box                 # the app (engine + UI)
+uv run box-box doctor          # check the setup
+uv run box-box watch -f recordings\x.f1raw.gz -s 0   # print every call the detectors make, flat out
+uv run box-box replay recordings\x.f1raw.gz         # resend a recording over UDP
+uv run pytest ; uv run ruff check . ; uv run ruff format .
 ```
 
-**Please record a few sessions.** One practice session with traffic around you and one full race give the
-best test data for tuning the engineer. Then the engineer can be developed without the game running.
-Recordings are compressed (about 1 MB per minute at 20Hz). Share them by committing them:
-
-```powershell
-git add recordings
-git commit -m "Add recordings"
-git push
+```
+F1 25 ──UDP──► telemetry/ (decode all 24 cars, both formats) ──► state/World (laps, pits, gaps, changes)
+                   │ auto-record                                     │
+                   ▼                                                 ▼
+              recordings/                         engineer/ detectors ──► RadioDirector (priority, straights,
+                                                                          budget, staleness, barge-in)
+wheel/keys/UDP action ─► voice/ptt ─► mic ─► stt (whisper)                     │
+                                         └─► brain/ (instant intents → Claude + tools) ──► replies
+                                                                               ▼
+                                              voice/ speaker: Kokoro TTS → radio FX → audio out
+                         ui/ (aiohttp + WebSocket) ◄── bus ◄── everything
 ```
 
-Example radio calls from a practice out-lap:
+| Package | What's there |
+|---|---|
+| `telemetry/` | UDP decoder for formats 2025 and 2026, recordings (`.f1raw[.gz]`), UDP/file sources, auto-recorder |
+| `state/` | `World`: the live session, per-car lap history, change events, on-road geometry |
+| `engineer/` | Detectors (traffic, flags, race, laps, car, weather, session, energy), phrasebook, radio director |
+| `voice/` | TTS engines + work queue, radio effect, audio output, mic, push-to-talk, speech recognition, model downloads |
+| `brain/` | Live-data tools, instant intents, Claude conversation, debriefs |
+| `memory/` | SQLite: sessions, laps, notes, radio log |
+| `ui/` | Local web UI: setup wizard, dashboard, settings, recordings, diagnostics |
+| `app.py` | The engine that wires it all together |
 
-```
-📻 [STRATEGY] Verstappen behind on a push lap, 8 seconds.
-📻 [SAFETY] Verstappen is on it, right behind. Stay off the line.
-📻 [STRATEGY] Traffic ahead, Alonso on an out lap, 6 seconds.
-```
+Tests replay real game recordings (including Ethan's practice session over real UDP) and simulate
+scenarios packet by packet. CI runs on Windows and Linux.
 
-## Layout
-
-```
-src/box_box/
-  telemetry/   packets.py (decoder, formats 2025 + 2026, all cars) · rawfile.py · sources.py (UDP / file) · names.py
-  state/       model.py (World: the live session) · track.py (on-road geometry, wrap-aware)
-  engineer/    radio.py (RadioCall, priorities, phrasebook) · traffic.py (out-lap / push-lap traffic)
-tests/         real-recording fixtures + a byte-level packet builder for scenario tests
-```
-
-## Development
-
-```powershell
-uv run pytest
-uv run ruff check . ; uv run ruff format .
-```
-
-## Credits
+### Credits
 
 UDP layouts follow EA's *F1 25: 2026 Season Pack UDP Specification*, cross-checked against
 [MacManley/f1-26-udp](https://github.com/MacManley/f1-26-udp) and
-[rdgonzaga/f1-game-telemetry](https://github.com/rdgonzaga/f1-game-telemetry) (both MIT). The `.f1raw` recordings
-in `tests/fixtures/` come from the latter. See `tests/fixtures/NOTICE.md`.
+[rdgonzaga/f1-game-telemetry](https://github.com/rdgonzaga/f1-game-telemetry) (both MIT). The test fixtures
+in `tests/fixtures/` come from the latter (see `tests/fixtures/NOTICE.md`). Voice:
+[Kokoro](https://github.com/thewh1teagle/kokoro-onnx). Speech recognition:
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper).

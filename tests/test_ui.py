@@ -29,7 +29,9 @@ def test_state_settings_and_ask(tmp_path: Path) -> None:
         r = await client.get("/api/state")
         data = await r.json()
         assert data["settings"]["driver"]["name"] == "Ethan" and data["schema"]
-        r = await client.post("/api/settings", json={"engineer": {"name": "Gianpiero"}, "ai": {"api_key": "sk-ant-secret-1234"}})
+        r = await client.post(
+            "/api/settings", json={"engineer": {"name": "Gianpiero"}, "ai": {"api_key": "sk-ant-secret-1234"}}
+        )
         body = await r.json()
         assert body["ok"] and body["settings"]["engineer"]["name"] == "Gianpiero"
         assert body["settings"]["ai"]["api_key"] == "••••1234"  # never sent back in full

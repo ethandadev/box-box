@@ -131,13 +131,13 @@ class AudioPlayer:
 
     def close(self) -> None:
         self.stop()
-        if self._stream is not None:
+        stream, self._stream = self._stream, None  # cleared first: closing isn't a disconnect
+        if stream is not None:
             try:
-                self._stream.stop()
-                self._stream.close()
+                stream.stop()
+                stream.close()
             except Exception:  # noqa: BLE001
                 pass
-            self._stream = None
 
     def play(self, samples: np.ndarray, samplerate: int) -> Future[bool]:
         fut: Future[bool] = Future()

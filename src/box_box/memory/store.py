@@ -66,6 +66,7 @@ class Memory:
         self._open()
 
     def _open(self) -> None:
+        db = None
         try:
             db = sqlite3.connect(self.path, check_same_thread=False, timeout=5)
             db.execute("PRAGMA journal_mode=WAL")
@@ -74,6 +75,8 @@ class Memory:
             db.commit()
             self._db = db
         except sqlite3.DatabaseError as e:
+            if db is not None:
+                db.close()  # Windows can't move a file that's still open
             log.error("memory database unusable (%s); moving it aside and starting fresh", e)
             self.error = str(e)
             try:

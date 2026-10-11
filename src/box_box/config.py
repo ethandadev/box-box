@@ -132,6 +132,11 @@ class PushToTalkSettings:
 @dataclass
 class TelemetrySettings:
     port: int = opt(20777, "UDP port", "Must match Telemetry > UDP Port in F1 25.", min=1024, max=65535)
+    listen_on_network: bool = opt(
+        False,
+        "Accept telemetry from other devices",
+        "Only needed if F1 25 runs on another PC or a console. Windows will ask to allow it through the firewall.",
+    )
     auto_record: bool = opt(
         True, "Auto-record sessions", "Save every session so it can be replayed or shared for tuning."
     )

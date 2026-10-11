@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import itertools
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -166,8 +167,9 @@ class Engine:
         if self._udp_task and not self._udp_task.done():
             self._udp_task.cancel()
         port = self.settings.telemetry.port
+        host = "0.0.0.0" if self.settings.telemetry.listen_on_network else "127.0.0.1"
         try:
-            sock = bind_udp(port)
+            sock = bind_udp(port, host)
         except PortUnavailable as e:
             self.port_error = (
                 f"UDP port {port} is in use or blocked ({e.cause}). Close other telemetry apps (SimHub, Crew Chief...) "
@@ -422,10 +424,20 @@ class Engine:
         self._tts_wanted = engine
         if engine == "kokoro" and not self.downloader.installed():
             self.downloader.start()  # housekeeping picks it up when it's done
-            self.tts.choose("windows")
-            self.tts.status = "downloading the voice (first run only)"
+            self._choose_voice("windows", status="downloading the voice (first run only)")
             return
-        self.tts.choose(engine)
+        self._choose_voice(engine)
+
+    def _choose_voice(self, engine: str, status: str | None = None) -> None:
+        """Loading a neural voice takes a couple of seconds: do it off the event loop."""
+        self.tts.status = f"loading the {engine} voice"
+
+        def load() -> None:
+            self.tts.choose(engine)
+            if status:
+                self.tts.status = status
+
+        threading.Thread(target=load, name="voice-load", daemon=True).start()
 
     def _load_stt(self) -> None:
         m = self.settings.mic
@@ -464,7 +476,10 @@ class Engine:
                 self._load_stt()
             if old.ptt != new.ptt:
                 self._configure_ptt()
-            if old.telemetry.port != new.telemetry.port:
+            if (old.telemetry.port, old.telemetry.listen_on_network) != (
+                new.telemetry.port,
+                new.telemetry.listen_on_network,
+            ):
                 self._open_udp()
             if (
                 old.telemetry.recordings_dir != new.telemetry.recordings_dir
@@ -485,8 +500,13 @@ class Engine:
                 self.recorder.tick()
                 if self.port_error and self.enable_udp:
                     self._open_udp()  # the other app may have closed
-                if self._tts_wanted == "kokoro" and self.tts.active != "kokoro" and self.downloader.installed():
-                    self.tts.choose("kokoro")
+                if (
+                    self._tts_wanted == "kokoro"
+                    and self.tts.active != "kokoro"
+                    and self.downloader.installed()
+                    and not self.tts.status.startswith("loading")
+                ):
+                    self._choose_voice("kokoro")
                 if self.player.error and "disconnected" in self.player.error:
                     self.player.open(self.settings.voice.output_device)
             except Exception:

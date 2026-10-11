@@ -5,7 +5,7 @@ from box_box.cli import main
 
 def test_taken_port_gives_help_instead_of_a_traceback(capsys, tmp_path) -> None:
     squatter = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    squatter.bind(("0.0.0.0", 0))
+    squatter.bind(("127.0.0.1", 0))
     port = squatter.getsockname()[1]
     try:
         assert main(["watch", "--port", str(port)]) == 1

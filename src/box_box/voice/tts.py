@@ -69,7 +69,10 @@ class KokoroEngine(Engine):
 
 
 class WindowsEngine(Engine):
-    """The voice built into Windows, via SAPI. Robotic but always there."""
+    """The voice built into Windows, via SAPI. Robotic but always there.
+
+    SAPI is a COM object: it's created on the TTS worker thread (where it's used), never on the loop thread.
+    """
 
     name = "windows"
 
@@ -77,26 +80,31 @@ class WindowsEngine(Engine):
         self._engine = None
 
     def load(self) -> None:
-        if self._engine is not None:
-            return
         if sys.platform != "win32":
             raise TTSUnavailable("the Windows voice only exists on Windows")
         try:
-            import pyttsx3
-
-            self._engine = pyttsx3.init()
+            import pyttsx3  # noqa: F401
         except Exception as e:  # noqa: BLE001
             raise TTSUnavailable(f"Windows speech isn't available: {e}") from e
 
+    def _get(self):  # type: ignore[no-untyped-def]
+        if self._engine is None:
+            import comtypes
+            import pyttsx3
+
+            comtypes.CoInitialize()
+            self._engine = pyttsx3.init()
+        return self._engine
+
     def synthesize(self, text: str, voice: str, speed: float) -> Audio:
         self.load()
-        assert self._engine is not None
+        engine = self._get()
         fd, name = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
         try:
-            self._engine.setProperty("rate", int(185 * speed))
-            self._engine.save_to_file(text, name)
-            self._engine.runAndWait()
+            engine.setProperty("rate", int(185 * speed))
+            engine.save_to_file(text, name)
+            engine.runAndWait()
             return read_wav(Path(name))
         finally:
             Path(name).unlink(missing_ok=True)
