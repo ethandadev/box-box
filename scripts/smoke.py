@@ -77,6 +77,7 @@ def voices() -> None:
     stt.load("small.en", "cpu")
     step("load Whisper small.en (CPU)", stt.ready, f"{stt.status} in {time.time() - t:.0f}s {stt.error or ''}")
     if stt.ready:
+        stt.extra_vocab = "Drivers: Leclerc, Norris, Verstappen, Hamilton. Track: Monza."  # as the app does per session
         sixteen = fx.resample(samples, sr, 16_000)
         tr = stt.transcribe(sixteen)
         heard = tr.text.lower()
