@@ -38,7 +38,9 @@ def _seconds_part(sec: str) -> str:
     """'26.7' -> 'twenty-six seven', '05.3' -> 'oh five three'."""
     whole, _, frac = sec.partition(".")
     w = int(whole)
-    words = ("oh " + ONES[w]) if whole.startswith("0") and len(whole) == 2 else number_words(w)
+    if w == 0 and not frac:
+        return "flat"  # "10:00" is "ten flat", not "ten oh zero"
+    words = ("oh " + (ONES[w] if w else "oh")) if whole.startswith("0") and len(whole) == 2 else number_words(w)
     if frac:
         words += " " + " ".join(ONES[int(d)] for d in frac)
     return words
@@ -60,11 +62,13 @@ def _decimal(m: re.Match[str]) -> str:
 
 def _symbols(t: str) -> str:
     """Units, slashes and dashes, written the way they're said (the voices read "/" as "slash")."""
+    t = re.sub(r"\b50\s*/\s*50\b", "fifty-fifty", t)
+    t = re.sub(r"(?<![\w.])(P?\d{1,3})\s*[-\u2013]\s*(P?\d{1,3})(?!\w|\.\d)", r"\1 to \2", t)  # "turns 1-3"
     t = re.sub(r"(\d:\d{2}(?:\.\d+)?)s\b", r"\1", t)  # "1:30.2s" is just a lap time
     t = re.sub(r"\s*km\s*/\s*h\b|\bkph\b", " k p h", t, flags=re.IGNORECASE)
     t = re.sub(r"\bmph\b", "m p h", t, flags=re.IGNORECASE)
     t = re.sub(r"(\d)\s?kg\b", r"\1 kilos", t)
-    t = re.sub(r"(?<![\d:.])(\d{1,2}(?:\.\d+)?)s\b", r"\1 seconds", t)  # "2.6s"; never "1990s"
+    t = re.sub(r"(?<![\d:.])(\d{1,3}(?:\.\d+)?)s\b", r"\1 seconds", t)  # "2.6s"; never "1990s"
     t = re.sub(r"\bT(\d{1,2})\b", r"turn \1", t)
     t = re.sub(r"\b(\d+)\s*/\s*(\d+)\b", r"\1 of \2", t)  # "lap 3/5" -> "lap 3 of 5"
     t = re.sub(r"(?<=[A-Za-z])\s*/\s*(?=[A-Za-z])", " or ", t)  # "softs/mediums"
@@ -82,7 +86,10 @@ def for_speech(text: str) -> str:
     t = re.sub(r"\bSQ(\d)\b", lambda m: "S Q " + ONES[int(m.group(1))], t)
     t = re.sub(r"\bQ(\d)\b", lambda m: "Q " + ONES[int(m.group(1))], t)
     t = re.sub(r"(?<![\w.])([+-])?(\d+)\.(\d+)\b", _decimal, t)
+    t = re.sub(r"(?<![\w.])\+(\d+)\b", r"plus \1", t)  # "+1 lap"
+    t = re.sub(r"(?<![\w.])-(\d+)\b", r"minus \1", t)  # "-3 places"
     t = re.sub(r"\b(\d+)\b", lambda m: number_words(int(m.group(1))) if len(m.group(1)) <= 6 else m.group(1), t)
     t = t.replace("%", " percent").replace("°C", " degrees").replace("°F", " degrees").replace("°", " degrees")
-    t = t.replace("VSC", "V S C").replace("DRS", "D R S").replace("ERS", "E R S").replace("DNF", "D N F")
+    for acronym in ("VSC", "DRS", "ERS", "DNF", "MFD"):
+        t = re.sub(rf"\b{acronym}\b", " ".join(acronym), t)
     return re.sub(r"\s+", " ", t).strip()

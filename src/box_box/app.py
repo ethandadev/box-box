@@ -46,6 +46,7 @@ log = logging.getLogger(__name__)
 RADIO_POLL_S = 0.05
 PTT_STUCK_S = 30.0  # held longer than this: the button is stuck, not the driver talking
 MIN_PTT_HOLD_S = 0.3
+KOKORO_RETRY_S = 300.0  # after the local voice fails to load, try again this rarely
 STATUS_EVERY_S = 0.5
 CONNECTED_WITHIN_S = 3.0
 _reply_ids = itertools.count(1)
@@ -114,6 +115,7 @@ class Engine:
         self.replaying: str | None = None
         self.replay_speed = 1.0
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._kokoro_tried_at = -1e9
         self._tasks: list[asyncio.Task] = []
         self._udp_task: asyncio.Task | None = None
         self._replay_task: asyncio.Task | None = None
@@ -388,7 +390,13 @@ class Engine:
             self.player.blip(fx.driver_key(fx.SR_DEFAULT, pressed, v.radio_effect), fx.SR_DEFAULT)
         if pressed:
             self._ptt_pressed_at = time.monotonic()
-            self.speaker.stop()
+            pressed_at = self._ptt_pressed_at
+            # Cut the engineer off only once it's clearly a real press: a bump of the wheel button
+            # shouldn't kill a box call.
+            if self._loop is not None:
+                self._loop.call_later(MIN_PTT_HOLD_S, self._barge_in, pressed_at)
+            else:
+                self.speaker.stop()
             self.mic.start_recording()
         else:
             audio = self.mic.stop_recording()
@@ -396,6 +404,10 @@ class Engine:
                 self.director.release_hold()  # an accidental tap: ignore it rather than "say again?"
                 return
             self._spawn(self._handle_utterance(audio))
+
+    def _barge_in(self, pressed_at: float) -> None:
+        if self.director.ptt_down and self._ptt_pressed_at == pressed_at:
+            self.speaker.stop()
 
     def _ptt_watchdog(self) -> None:
         """A button that reads as held for ages is stuck (wrong binding, a toggle left on, a bad axis).
@@ -609,7 +621,9 @@ class Engine:
                     and self.tts.active != "kokoro"
                     and self.downloader.installed()
                     and not self.tts.status.startswith("loading")
+                    and time.monotonic() - self._kokoro_tried_at > KOKORO_RETRY_S
                 ):
+                    self._kokoro_tried_at = time.monotonic()  # a model that won't load isn't retried every tick
                     self._choose_voice("kokoro")
                 kokoro = self.tts.engines.get("kokoro")
                 if self.tts.active == "kokoro" and getattr(kokoro, "upgradable", False):

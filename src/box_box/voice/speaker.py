@@ -21,8 +21,9 @@ from box_box.voice.tts import TTS
 log = logging.getLogger(__name__)
 
 SYNTH_TIMEOUT_S = 12.0
+PLAY_GRACE_S = 3.0  # playback should end this long after the audio's own length at the latest
 # How often a two-sentence call is said with the key held between the sentences (he glances at the
-# screen, then carries on): dead air with the carrier still open. Never on urgent calls.
+# screen, then carries on): dead air with the carrier still open. Only on routine information.
 HOLD_CHANCE = {"off": 0.0, "subtle": 0.2, "human": 0.35}
 HOLD_GAP_S = (0.35, 0.8)
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
@@ -35,7 +36,7 @@ def hold_split(call: RadioCall, natural_speech: str) -> tuple[list[str], float]:
     pieces = _SENTENCE_BREAK.split(call.text.strip(), maxsplit=1)
     if (
         not chance
-        or call.priority == Priority.SAFETY
+        or call.priority != Priority.INFO  # box calls, warnings and strategy are said in one breath
         or call.source != "engineer"
         or len(pieces) < 2
         or len(pieces[0]) < 8
@@ -46,6 +47,11 @@ def hold_split(call: RadioCall, natural_speech: str) -> tuple[list[str], float]:
     if rng.random() >= chance:
         return [call.text], 0.0
     return pieces, rng.uniform(*HOLD_GAP_S)
+
+
+def reply_prefix(call: RadioCall) -> str | None:
+    """'reply:<id>' for a piece of a spoken reply, None for a standalone call."""
+    return call.key.rsplit(":", 1)[0] if reply_part(call) is not None else None
 
 
 def reply_part(call: RadioCall) -> int | None:
@@ -65,6 +71,7 @@ class Speaker:
         self.speaking: RadioCall | None = None
         self.has_followup: Callable[[RadioCall], bool] = lambda call: False  # more of the same reply queued?
         self._generation = 0  # bumped by stop(); a call whose generation is stale must not play
+        self._open_tx: str | None = None  # reply whose transmission is still keyed (more of it coming)
         self.spoken = 0
 
     def _voice(self) -> tuple[str, float]:
@@ -84,6 +91,7 @@ class Speaker:
     def stop(self) -> None:
         """Barge-in: cut the engineer off mid-sentence."""
         self._generation += 1
+        self._open_tx = None
         self.player.stop()
 
     async def say(self, call: RadioCall) -> bool:
@@ -98,11 +106,16 @@ class Speaker:
             if s.voice.engine == "off" or self.tts.active == "off":
                 await asyncio.sleep(min(4.0, 0.06 * len(call.text)))  # pace text-only mode like speech
                 return True
+            if not any(ch.isalnum() for ch in call.text):
+                return True  # nothing to say ("...")
             voice, speed = self._voice()
             pieces, gap_s = hold_split(call, s.engineer.natural_speech)
             futures = [self.tts.submit(for_speech(p), voice, speed) for p in pieces]
             try:
-                clips = [await asyncio.wait_for(asyncio.wrap_future(f), SYNTH_TIMEOUT_S) for f in futures]
+                # shield: a timeout here must not cancel the shared future other callers may be waiting on
+                clips = [
+                    await asyncio.wait_for(asyncio.shield(asyncio.wrap_future(f)), SYNTH_TIMEOUT_S) for f in futures
+                ]
                 sr = clips[0][1]
                 joined: list[np.ndarray] = []
                 for n, (clip, clip_sr) in enumerate(clips):
@@ -123,21 +136,27 @@ class Speaker:
                 return False
             if generation != self._generation or len(samples) == 0:
                 return False
+            # One transmission per reply: key up unless this reply's transmission is already open, and keep
+            # it open while more of the reply is on its way.
+            tx = reply_prefix(call)
+            open_beep = tx is None or self._open_tx != tx
+            close_beep = tx is None or not self.has_followup(call)
             try:
-                part = reply_part(call)
                 audio = fx.radio(
-                    samples,
-                    sr,
-                    s.voice.radio_effect,
-                    beeps=s.voice.beeps,
-                    open_beep=part is None or part == 0,
-                    close_beep=part is None or not self.has_followup(call),
+                    samples, sr, s.voice.radio_effect, beeps=s.voice.beeps, open_beep=open_beep, close_beep=close_beep
                 )
             except Exception:  # noqa: BLE001 - a broken effect must never silence the engineer
                 log.exception("radio effect failed; playing the dry voice")
                 audio = samples
             self.player.volume = s.voice.volume
-            done = await asyncio.wrap_future(self.player.play(audio, sr))
+            self._open_tx = None if close_beep else tx
+            playing = asyncio.wrap_future(self.player.play(audio, sr))
+            try:
+                done = await asyncio.wait_for(playing, len(audio) / sr + PLAY_GRACE_S)
+            except TimeoutError:  # the output stalled without telling us (a device unplugged mid-line)
+                log.warning("audio output stalled; cutting the line")
+                self.player.stop()
+                return False
             self.spoken += 1
             return bool(done) and generation == self._generation
         finally:

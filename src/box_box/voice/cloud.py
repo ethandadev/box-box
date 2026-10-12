@@ -24,7 +24,7 @@ from box_box.voice.tts import Audio, Engine, TTSUnavailable
 
 log = logging.getLogger(__name__)
 
-TIMEOUT_S = 15
+TIMEOUT_S = 6  # a radio line that takes longer is late anyway; Kokoro says it instead
 STYLE_DEFAULT = (
     "You are an experienced Formula 1 race engineer talking to your driver on team radio during a session. "
     "Natural American accent. Calm, quick, clipped and confident; matter-of-fact, a little dry; short natural "
@@ -50,6 +50,8 @@ def _post(url: str, body: dict[str, Any], headers: dict[str, str], what: str) ->
             return resp.read()
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:300]
+        if e.code == 429:  # rate limited (Gemini's says "exceeded your current quota"): transient
+            raise RuntimeError(f"{what} is rate limiting us: {detail[:120]}") from e
         if "quota" in detail.lower() or "credits" in detail.lower() or e.code == 402:
             raise TTSUnavailable(f"{what} is out of credits.") from e
         if e.code in (401, 403):

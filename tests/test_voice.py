@@ -265,3 +265,43 @@ def test_driver_key_sounds() -> None:
     down, up = fx.driver_key(24_000, True, 0.5, seed=1), fx.driver_key(24_000, False, 0.5, seed=1)
     assert 0.05 < len(down) / 24_000 < 0.2 and 0.1 < len(up) / 24_000 < 0.3
     assert 0.02 < float(np.max(np.abs(down))) < 0.3
+
+
+@pytest.mark.parametrize(
+    ("text", "spoken"),
+    [
+        ("Turns 1-3.", "Turns one to three."),
+        ("50/50 call.", "fifty-fifty call."),
+        ("+1 lap.", "plus one lap."),
+        ("1:00.5", "one oh oh five"),
+        ("Confirm on the MFD.", "Confirm on the M F D."),
+        ("The LEADERS", "The LEADERS"),
+    ],
+)
+def test_radio_text_edge_cases(text: str, spoken: str) -> None:
+    assert for_speech(text) == spoken
+
+
+def test_an_abandoned_synthesis_never_poisons_that_line() -> None:
+    """A synth that timed out left a cancelled future behind, and that exact line never played again."""
+    import threading
+
+    gate = threading.Event()
+
+    class Slow(Engine):
+        name = "kokoro"
+
+        def synthesize(self, text, voice, speed):  # type: ignore[no-untyped-def]
+            gate.wait(5)
+            return np.ones(10, dtype=np.float32), 24_000
+
+    tts = TTS({"kokoro": Slow(), "off": SilentEngine()})
+    tts.choose("kokoro")
+    blocker = tts.submit("Something long.", "am_michael", 1.0)
+    first = tts.submit("Box, box.", "am_michael", 1.0)
+    first.cancel()  # the speaker gave up waiting
+    gate.set()
+    blocker.result(5)
+    again = tts.submit("Box, box.", "am_michael", 1.0)
+    assert not again.cancelled() and len(again.result(5)[0]) == 10
+    tts.shutdown()

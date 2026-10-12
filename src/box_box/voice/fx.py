@@ -133,7 +133,7 @@ def radio(
     a moment of carrier) and only the last lets go (hiss tail, beep); the pieces between are bridged by
     a short stretch of open carrier, so it sounds like he kept the button down."""
     rng = np.random.default_rng(seed)
-    x = _normalize(np.asarray(samples, dtype=np.float32))
+    x = _normalize(np.nan_to_num(np.asarray(samples, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0))
     i = float(np.clip(intensity, 0.0, 1.0))
     if i > 0 and len(x) >= 16:
         # Real F1 radio is band-limited and heavily compressed, with only a little grit. Strong overdrive

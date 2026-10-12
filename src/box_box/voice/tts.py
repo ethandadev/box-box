@@ -85,9 +85,10 @@ class KokoroEngine(Engine):
 
     def synthesize(self, text: str, voice: str, speed: float) -> Audio:
         self.load()
-        assert self._kokoro is not None
+        kokoro = self._kokoro  # one read: a reload on another thread may clear it at any moment
+        if kokoro is None:
+            raise TTSUnavailable("Kokoro is reloading")
         lang = "en-gb" if voice.startswith("b") else "en-us"
-        kokoro = self._kokoro
         # Names in IPA (the dictionary mangles Leclerc, Ocon, Sainz...), everything else phonemized normally.
         phonemes = to_phonemes(text, lambda chunk: kokoro.tokenizer.phonemize(chunk, lang))
         samples, sr = kokoro.create(
@@ -213,6 +214,7 @@ def read_wav(path: Path) -> Audio:
 URGENT, PREFETCH = 0, 1
 PREFETCH_MAX_AGE_S = 20.0  # a prefetch still queued after this long is for a call that's gone stale
 DEAD_RETRY_S = 600.0  # a cloud voice that rejected us (key, credits) is retried this rarely
+FLAKY_RETRY_S = 60.0  # after repeated network failures, give the cloud voice a minute off
 FALLBACK_MAX_SPEED = 1.2  # cloud voices cap speed; the local stand-in shouldn't suddenly rush
 
 
@@ -237,11 +239,15 @@ class TTS:
         self.status: str = "not started"
         self.error: str | None = None
         self._dead: dict[str, float] = {}  # cloud engine -> when it rejected us; skipped until DEAD_RETRY_S
+        self._dead_for: dict[str, float] = {}  # how long that skip lasts
+        self._failures: dict[str, int] = {}  # consecutive network failures per cloud engine
+        self._used_fallback = False  # the last synthesis on the worker came from a stand-in voice
 
     def choose(self, preferred: str) -> str:
         """Load the preferred engine, falling back to the next one that works. Returns the engine used."""
         order = [preferred] + [e for e in ("kokoro", "windows", "off") if e != preferred]
         self._dead.clear()  # settings changed (a new key, perhaps): give every voice a fresh chance
+        self._failures.clear()
         errors = []
         for name in order:
             engine = self.engines.get(name)
@@ -279,6 +285,9 @@ class TTS:
                 fut.set_result(cached)
                 return fut
             existing = self._inflight.get(key)
+            if existing is not None and existing.done():  # cancelled or failed: never hand that out again
+                self._inflight.pop(key, None)
+                existing = None
             if existing is not None:
                 if urgent:  # promote: queue it again at the front; the worker skips whichever runs second
                     self._queue.put((URGENT, next(self._seq), time.monotonic(), key, text, voice, speed))
@@ -295,13 +304,16 @@ class TTS:
                 return
             with self._lock:
                 fut = self._inflight.get(key)
+                if fut is not None and fut.done():
+                    self._inflight.pop(key, None)  # nobody's waiting any more (timed out, cancelled)
             if fut is None or fut.done():
-                continue  # already synthesized via a promoted copy
+                continue  # already synthesized via a promoted copy, or abandoned
             if priority == PREFETCH and time.monotonic() - queued_at > PREFETCH_MAX_AGE_S:
                 with self._lock:
                     self._inflight.pop(key, None)
                 fut.cancel()
                 continue
+            self._used_fallback = False
             try:
                 audio = self._synth(key, text, voice, speed)
             except Exception as e:  # noqa: BLE001
@@ -312,7 +324,8 @@ class TTS:
                 continue
             with self._lock:
                 self._inflight.pop(key, None)
-                self._cache[key] = audio
+                if not self._used_fallback:  # a stand-in voice's audio must not stick to the real voice's key
+                    self._cache[key] = audio
                 while len(self._cache) > self._cache_size:
                     self._cache.popitem(last=False)
             if not fut.done():
@@ -322,10 +335,11 @@ class TTS:
         engine = self.engines.get(key[0]) or self.engines["off"]
         cloud = engine.name not in ("kokoro", "windows", "off")
         dead_since = self._dead.get(engine.name)
-        if cloud and dead_since is not None and time.monotonic() - dead_since < DEAD_RETRY_S:
+        if cloud and dead_since is not None and time.monotonic() - dead_since < self._dead_for.get(engine.name, 0):
             return self._fallback(text, voice, speed, None)  # don't wait on a voice we know will refuse
         try:
             audio = engine.synthesize(text, voice, speed)
+            self._failures.pop(engine.name, None)
             if dead_since is not None:
                 self._dead.pop(engine.name, None)
                 self.error, self.status = None, "ready"
@@ -338,19 +352,24 @@ class TTS:
                     return self._fallback(text, voice, speed, e, skip_kokoro=True)
                 raise
             log.warning("%s voice unavailable, using the local voice: %s", engine.name, e)
-            self._dead[engine.name] = time.monotonic()
+            self._dead[engine.name], self._dead_for[engine.name] = time.monotonic(), DEAD_RETRY_S
             self.error = str(e)
             self.status = f"{e} Using the local voice for now."
             return self._fallback(text, voice, speed, e)
         except Exception as e:
-            log.exception("speech synthesis failed with %s", engine.name)
+            log.warning("speech synthesis failed with %s: %s", engine.name, e)
             self.error = f"{engine.name}: {e}"
             if not cloud and engine.name != "kokoro":
                 raise
+            if cloud:
+                n = self._failures[engine.name] = self._failures.get(engine.name, 0) + 1
+                if n >= 2:  # the network's struggling: don't make every line wait for a timeout
+                    self._dead[engine.name], self._dead_for[engine.name] = time.monotonic(), FLAKY_RETRY_S
             return self._fallback(text, voice, speed, e, skip_kokoro=engine.name == "kokoro")
 
     def _fallback(self, text: str, voice: str, speed: float, err: Exception | None, skip_kokoro: bool = False) -> Audio:
         speed = min(speed, FALLBACK_MAX_SPEED)
+        self._used_fallback = True
         if not skip_kokoro and "kokoro" in self.engines:
             try:  # a cloud voice failed (network, quota): say it with the local voice instead
                 return self.engines["kokoro"].synthesize(text, voice, speed)

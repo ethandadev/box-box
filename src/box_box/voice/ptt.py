@@ -146,6 +146,7 @@ def key_name(key) -> str:  # type: ignore[no-untyped-def]
 class KeyboardReader:
     def __init__(self) -> None:
         self._down: set[str] = set()
+        self._by_vk: dict[int, str] = {}  # physical key -> the name it was pressed as
         self._lock = threading.Lock()
         self._listener = None
         self.error: str | None = None
@@ -174,10 +175,17 @@ class KeyboardReader:
         with self._lock:
             self._down.add(name)
             self.last_pressed = name
+            vk = getattr(key, "vk", None)
+            if vk is not None:
+                self._by_vk[vk] = name
 
     def _release(self, key) -> None:  # type: ignore[no-untyped-def]
         with self._lock:
             self._down.discard(key_name(key))
+            # Released with a different modifier held ("7" pressed, "&" released): match the physical key.
+            pressed_as = self._by_vk.pop(getattr(key, "vk", None), None)
+            if pressed_as is not None:
+                self._down.discard(pressed_as)
 
     def pressed(self, name: str) -> bool:
         with self._lock:
