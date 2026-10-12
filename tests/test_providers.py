@@ -237,3 +237,75 @@ def test_unreachable_local_server_says_so() -> None:
 
     asyncio.run(run())
     assert brain.available  # not fatal: start the server and it works
+
+
+def test_parallel_tool_calls_without_index_stay_separate() -> None:
+    no_index = [
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "id": "a",
+                                "type": "function",
+                                "function": {"name": "driver", "arguments": '{"name": "Leclerc"}'},
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "tool_calls": [
+                            {"id": "b", "type": "function", "function": {"name": "tyres", "arguments": "{}"}}
+                        ]
+                    }
+                }
+            ]
+        },
+        {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]},
+    ]
+    fake = FakeOpenAI([no_index, text_chunks("Leclerc is close. ", "Tyres fine.")])
+
+    async def run(brain: Brain, _s: Settings) -> list[str]:
+        return [x async for x in brain.reply("leclerc and tyres?", race_sim().world, FakeActions())]
+
+    out = asyncio.run(with_server(fake, "custom", "m", run))
+    assert out == ["Leclerc is close.", "Tyres fine."]
+    calls = fake.requests[1]["messages"][-3]["tool_calls"]
+    assert [c["function"]["name"] for c in calls] == ["driver", "tyres"]
+    assert json.loads(calls[0]["function"]["arguments"]) == {"name": "Leclerc"}
+
+
+def test_anthropic_retries_without_effort_for_older_models() -> None:
+    import anthropic
+    import httpx2 as httpx
+
+    from tests.test_brain import FakeClient
+
+    settings = Settings()
+    settings.ai.api_key = "sk-test"
+    settings.ai.model = "claude-haiku-4-5"
+    brain = Brain(lambda: settings, lambda: "")
+    backend = brain.backend()
+    inner = FakeClient([{"text": ["Loud and clear."]}])
+    requests: list[dict] = []
+
+    def stream(**kw):  # type: ignore[no-untyped-def]
+        requests.append(kw)
+        if "output_config" in kw:
+            resp = httpx.Response(400, request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+            raise anthropic.BadRequestError("output_config.effort: not supported", response=resp, body=None)
+        return inner._stream(**kw)
+
+    backend.client = type("C", (), {"messages": type("M", (), {"stream": staticmethod(stream)})()})()
+
+    async def run() -> list[str]:
+        return [x async for x in brain.reply("radio check", race_sim().world, FakeActions())]
+
+    assert asyncio.run(run()) == ["Loud and clear."]
+    assert "output_config" in requests[0] and "output_config" not in requests[1]

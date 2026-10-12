@@ -153,7 +153,8 @@ class CarDetector(Detector):
                 self._hot_since.pop(key, None)
             # Cold tyres only matter once they should be up to temperature: on a push lap or mid-race.
             ckey = f"cold:{axle}"
-            if temp < cold and me.speed_kph > 150 and (status.tyre_age_laps >= 1):
+            under_sc = ctx.world.session is not None and ctx.world.session.safety_car_status in (1, 2)
+            if temp < cold and me.speed_kph > 150 and status.tyre_age_laps >= 1 and not under_sc:
                 since = self._hot_since.setdefault(ckey, ctx.now)
                 if ctx.now - since > 20 and self._cooldown(ckey, ctx.now, 300):
                     out.append(

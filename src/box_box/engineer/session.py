@@ -10,6 +10,9 @@ from box_box.telemetry.packets import DriverStatus
 
 WEATHER_WORDS = {0: "clear skies", 1: "light cloud", 2: "overcast", 3: "light rain", 4: "heavy rain", 5: "stormy"}
 Q1, Q2, SHORT_Q, OSQ = 5, 6, 8, 9
+SQ1, SQ2 = 10, 11
+KNOCKOUT = {Q1, Q2, SQ1, SQ2}  # segments where the slowest are eliminated
+FINAL_QUALI = {7, 8, 9, 12, 13, 14}  # Q3, short, one-shot, SQ3, short sprint, one-shot sprint
 ORDINALS = {2: "second", 3: "third", 4: "fourth", 5: "fifth"}
 
 
@@ -136,7 +139,7 @@ class SessionDetector(Detector):
         world = ctx.world
         s, me = world.session, world.player
         assert s and me and me.lap
-        if s.session_type not in (Q1, Q2):
+        if s.session_type not in KNOCKOUT:
             return []
         cutoff = self._cutoff(ctx)
         pos = me.lap.position
@@ -153,7 +156,10 @@ class SessionDetector(Detector):
         """Last position that goes through to the next quali segment."""
         s = ctx.world.session
         assert s
-        return 10 if s.session_type == Q2 else max(10, len(ctx.world.running()) - 6)
+        if s.session_type in (Q2, SQ2):
+            return 10
+        running = len(ctx.world.running())
+        return max(10, running - (6 if running >= 22 else 5))  # 22-car grids drop six, 20-car grids five
 
     def _last_chance(self, ctx: Context) -> list[RadioCall]:
         world = ctx.world
@@ -184,9 +190,9 @@ class SessionDetector(Detector):
         if world.is_qualifying:
             pos = me.lap.position
             key = "session_end_quali"
-            if s.session_type in (Q1, Q2) and pos > self._cutoff(ctx):
+            if s.session_type in KNOCKOUT and pos > self._cutoff(ctx):
                 key = "quali_out"
-            elif pos == 1:
+            elif pos == 1 and s.session_type in FINAL_QUALI:
                 key = "quali_pole"
             return [ctx.call("session_end", Priority.INFO, ctx.say(key, pos=pos, me=ctx.me), ttl=120)]
         if best:

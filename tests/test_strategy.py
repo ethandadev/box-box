@@ -48,13 +48,14 @@ def test_grid_tyre_brief_names_the_odd_ones_out() -> None:
 
 def test_robust_tyres_then_plan_b_when_deg_bites() -> None:
     sim = Sim([StrategyDetector()], session=replace(SESSION, total_laps=30))
+    sim.set_session(pit_window_ideal_lap=20, pit_window_latest_lap=24)  # first stint: target is the stop
     racing(sim)
     sim.lap(0, lap_num=2)
     sim.tick()
     calls = wear_laps(sim, 5, 1.5, 5)  # 1.5%/lap with 24 to go: lasts ~38 laps -> fine
     robust = [c for c in calls if c.key == "tyre_plan"]
     assert len(robust) == 1 and robust[0].priority == Priority.INFO
-    calls = wear_laps(sim, 12.5, 6.0, 3, start_age=6)  # now 6%/lap: dead in a few laps
+    calls = wear_laps(sim, 12.5, 8.0, 5, start_age=6)  # now 6%/lap: dead in a few laps
     plan_b = [c for c in calls if c.key == "tyre_plan"]
     assert plan_b and "plan B" in plan_b[0].text and plan_b[0].priority == Priority.STRATEGY
 
@@ -66,7 +67,7 @@ def test_extend_the_stint_when_tyres_are_fresh_at_the_window() -> None:
     sim.lap(0, lap_num=3)
     sim.tick()
     calls = wear_laps(sim, 4, 1.5, 5, start_age=2)  # lap 8 now, ~12% worn, 1.5%/lap
-    ext = [c for c in calls if c.key == "tyre_plan" and "plus" in c.text]
+    ext = [c for c in calls if c.key == "pit_window" and "plus" in c.text]
     assert ext, [c.text for c in calls]
     calls = wear_laps(sim, 12, 1.5, 2, start_age=7)  # lap 10: the window, but no box call
     assert not any(c.key == "box" for c in calls)
@@ -76,9 +77,9 @@ def test_safety_car_window_then_box_under_the_safety_car() -> None:
     sim = Sim([StrategyDetector()], session=replace(SESSION, total_laps=30))
     sim.set_session(pit_window_ideal_lap=14, pit_window_latest_lap=18)
     racing(sim)
-    sim.lap(0, lap_num=7)
+    sim.lap(0, lap_num=6)
     sim.tick()
-    calls = wear_laps(sim, 10, 2.0, 1, start_age=7)  # lap 8: within 6 of the window
+    calls = wear_laps(sim, 8, 2.0, 2, start_age=6)  # lap 8: within 6 of the window, new set reaches the flag
     assert any(c.key == "sc_window" for c in calls)
     sim.set_session(safety_car_status=1)
     calls = sim.run(0.3)
@@ -158,10 +159,13 @@ def test_say_again_and_whats_the_plan() -> None:
 
 def test_openers_keep_proper_names_capitalised() -> None:
     say = Phrasebook(seed=1)
-    out = {say.lead("Leclerc 1.2 ahead.", me="Ethan", p=1.0) for _ in range(20)}
-    assert all("Leclerc" in o for o in out)
-    out = {say.lead("Gap to Leclerc 1.2.", me="Ethan", p=1.0) for _ in range(20)}
-    assert all("gap to Leclerc" in o for o in out)
+
+    def lead(text: str) -> str:
+        say._since_lead = 9  # no cooldown: every call gets an opener here
+        return say.lead(text, me="Ethan", p=1.0)
+
+    assert all("Leclerc" in lead("Leclerc 1.2 ahead.") for _ in range(20))
+    assert all("gap to Leclerc" in lead("Gap to Leclerc 1.2.") for _ in range(20))
 
 
 def test_second_quali_run_gets_its_own_call() -> None:

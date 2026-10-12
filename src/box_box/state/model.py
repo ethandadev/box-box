@@ -201,6 +201,7 @@ class World:
     chequered_flag: bool = False
     session_ended: bool = False
     fastest_lap: tuple[int, float] | None = None  # (car index, seconds) from FTLP events
+    plan_extended_from: int = 0  # ideal pit lap the strategist told the driver we'd go past
     last_packet_time: float = 0.0  # monotonic, set by the engine
 
     # ---- queries -------------------------------------------------------------------------------
@@ -391,6 +392,7 @@ class World:
         self.chequered_flag = False
         self.session_ended = False
         self.fastest_lap = None
+        self.plan_extended_from = 0
 
     def _rewind(self) -> None:
         """The clock went backwards: forget laps from the abandoned future."""
@@ -420,11 +422,13 @@ class World:
             self.changes.append(PitEntered(car.index))
         elif prev.pit_status != 0 and lap.pit_status == 0:
             if lap.num_pit_stops > prev.num_pit_stops or car._pit_stationary_ms > 0:
-                car.pit_stops += 1
+                car.pit_stops = max(car.pit_stops + 1, lap.num_pit_stops)
             self.changes.append(PitExited(car.index, car._pit_stationary_ms, car.compound))
             car._pit_stationary_ms = 0
-        # The game's own count covers stops made before we joined the session.
-        car.pit_stops = max(car.pit_stops, lap.num_pit_stops)
+        # The game's own count covers stops made before we joined the session (synced only on track,
+        # so a count bumped while still in the box isn't added twice on pit exit).
+        if lap.pit_status == 0:
+            car.pit_stops = max(car.pit_stops, lap.num_pit_stops)
 
         # Lap completion: the lap number moves on, or the last-lap time changes (the chequered flag
         # updates the time without incrementing the lap).

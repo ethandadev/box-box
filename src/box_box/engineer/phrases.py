@@ -286,6 +286,10 @@ PHRASES: dict[str, dict[str, list[str]]] = {
     "stay_out": {
         "calm": ["Stay out, stay out.", "Stay out this lap."],
     },
+    "pit_stop_time": {
+        "calm": ["Good stop, {seconds} seconds. Out in P{pos}.", "{seconds} second stop. You're P{pos}."],
+        "fired_up": ["Great stop! {seconds} seconds, P{pos}!"],
+    },
     "pit_stop_done": {
         "calm": [
             "Good stop, {seconds} seconds. Out in P{pos}.",

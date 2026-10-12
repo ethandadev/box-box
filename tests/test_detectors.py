@@ -43,7 +43,7 @@ def test_gap_updates_with_trend_every_two_laps() -> None:
         gaps += [c for c in sim.run(0.5) if c.key == "gaps"]
     assert len(gaps) == 2, [c.text for c in gaps]  # laps 2 and 4: every second lap
     text = gaps[1].text
-    assert "Norris" in text and "1.4" in text and "closing" in text and "two tenths" in text
+    assert "Norris" in text and "1.4" in text and "closing" in text.lower() and "two tenths" in text
     assert "Leclerc" in text and "2.1" in text
 
 

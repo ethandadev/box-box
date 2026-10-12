@@ -64,7 +64,7 @@ def gap(seconds: float) -> str:
     seconds = abs(seconds)
     if seconds >= 10:
         return f"{round(seconds)} seconds"
-    return f"{seconds:.1f}"
+    return f"{max(seconds, 0.1):.1f}"  # side by side is "point one", never "zero point zero"
 
 
 def tenths(seconds: float) -> str:
@@ -205,8 +205,15 @@ class Phrasebook:
     def lead(self, text: str, me: str = "", p: float = 0.3) -> str:
         """Sometimes open a call the way engineers do ("Okay, ...", "And Ethan, ..."), so not every
         transmission starts cold. Proper names and numbers keep their capitals."""
-        if not text or not self.chance(p) or text.startswith(("Okay", "And ", "Just for info")):
+        self._since_lead = getattr(self, "_since_lead", 9) + 1
+        if (
+            not text
+            or self._since_lead <= 2
+            or not self.chance(p)
+            or text.startswith(("Okay", "And ", "Just for info"))
+        ):
             return text
+        self._since_lead = 0
         opener = self.pick("lead", ["Okay, ", "And ", "Just for info, "])
         first, _, rest = text.partition(" ")
         if first.lower().strip(",.") in LOWERCASE_OK:

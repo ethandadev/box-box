@@ -80,6 +80,7 @@ class StrategyDetector(Detector):
         self._rhythm_lap = -10
         self._nothing_to_prove = False
         self._sc_temps_called = False
+        self._sc_laps: set[int] = set()
 
     def on_rewind(self) -> None:
         self._verdicts.clear()
@@ -164,8 +165,14 @@ class StrategyDetector(Detector):
         assert s and me.lap
         lap = me.lap.lap_num
         remaining = world.laps_remaining
-        if s.pit_window_ideal_lap and me.pit_stops == 0 and lap <= s.pit_window_ideal_lap:
-            return s.pit_window_ideal_lap - lap, True
+        if me.pit_stops == 0:
+            # First stint: the target is the stop, never the flag (a dry race needs a stop).
+            if not s.pit_window_ideal_lap:
+                return None, True  # no window from the game yet: no verdict to give
+            stop_lap = s.pit_window_ideal_lap
+            if lap > stop_lap or world.plan_extended_from == stop_lap:
+                stop_lap = s.pit_window_latest_lap or stop_lap
+            return max(1, stop_lap - lap), True
         return remaining, False
 
     def _say_once(self, ctx: Context, stint: int, verdict: str) -> bool:
@@ -196,8 +203,10 @@ class StrategyDetector(Detector):
             extra = min(latest - (lap + target), int(life - target) - 2)
             projected = (me.tyre_wear_avg or 0) + (wear_rate(me) or 0) * target
             if extra >= 2 and projected < 30 and self._say_once(ctx, stint, "extend"):
+                ctx.world.plan_extended_from = s.pit_window_ideal_lap
                 text = ctx.say("plan_extend", n=count_word(extra), me=ctx.me)
-                return [ctx.call("tyre_plan", Priority.STRATEGY, text, ttl=40, category="pit")]
+                # Same key as the race detector's "window opens in N laps", so this replaces it.
+                return [ctx.call("pit_window", Priority.STRATEGY, text, ttl=40, category="pit")]
         # Comfortably inside the plan: let the driver lean on them.
         if target >= 3 and life >= target + 4 and 4 <= age <= 14 and self._say_once(ctx, stint, "robust"):
             if to_stop and s.pit_window_ideal_lap and ctx.say.chance(0.5):
@@ -216,12 +225,15 @@ class StrategyDetector(Detector):
         s = world.session
         assert s and me.lap
         remaining = world.laps_remaining or 0
-        if remaining < 8 or me.status is None:
+        if remaining < 8 or me.status is None or me.pit_stops > 0:
+            return False  # one-stop race: once we've stopped, a safety car is no reason to stop again
+        # A new set has to make it to the flag, at the wear rate we're seeing.
+        rate = wear_rate(me)
+        if not rate or rate <= 0 or remaining > TYRE_CLIFF_PCT / rate:
             return False
-        if s.pit_window_ideal_lap and me.pit_stops == 0:
+        if s.pit_window_ideal_lap:
             return me.lap.lap_num >= s.pit_window_ideal_lap - 6
-        # No game window (or already stopped): a cheap stop is worth it on worn tyres.
-        return me.status.tyre_age_laps >= 10 and (me.tyre_wear_avg or 0) >= 25
+        return me.status.tyre_age_laps >= 8 and (me.tyre_wear_avg or 0) >= 20
 
     def _sc_window(self, ctx: Context, me: CarState) -> list[RadioCall]:
         stint = me.pit_stops
@@ -235,6 +247,8 @@ class StrategyDetector(Detector):
         s = ctx.world.session
         assert s
         prev, self._sc_status = self._sc_status, s.safety_car_status
+        if s.safety_car_status in (1, 2) and me.lap:
+            self._sc_laps.add(me.lap.lap_num)
         if s.safety_car_status not in (1, 2) or prev == s.safety_car_status:
             return []
         stint = me.pit_stops
@@ -314,7 +328,10 @@ class StrategyDetector(Detector):
         s = world.session
         assert s and me.lap
         laps = [r for r in me.laps if r.lap_ms > 0 and not r.pit_lap]
-        if len(laps) < 5 or s.safety_car_status != 0 or me.lap.lap_num - self._rhythm_lap < 5:
+        if len(laps) < 5 or me.lap.lap_num - self._rhythm_lap < 5:
+            return []
+        # Any lap touched by a safety car or VSC (and the one after it) is slow for a reason.
+        if self._sc_laps & {laps[-1].lap_num, laps[-1].lap_num - 1, me.lap.lap_num}:
             return []
         last, recent = laps[-1], sorted(r.lap_ms for r in laps[-6:-1])
         median = recent[len(recent) // 2]

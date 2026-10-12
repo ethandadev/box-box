@@ -240,6 +240,9 @@ class Brain:
     def reset_errors(self) -> None:
         self.disabled_reason = None
         self.last_error = None
+        reset = getattr(self._backend, "reset", None)
+        if callable(reset):
+            reset()
 
     def backend(self) -> Any:
         s = self._settings()

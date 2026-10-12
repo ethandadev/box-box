@@ -107,6 +107,25 @@ class AnthropicBackend:
 
         self.provider = provider
         self.client = anthropic.AsyncAnthropic(api_key=key, timeout=anthropic.Timeout(20.0, connect=5.0), max_retries=1)
+        self._no_effort: set[str] = set()  # models that reject the effort setting (older Claude models)
+
+    def _opts(self, model: str) -> dict[str, Any]:
+        return {} if model in self._no_effort else {"output_config": {"effort": "low"}}
+
+    def _effort_rejected(self, e: Exception, model: str) -> bool:
+        """An older model refused `effort`: remember, so the request can go again without it."""
+        import anthropic
+
+        msg = str(getattr(e, "message", e)).lower()
+        if (
+            isinstance(e, anthropic.BadRequestError)
+            and model not in self._no_effort
+            and ("effort" in msg or "output_config" in msg)
+        ):
+            log.info("%s doesn't take the effort setting; retrying without it", model)
+            self._no_effort.add(model)
+            return True
+        return False
 
     @staticmethod
     def tools(defs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -138,19 +157,27 @@ class AnthropicBackend:
         tools = self.tools(tool_defs)
         async with self._errors(model):
             for _round in range(MAX_TOOL_ROUNDS):
-                async with self.client.messages.stream(
-                    model=model,
-                    max_tokens=1024,
-                    system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-                    tools=tools,
-                    messages=messages,
-                    output_config={"effort": "low"},
-                ) as stream:
-                    async for event in stream:
-                        if event.type == "text":
-                            for sentence in out.feed(event.text):
-                                yield sentence
-                    final = await stream.get_final_message()
+                for _attempt in range(2):
+                    spoke = len(out.spoken)
+                    try:
+                        async with self.client.messages.stream(
+                            model=model,
+                            max_tokens=1024,
+                            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                            tools=tools,
+                            messages=messages,
+                            **self._opts(model),
+                        ) as stream:
+                            async for event in stream:
+                                if event.type == "text":
+                                    for sentence in out.feed(event.text):
+                                        yield sentence
+                            final = await stream.get_final_message()
+                        break
+                    except Exception as e:
+                        if len(out.spoken) == spoke and self._effort_rejected(e, model):
+                            continue
+                        raise
                 for sentence in out.flush():
                     yield sentence
                 if final.stop_reason == "refusal":
@@ -171,13 +198,20 @@ class AnthropicBackend:
 
     async def complete(self, model: str, system: str, prompt: str, max_tokens: int) -> str:
         async with self._errors(model):
-            msg = await self.client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": prompt}],
-                output_config={"effort": "low"},
-            )
+            for _attempt in range(2):
+                try:
+                    msg = await self.client.messages.create(
+                        model=model,
+                        max_tokens=max_tokens,
+                        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                        messages=[{"role": "user", "content": prompt}],
+                        **self._opts(model),
+                    )
+                    break
+                except Exception as e:
+                    if self._effort_rejected(e, model):
+                        continue
+                    raise
         if msg.stop_reason == "refusal":
             raise LLMError("The model declined to answer.")
         return " ".join(b.text for b in msg.content if b.type == "text")
@@ -353,7 +387,13 @@ class OpenAICompatBackend:
         except (aiohttp.ClientError, TimeoutError) as e:
             raise self._net_error(e) from e
 
+    def reset(self) -> None:
+        """Forget what we learned about the server (the loaded model may have changed)."""
+        self._auto_model = None
+
     def _fail(self, e: HTTPError, model: str) -> LLMError:
+        if e.status == 404:
+            self._auto_model = None  # the local server may have a different model loaded now
         label, msg, low = self.provider.label, e.message, e.message.lower()
         if e.status == 401:
             return LLMError(f"The {label} API key was rejected. Check it in Settings > AI.", fatal=True)
@@ -481,8 +521,16 @@ class OpenAICompatBackend:
                                 text_parts.append(content)
                                 for sentence in out.feed(content):
                                     yield sentence
-                            for i, tc in enumerate(delta.get("tool_calls") or []):
-                                entry = calls.setdefault(int(tc.get("index", i)), {"id": "", "name": "", "args": ""})
+                            for tc in delta.get("tool_calls") or []:
+                                if "index" in tc:
+                                    idx = int(tc["index"])
+                                else:
+                                    # No index (some servers send each whole call in its own chunk):
+                                    # a new id means a new call, otherwise it continues the last one.
+                                    last = max(calls) if calls else -1
+                                    new_id = tc.get("id") and (last < 0 or calls[last]["id"] not in ("", tc["id"]))
+                                    idx = last + 1 if new_id or last < 0 else last
+                                entry = calls.setdefault(idx, {"id": "", "name": "", "args": ""})
                                 if tc.get("id"):
                                     entry["id"] = tc["id"]
                                 fn = tc.get("function") or {}

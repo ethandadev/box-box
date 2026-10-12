@@ -17,8 +17,9 @@ import random
 import re
 
 # Chance that a transmission gets a slip, and the minimum number of clean calls in between.
-RATES = {"off": 0.0, "subtle": 0.16, "human": 0.32}
-COOLDOWN = {"off": 99, "subtle": 3, "human": 1}
+RATES = {"off": 0.0, "subtle": 0.1, "human": 0.22}
+COOLDOWN = {"off": 99, "subtle": 4, "human": 2}
+NUMBER_SLIP_EVERY = 12  # a misspoken number at most once in this many transmissions
 
 # Calls where a misspoken number is harmless and immediately corrected.
 NUMBER_SLIP_KEYS = {"gaps", "lap", "pit_done", "rival", "time_left", "laps_to_go", "tyre_plan"}
@@ -32,6 +33,8 @@ class Humanizer:
     def __init__(self, rng: random.Random | None = None) -> None:
         self._rng = rng or random.Random()
         self._since_slip = 99
+        self._calls = 0
+        self._last_number_slip = -99
 
     def apply(self, text: str, level: str, *, key: str = "", safety: bool = False, reply: bool = False) -> str:
         """Maybe add one natural imperfection. `reply` limits it to spoken-reply habits (no number slips)."""
@@ -39,14 +42,15 @@ class Humanizer:
         if safety or not rate or not text:
             return text
         self._since_slip += 1
+        self._calls += 1
         if self._since_slip <= COOLDOWN.get(level, 3) or self._rng.random() >= rate:
             return text
         options = [self._filler, self._restart, self._mate]
         if reply:
             options = [self._filler, self._yeah, self._copy_copy, self._mate]
         else:
-            if key.split(":")[0] in NUMBER_SLIP_KEYS:
-                options += [self._number_slip, self._number_slip]  # the most human one: weight it up
+            if key.split(":")[0] in NUMBER_SLIP_KEYS and self._calls - self._last_number_slip >= NUMBER_SLIP_EVERY:
+                options.append(self._number_slip)
             if key == "pit_done":
                 options.append(self._compound_slip)
         self._rng.shuffle(options)
@@ -54,6 +58,8 @@ class Humanizer:
             out = slip(text)
             if out and out != text:
                 self._since_slip = 0
+                if slip == self._number_slip:
+                    self._last_number_slip = self._calls
                 return out
         return text
 
@@ -78,7 +84,9 @@ class Humanizer:
         if not rest or not first[:1].isalpha():
             return None
         lead = self._rng.choice(["So, uh... ", "Okay, so... ", "Okay... "])
-        if first.lower() in {"gap", "tyres", "fuel", "that", "you", "you're", "we", "we're", "the", "these", "still"}:
+        from box_box.engineer.radio import LOWERCASE_OK
+
+        if first.lower().strip(",.") in LOWERCASE_OK | {"temps", "rears", "fronts", "deg"}:
             first = first.lower()
         return lead + first + " " + rest
 
