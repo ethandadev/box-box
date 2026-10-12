@@ -10,6 +10,7 @@ from box_box.telemetry.packets import DriverStatus
 
 WEATHER_WORDS = {0: "clear skies", 1: "light cloud", 2: "overcast", 3: "light rain", 4: "heavy rain", 5: "stormy"}
 Q1, Q2, SHORT_Q, OSQ = 5, 6, 8, 9
+ORDINALS = {2: "second", 3: "third", 4: "fourth", 5: "fifth"}
 
 
 class SessionDetector(Detector):
@@ -23,6 +24,8 @@ class SessionDetector(Detector):
         self._last_chance_called = False
         self._ended = False
         self._prev_status: int | None = None
+        self._runs = 0  # times the driver has left the garage this session
+        self._in_garage: bool | None = None
 
     def on_rewind(self) -> None:
         self._last_time_left = None
@@ -35,6 +38,7 @@ class SessionDetector(Detector):
             return []
         out: list[RadioCall] = []
         out += self._greet(ctx)
+        out += self._new_run(ctx)
         out += self._time_left(ctx)
         for change in ctx.changes:
             if isinstance(change, LapCompleted) and change.car_index == me.index and world.is_qualifying:
@@ -77,6 +81,23 @@ class SessionDetector(Detector):
             else:
                 text = ctx.say("greet_practice", **common)
         return [ctx.call("greet", Priority.INFO, text, ttl=60, verbosity=Verbosity.QUIET)]
+
+    def _new_run(self, ctx: Context) -> list[RadioCall]:
+        """Each time the driver leaves the garage again in quali: the run, the clock, the out-lap job."""
+        world = ctx.world
+        me, s = world.player, world.session
+        assert me and me.lap and s
+        garage = me.lap.driver_status == DriverStatus.IN_GARAGE
+        prev, self._in_garage = self._in_garage, garage
+        if prev is None or not prev or garage:
+            return []
+        self._runs += 1
+        if not world.is_qualifying or self._runs < 2 or s.time_left_s <= 0:
+            return []
+        minutes = max(1, s.time_left_s // 60)
+        run = ORDINALS.get(self._runs, "next")
+        text = ctx.say("quali_run", run=run, run_cap=run.capitalize(), minutes=minutes, me=ctx.me)
+        return [ctx.call("greet", Priority.INFO, text, ttl=40)]
 
     @staticmethod
     def _temp(ctx: Context, celsius: int) -> str:

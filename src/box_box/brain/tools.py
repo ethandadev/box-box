@@ -1,4 +1,4 @@
-"""What the engineer can look up. Shared by the instant offline answers and Claude's tool calls.
+"""What the engineer can look up. Shared by the instant offline answers and the AI's tool calls.
 
 Every function reads the live World and returns plain data. Numbers never come from the LLM's
 imagination: it has to call one of these.

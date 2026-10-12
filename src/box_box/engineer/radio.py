@@ -98,6 +98,49 @@ def ordinal_position(p: int) -> str:
     return f"P{p}"
 
 
+# Sentence-opening words that read naturally in lower case after "Okay, " (everything else, like
+# driver names, "P4" or numbers, keeps its capital).
+LOWERCASE_OK = {
+    "gap",
+    "tyres",
+    "fuel",
+    "that",
+    "you",
+    "your",
+    "you're",
+    "we",
+    "we're",
+    "it",
+    "it's",
+    "the",
+    "there",
+    "good",
+    "nice",
+    "pace",
+    "battery",
+    "track",
+    "rain",
+    "box",
+    "stay",
+    "brakes",
+    "front",
+    "car",
+    "radar",
+    "inside",
+    "taking",
+    "wear",
+    "deg",
+    "these",
+    "still",
+    "most",
+    "whole",
+    "pit",
+    "just",
+    "tyre",
+    "this",
+}
+
+
 class Phrasebook:
     """Picks among variations so the same situation doesn't sound canned, without repeating back-to-back.
 
@@ -123,3 +166,14 @@ class Phrasebook:
 
     def chance(self, p: float) -> bool:
         return self._rng.random() < p
+
+    def lead(self, text: str, me: str = "", p: float = 0.3) -> str:
+        """Sometimes open a call the way engineers do ("Okay, ...", "And Ethan, ..."), so not every
+        transmission starts cold. Proper names and numbers keep their capitals."""
+        if not text or not self.chance(p) or text.startswith(("Okay", "And ", "Just for info")):
+            return text
+        opener = self.pick("lead", ["Okay, ", "And ", "Just for info, "])
+        first, _, rest = text.partition(" ")
+        if first.lower().strip(",.") in LOWERCASE_OK:
+            first = first[0].lower() + first[1:]
+        return opener + first + (" " + rest if rest else "")

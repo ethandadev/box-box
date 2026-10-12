@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
+import time
 from collections.abc import AsyncIterator, Callable
 
 from box_box.brain import intents
@@ -18,6 +20,17 @@ from box_box.telemetry import names
 log = logging.getLogger(__name__)
 
 STAND_BY_AFTER_S = 1.5
+FEEDBACK_WINDOW_S = 75.0  # how long after "How's the balance?" an answer counts as feedback
+QUESTION_START = re.compile(
+    r"^(?:what|what's|whats|how|how's|hows|where|where's|who|who's|when|why|is|are|can|could|should|do|does|did|"
+    r"any|have|has|will|would|tell me|give me)\b",
+    re.I,
+)
+
+
+def is_question(text: str) -> bool:
+    t = text.strip()
+    return t.endswith("?") or bool(QUESTION_START.match(t))
 
 
 class Conversation:
@@ -29,6 +42,23 @@ class Conversation:
         self._settings = settings
         self.bus = bus or Bus()
         self.say = Phrasebook()
+        self.awaiting: tuple[str, float] | None = None  # (topic, when asked)
+
+    def expect_feedback(self, topic: str) -> None:
+        """The engineer just asked the driver something ("How's the balance?"): the next answer is feedback."""
+        self.awaiting = (topic, time.monotonic())
+
+    def _feedback_topic(self, text: str, local: intents.Answer | None) -> str | None:
+        if self.awaiting is None:
+            return None
+        topic, asked_at = self.awaiting
+        if time.monotonic() - asked_at > FEEDBACK_WINDOW_S:
+            self.awaiting = None
+            return None
+        if (local and local.command) or is_question(text):
+            return None
+        self.awaiting = None
+        return topic
 
     async def handle(self, transcript: str, world: World) -> AsyncIterator[str]:
         s = self._settings()
@@ -39,6 +69,20 @@ class Conversation:
             return
         self.bus.publish("driver", text=text)
         local = intents.answer(text, world, self.actions, s.driver.name)
+        llm_text = text
+        topic = self._feedback_topic(text, local)
+        if topic:
+            where = (
+                f"{names.track_name(world.session.track_id)} {names.session_name(world.session_type)}"
+                if world.session
+                else "a session"
+            )
+            self.actions.remember(f"{topic.capitalize()} feedback at {where}: {text}")
+            if not self.brain.available:
+                yield self.say("feedback_ack", me=s.driver.name)
+                return
+            local = None  # it's feedback, not a question about tyres or whatever it mentioned
+            llm_text = f"(answering your question about the {topic}) {text}"
         use_llm = self.brain.available and not (local and (local.command or s.ai.fast_answers))
         if not use_llm:
             if local:
@@ -54,7 +98,7 @@ class Conversation:
 
         async def pump() -> None:
             try:
-                async for sentence in self.brain.reply(text, world, self.actions):
+                async for sentence in self.brain.reply(llm_text, world, self.actions):
                     await queue.put(sentence)
             except Exception as e:  # noqa: BLE001
                 await queue.put(e)
@@ -133,8 +177,12 @@ class Conversation:
         if not (self.brain.available and s.ai.debrief):
             return None
         prompt = (
-            f"The session just ended. Give {s.driver.name} a spoken radio debrief: at most three short sentences, "
-            f"one positive, one thing to work on. Facts: {summary}"
+            f"The session just ended. Give {s.driver.name} the post-session radio, like a real F1 engineer on the "
+            "in-lap: open with the result, one specific thing that went well, one thing we'll review, and a short "
+            "warm close. Three or four short sentences, spoken, no lists. Examples of the tone: "
+            "'P3, well done mate. Pace was good in clean air. We'll look at the stop. Good points today.' / "
+            "'Not our day. We'll review. You drove well with what we had.' "
+            f"Facts: {summary}"
         )
         try:
             return await self.brain.complete(prompt)

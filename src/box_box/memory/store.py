@@ -185,7 +185,7 @@ class Memory:
         )
 
     def driver_profile(self) -> str:
-        """A few lines about the driver for Claude's context: notes, past debriefs, recent results."""
+        """A few lines about the driver for the AI's context: notes, past debriefs, recent results."""
         lines = []
         for n in reversed(self.notes(12)):
             lines.append(f"- ({n['kind']}) {n['text']}")

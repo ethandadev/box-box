@@ -1,7 +1,7 @@
 """Instant answers for the common questions and commands, no AI needed.
 
-These run before Claude: they're immediate, they work offline and without an API key, and they're
-exact (the numbers come straight from telemetry). Anything not matched here goes to Claude.
+These run before the AI: they're immediate, they work offline and without an API key, and they're
+exact (the numbers come straight from telemetry). Anything not matched here goes to the AI.
 """
 
 from __future__ import annotations
@@ -23,12 +23,13 @@ class Actions(Protocol):
     def set_gap_every(self, laps: int) -> None: ...
     def set_callout(self, category: str, enabled: bool) -> None: ...
     def remember(self, note: str) -> None: ...
+    def last_radio(self) -> str | None: ...
 
 
 @dataclass
 class Answer:
     text: str
-    command: bool = False  # changed a setting (so it's handled even when Claude is available)
+    command: bool = False  # changed a setting (so it's handled even when the AI is available)
 
 
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "every": 1, "each": 1}
@@ -289,6 +290,38 @@ def _whos_around(t: str, w: World, a: Actions, me: str) -> Answer | None:
     return Answer(", ".join(bits) + "." if bits else "Nobody around you.")
 
 
+def _say_again(t: str, w: World, a: Actions, me: str) -> Answer | None:
+    last_radio = getattr(a, "last_radio", None)
+    said = last_radio() if callable(last_radio) else None
+    return Answer(said or "Nothing from me. All good.")
+
+
+def _plan(t: str, w: World, a: Actions, me: str) -> Answer | None:
+    info = tools.strategy(w)
+    if "error" in info or not w.is_race:
+        return None
+    me_car = w.player
+    bits: list[str] = []
+    window = info.get("game_pit_window")
+    life = info.get("tyre_life_laps_left_estimate")
+    remaining = info.get("laps_remaining")
+    if window and info["pit_stops_done"] == 0 and me_car and me_car.lap and me_car.lap.lap_num <= window["ideal_lap"]:
+        if life is not None and life < window["ideal_lap"] - me_car.lap.lap_num - 2:
+            bits.append(f"Thinking plan B. The tyres have about {life} laps, so we'll come in early")
+        else:
+            bits.append(f"Plan A. Box around lap {window['ideal_lap']}")
+            if life is not None:
+                bits.append(f"tyres have about {life} laps in them")
+    elif remaining is not None:
+        if life is not None and life + 2 < remaining:
+            bits.append(f"{remaining} to go and the tyres have about {life} laps. We'll need to look at another stop")
+        else:
+            bits.append(f"No more stops. {remaining} laps to go, bring it home")
+    if not bits:
+        return None
+    return Answer(". ".join(b[0].upper() + b[1:] for b in bits) + ".")
+
+
 def _remember(t: str, w: World, a: Actions, me: str) -> Answer | None:
     m = re.search(r"remember (?:that )?(.+)", t)
     if not m:
@@ -301,6 +334,14 @@ RULES: list[Rule] = [
     (r"\bradio check\b|\bcan you hear me\b|\bdo you (?:read|copy)\b", _radio_check),
     (r"^(?:thanks|thank you|cheers|nice one)\b", _thanks),
     (r"\bremember\b", _remember),
+    (
+        r"\b(?:say (?:that )?again|repeat(?: that)?|what did you (?:just )?say|come again|didn'?t (?:get|catch) that)\b",
+        _say_again,
+    ),
+    (
+        r"\bwhat(?:'s| is) the plan\b|\bplan [ab]\b|\bwhat(?:'s| is) (?:our|the) strategy\b|\bwhen (?:do|are) we (?:box|pit)",
+        _plan,
+    ),
     (r"\b(?:radio silence|stop talking|shut up|be quiet for|go quiet|no radio)\b", _silence),
     (r"\b(?:talk to me again|radio back on|you can talk|unmute|come back on)\b", _unmute),
     (

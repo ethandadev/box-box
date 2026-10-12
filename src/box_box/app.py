@@ -325,6 +325,8 @@ class Engine:
                     if decision.interrupt:
                         self.speaker.stop()
                     self.speaker.speaking = decision.call
+                    if decision.call.key.startswith("ask:"):
+                        self.conversation.expect_feedback(decision.call.key.split(":", 1)[1])
                     self.memory.log_radio(self._session_db_id, "engineer", decision.call.text)
                     self._speak_task = asyncio.create_task(self.speaker.say(decision.call))
             except Exception:
@@ -451,6 +453,13 @@ class Engine:
 
     def remember(self, note: str) -> None:
         self.memory.add_note("driver", note)
+
+    def last_radio(self) -> str | None:
+        """The engineer's last transmission, for "say again"."""
+        for e in reversed(self.bus.history):
+            if e["type"] == "radio" and e.get("source") != "reply":
+                return e["text"]
+        return None
 
     # ================================================================================================
     # subsystems & settings

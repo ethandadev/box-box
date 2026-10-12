@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from box_box.engineer.base import Context, Detector
 from box_box.engineer.radio import Priority, RadioCall, Verbosity, gap, tenths
+from box_box.engineer.strategy import tyre_offset
 from box_box.state.model import CarState, LapCompleted, PitEntered, PitExited, Retired
 from box_box.telemetry.packets import ResultStatus
 
@@ -33,6 +35,7 @@ class RaceDetector(Detector):
         self._last_lap_called = False
         self._finished_called = False
         self._laps_to_go_called: set[int] = set()
+        self._offset_said: dict[int, str] = {}  # car index -> last tyre-offset note given
 
     def on_rewind(self) -> None:
         # Keep the one-off calls (start, finish); drop pending moves and gap trends from the rewound future.
@@ -187,6 +190,15 @@ class RaceDetector(Detector):
         else:
             return []
         text = text.replace(", .", ".").replace(" .", ".").replace("..", ".")
+        text = re.sub(r"([.!?] )([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+        # Like a real pit wall: add the rival's tyre situation when it's new information.
+        for car, ok in ((ahead, valid_ahead and me.lap.position > 1), (behind, valid_behind)):
+            note = tyre_offset(me, car) if ok and car is not None else None
+            if note and car is not None and self._offset_said.get(car.index) != note:
+                self._offset_said[car.index] = note
+                who = ctx.name(car, "He")
+                text += " " + note.replace("He's", f"{who}'s", 1).replace("Same tyre,", f"{who} on the same tyre,", 1)
+                break
         return [ctx.call("gaps", Priority.INFO, text, ttl=20, category="gaps", verbosity=Verbosity.NORMAL)]
 
     def _within_second(self, ctx: Context, me: CarState) -> list[RadioCall]:
@@ -359,4 +371,11 @@ class RaceDetector(Detector):
             if pos <= POINTS_POSITIONS
             else "finish_no_points"
         )
-        return [ctx.call("finish", Priority.STRATEGY, ctx.say(key, pos=pos, me=ctx.me), ttl=60)]
+        text = ctx.say(key, pos=pos, me=ctx.me)
+        grid = me.lap.grid_position
+        if grid and pos != 1:
+            if grid - pos >= 2:
+                text += " " + ctx.say("finish_gained", n=grid - pos)
+            elif pos - grid >= 3 and key == "finish_no_points":
+                text += " " + ctx.say("finish_lost")
+        return [ctx.call("finish", Priority.STRATEGY, text, ttl=60)]

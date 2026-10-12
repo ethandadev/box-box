@@ -423,6 +423,8 @@ class World:
                 car.pit_stops += 1
             self.changes.append(PitExited(car.index, car._pit_stationary_ms, car.compound))
             car._pit_stationary_ms = 0
+        # The game's own count covers stops made before we joined the session.
+        car.pit_stops = max(car.pit_stops, lap.num_pit_stops)
 
         # Lap completion: the lap number moves on, or the last-lap time changes (the chequered flag
         # updates the time without incrementing the lap).

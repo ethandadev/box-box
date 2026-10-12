@@ -83,6 +83,10 @@ class CarDetector(Detector):
                     out.append(
                         ctx.call("wing", Priority.STRATEGY, ctx.say("wing_damage_box"), ttl=30, category="damage")
                     )
+                elif b >= 40 and not ctx.world.is_time_trial:
+                    # Practice/quali: no point running a broken car, the data and laps are worthless.
+                    text = ctx.say("wing_damage_practice", side=side, pct=b)
+                    out.append(ctx.call("wing", Priority.STRATEGY, text, ttl=30, category="damage"))
                 else:
                     out.append(
                         ctx.call(

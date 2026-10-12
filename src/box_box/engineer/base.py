@@ -13,6 +13,11 @@ from box_box.telemetry.packets import Event
 log = logging.getLogger(__name__)
 
 
+# Calls where a real engineer would often open with "Okay," / "And," / "Just for info," rather than
+# launching straight in. Not lap times (those are said bare, the instant the lap ends) or warnings.
+CONVERSATIONAL_KEYS = {"gaps", "pit_window", "rival", "tyre_plan", "sc_window", "grid_tyres", "pit_done", "tyres"}
+
+
 @dataclass
 class Context:
     world: World
@@ -46,6 +51,8 @@ class Context:
         category: str = "general",
         verbosity: Verbosity = Verbosity.QUIET,
     ) -> RadioCall:
+        if priority == Priority.INFO and key.split(":")[0] in CONVERSATIONAL_KEYS:
+            text = self.say.lead(text, me=self.me)
         return RadioCall(
             key=key,
             priority=priority,
