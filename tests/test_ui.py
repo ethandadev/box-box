@@ -118,5 +118,5 @@ def test_feedback_bundle_has_recording_radio_and_report(tmp_path) -> None:  # ty
     data = asyncio.run(run())
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         names = z.namelist()
-        assert fixture.name in names and "radio.txt" in names and "support-report.txt" in names
+        assert "race-2026-monza-finish.f1raw.gz" in names and "radio.txt" in names and "support-report.txt" in names
         assert "Box this lap" in z.read("radio.txt").decode()

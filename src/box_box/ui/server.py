@@ -362,9 +362,17 @@ class UIServer:
             start = st.st_ctime if sys.platform == "win32" else st.st_mtime - 4 * 3600
             radio = self.engine.memory.radio_between(start - 60, st.st_mtime + 300)
             lines = [f"{time.strftime('%H:%M:%S', time.localtime(r['at']))}  {r['who']:8}  {r['text']}" for r in radio]
+            import tempfile
+
+            from box_box.telemetry.rawfile import compact
+
+            stem = path.name.split(".f1raw")[0]
             buf = io.BytesIO()
-            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-                z.write(path, path.name, compress_type=zipfile.ZIP_STORED)  # already gzip-compressed
+            with tempfile.TemporaryDirectory() as tmp, zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+                # A shareable copy: only what the engineer uses, about 5x smaller, replays the same.
+                small = Path(tmp) / f"{stem}.f1raw.gz"
+                compact(path, small)
+                z.write(small, small.name, compress_type=zipfile.ZIP_STORED)  # already gzip-compressed
                 z.writestr("radio.txt", "\n".join(lines) + "\n" if lines else "(nothing was said)\n")
                 z.writestr("support-report.txt", diagnostics.report(self.engine))
             return buf.getvalue()

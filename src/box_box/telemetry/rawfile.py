@@ -25,9 +25,9 @@ class RawFileError(ValueError):
 
 
 class RawWriter:
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, level: int = 6) -> None:
         self._file: BinaryIO = (
-            gzip.open(path, "wb", compresslevel=6) if str(path).endswith(".gz") else open(path, "wb")  # noqa: SIM115
+            gzip.open(path, "wb", compresslevel=level) if str(path).endswith(".gz") else open(path, "wb")  # noqa: SIM115
         )
         self._file.write(FILE_HEADER.pack(MAGIC, VERSION))
         self.count = 0
@@ -75,3 +75,35 @@ def read_records(path: str | Path) -> Iterator[tuple[int, bytes]]:
             if len(data) < length:
                 return
             yield t_ns, data
+
+
+# For sharing a session: the packets the engineer uses, at the rate he needs them. About 4x smaller.
+_SHARE_RATE_HZ = {
+    6: 10.0,
+    7: 10.0,
+    16: 10.0,
+    10: 2.0,
+    11: 4.0,
+}  # telemetry, status, t2, damage, history (lap data: all)
+_SHARE_KEEP = {1, 2, 3, 4, 6, 7, 8, 10, 11, 16}  # no motion, setups, lobby, tyre sets, motion ex, time trial, positions
+
+
+def compact(src: str | Path, dest: str | Path) -> int:
+    """Write a smaller copy of a recording that still replays the same through the engineer.
+    Returns the number of datagrams kept."""
+    last: dict[int, int] = {}
+    kept = 0
+    with RawWriter(dest, level=9) as out:
+        for t_ns, data in read_records(src):
+            if len(data) < 7:
+                continue
+            pid = data[6]
+            if pid not in _SHARE_KEEP:
+                continue
+            rate = _SHARE_RATE_HZ.get(pid)
+            if rate and t_ns - last.get(pid, -(10**18)) < 1e9 / rate:
+                continue
+            last[pid] = t_ns
+            out.write(t_ns, data)
+            kept += 1
+    return kept
