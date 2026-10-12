@@ -98,6 +98,13 @@ def test_snapshot_is_compact_and_factual() -> None:
     assert len(snap) < 300
 
 
+def test_snapshot_says_when_the_race_is_over() -> None:
+    sim = race_sim()
+    sim.lap(0, result_status=3)
+    sim.tick()
+    assert tools.snapshot(sim.world).startswith("RACE FINISHED")
+
+
 def test_split_sentences() -> None:
     done, rest = split_sentences("Copy. Gap is 1.2 to Leclerc. He's on")
     assert done == ["Copy.", "Gap is 1.2 to Leclerc."] and rest == "He's on"

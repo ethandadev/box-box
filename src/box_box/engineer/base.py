@@ -58,6 +58,8 @@ class Context:
         category: str = "general",
         verbosity: Verbosity = Verbosity.QUIET,
     ) -> RadioCall:
+        # Names keep their capitals when an opener goes in front ("Okay, so Russell is through").
+        self.say.proper.update(c.name for c in self.world.cars if c.participant and c.participant.name)
         if priority == Priority.INFO and key.split(":")[0] in CONVERSATIONAL_KEYS:
             text = self.say.lead(text, me=self.me)
         crisp = priority == Priority.SAFETY or key.split(":")[0] in CRISP_KEYS

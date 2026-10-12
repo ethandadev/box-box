@@ -707,7 +707,10 @@ _CLIPPED: dict[str, list[str]] = {
     "after_lap_one_same": ["P{pos}. Good, settle in.", "Held position, P{pos}. Settle in."],
     "car_ahead_pitted": ["{name} has boxed. Clear air, push now.", "{name} pitting. This is your chance, push."],
     "car_behind_pitted": ["{name} behind has boxed. Undercut threat.", "{name} pitted behind. Watch the undercut."],
-    "pit_window_soon": ["Box window opens in {n} laps. Target lap {ideal}.", "Pit window, lap {ideal}. {n} laps."],
+    "pit_window_soon": [
+        "Box window opens in {n} laps. Target lap {ideal}.",
+        "Window opens in {n} laps, we're looking at lap {ideal}.",
+    ],
     "lap_slower": ["{time}. {delta} off, sector {sector}.", "{time}, {delta} down. Lost it in sector {sector}."],
     "lap_position": ["P{pos}, {delta} off {name}.", "That's P{pos}, {delta} to {name}."],
     "long_run_summary": [

@@ -42,3 +42,19 @@ def test_reply_habits_and_compound_correction() -> None:
     assert "Copy, copy. Box this lap." in replies
     stops = set(run("2.4 second stop. You're P5. New hards on.", key="pit_done", n=2000))
     assert any(re.search(r"New (softs|mediums), sorry, new hards", t) for t in stops)
+
+
+def test_openers_keep_names_but_lowercase_ordinary_words() -> None:
+    from box_box.engineer.radio import soften
+
+    assert soften("Overtake") == "overtake"
+    assert soften("Lead") == "lead"
+    assert soften("Russell", {"Russell"}) == "Russell"
+    assert soften("Leclerc's") == "Leclerc's"
+    assert soften("P4") == "P4" and soften("DRS") == "DRS" and soften("I'm") == "I'm"
+
+
+def test_no_mate_after_the_drivers_name() -> None:
+    h = Humanizer(random.Random(0))
+    assert h._mate("That's fastest lap, Ethan.") is None
+    assert h._mate("Good lap.") == "Good lap, mate."

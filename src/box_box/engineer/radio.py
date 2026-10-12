@@ -106,70 +106,28 @@ def ordinal_position(p: int) -> str:
     return f"P{p}"
 
 
-# Sentence-opening words that read naturally in lower case after "Okay, " (everything else, like
-# driver names, "P4" or numbers, keeps its capital).
-LOWERCASE_OK = set(
-    [
-        "battery",
-        "big",
-        "box",
-        "brakes",
-        "car",
-        "clear",
-        "currently",
-        "deg",
-        "drop",
-        "front",
-        "fuel",
-        "gap",
-        "good",
-        "green",
-        "heads",
-        "inside",
-        "it",
-        "it's",
-        "just",
-        "lap",
-        "laps",
-        "mixed",
-        "most",
-        "new",
-        "nice",
-        "on",
-        "pace",
-        "pit",
-        "purple",
-        "radar",
-        "rain",
-        "rear",
-        "red",
-        "safety",
-        "sector",
-        "slow",
-        "stay",
-        "still",
-        "taking",
-        "target",
-        "that",
-        "the",
-        "there",
-        "these",
-        "this",
-        "time",
-        "track",
-        "traffic",
-        "tyre",
-        "tyres",
-        "we",
-        "we're",
-        "wear",
-        "whole",
-        "yellow",
-        "you",
-        "you're",
-        "your",
-    ]
-)
+# Words that keep their capital mid-sentence ("Okay, so Russell is through"). Driver names in the session
+# are added by the engineer as they become known; the rest is lower-cased after an opener.
+TEAMS = {"Mercedes", "Ferrari", "McLaren", "Red", "Williams", "Alpine", "Aston", "Haas", "Sauber", "Audi",
+         "Cadillac", "Racing", "Kick", "Visa"}  # fmt: skip
+
+
+def soften(word: str, proper: set[str] | frozenset[str] = frozenset()) -> str:
+    """Lower-case a sentence's first word when something is put in front of it, unless it's a name."""
+    from box_box.voice.pronounce import LEXICON
+
+    bare = word.strip(",.!?;:")
+    bare = bare[:-2] if bare.endswith("'s") else bare
+    if (
+        not bare[:1].isupper()
+        or bare in proper
+        or bare in LEXICON
+        or bare in TEAMS
+        or bare in {"I", "I'm", "I'll", "I'd", "I've"}
+        or any(ch.isupper() or ch.isdigit() for ch in bare[1:])  # P4, DRS, VSC, McLaren
+    ):
+        return word
+    return word[0].lower() + word[1:]
 
 
 class Phrasebook:
@@ -184,7 +142,8 @@ class Phrasebook:
         self.personality = personality
         self._rng = random.Random(seed)
         self._last: dict[str, int] = {}
-        self.human = Humanizer(random.Random(None if seed is None else seed + 1))
+        self.proper: set[str] = set()  # names that keep their capital: the driver's, the other cars'
+        self.human = Humanizer(random.Random(None if seed is None else seed + 1), self.proper)
 
     def __call__(self, key: str, **fmt: object) -> str:
         table = PHRASES[key]
@@ -216,6 +175,5 @@ class Phrasebook:
         self._since_lead = 0
         opener = self.pick("lead", ["Okay, ", "And ", "Just for info, "])
         first, _, rest = text.partition(" ")
-        if first.lower().strip(",.") in LOWERCASE_OK:
-            first = first[0].lower() + first[1:]
+        first = soften(first, self.proper | {me})
         return opener + first + (" " + rest if rest else "")

@@ -9,6 +9,8 @@ Real engineers are good because of when they talk. The rules here:
 - Non-urgent chatter is rationed per lap by the verbosity setting, with a minimum gap between calls.
 - A newer call with the same key replaces an unsaid older one; anything stale is dropped silently.
 - On a qualifying push lap only safety and traffic get through.
+- After a flashback, nothing already said in the abandoned future is said again (the driver heard it a
+  minute ago), and the same sentence is never repeated word for word within a couple of minutes.
 - Pressing push-to-talk cuts the engineer off and holds the queue until the driver has finished.
 """
 
@@ -29,6 +31,9 @@ MIN_SPACING_S = {Verbosity.QUIET: 8.0, Verbosity.NORMAL: 4.0, Verbosity.CHATTY: 
 STRAIGHT_HOLD_S = 0.35  # how long the car must have been "on a straight" before we start talking
 PUSH_LAP_ALLOWED = {"traffic", "flags"}
 LINE_WINDOW_MS = 6000  # just after the line on back-to-back push laps: time for the lap time and position
+REWIND_MEMORY_S = 180.0  # after a flashback, calls made this recently stay said for this long
+SAME_TEXT_S = 120.0  # never the identical sentence twice inside this
+REWIND_FRESH = {"gaps", "positions", "lap_feedback"}  # always new information, even after a flashback
 
 _seq = itertools.count()
 
@@ -60,6 +65,9 @@ class RadioDirector:
         self._ptt_down = False
         self.muted_until = 0.0
         self.dropped = 0
+        self._said: dict[str, tuple[float, str, str]] = {}  # key -> (when, text, category), engineer calls
+        self._said_again_after: dict[str, float] = {}  # flashback: key -> don't repeat it before this
+        self._timeline: tuple[int, int] | None = None
 
     # ---- inputs -----------------------------------------------------------------------------------
 
@@ -75,6 +83,8 @@ class RadioDirector:
                     continue
                 if call.category != "general" and not getattr(s.callouts, call.category, True):
                     continue
+                if call.priority != Priority.SAFETY and self._already_said(call, now):
+                    continue
             ttl = max(0.5, call.expires_at - call.created_at)
             force_at = None
             if call.priority == Priority.SAFETY:
@@ -88,8 +98,28 @@ class RadioDirector:
             self._queue.append(_Queued((int(call.priority), next(_seq)), call, now + ttl, force_at))
         self._queue.sort()
 
+    def _already_said(self, call: RadioCall, now: float) -> bool:
+        if now < self._said_again_after.get(call.key, -1e9):
+            return True
+        said = [t for t, text, _ in self._said.values() if text == call.text and now - t < SAME_TEXT_S]
+        return bool(said)
+
+    def _on_rewind(self, now: float) -> None:
+        """A flashback: forget queued calls about the abandoned future, and don't repeat what was said."""
+        self._queue = [q for q in self._queue if q.call.source != "engineer" or q.call.priority == Priority.SAFETY]
+        for key, (t, _, category) in self._said.items():
+            if now - t < REWIND_MEMORY_S and category not in REWIND_FRESH:
+                self._said_again_after[key] = max(self._said_again_after.get(key, 0.0), now + REWIND_MEMORY_S)
+
     def on_telemetry(self, world: World) -> None:
         """Track whether the driver is busy (braking, turning, lifting) for the straights-only rule."""
+        timeline = (world.session_uid, world.timeline)
+        if self._timeline is not None and timeline[0] == self._timeline[0] and timeline[1] > self._timeline[1]:
+            self._on_rewind(self._clock())
+        elif self._timeline is not None and timeline[0] != self._timeline[0]:
+            self._said.clear()
+            self._said_again_after.clear()
+        self._timeline = timeline
         me = world.player
         if me is None or me.telemetry is None or me.lap is None:
             return
@@ -193,6 +223,8 @@ class RadioDirector:
             self._queue.remove(q)
             if call.source == "engineer" and not safety:
                 self._spoken_this_lap += 1
+            if call.source == "engineer":
+                self._said[call.key] = (now, call.text, call.category)
             self._last_spoken_at = now
             return Decision(call, interrupt=speaking is not None)
         return None

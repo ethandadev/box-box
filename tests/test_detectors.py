@@ -92,6 +92,18 @@ def test_overtake_is_debounced_and_cancelled_by_a_pass_back() -> None:
     assert len(calls) == 1 and "P3" in calls[0].text
 
 
+def test_no_position_commentary_through_our_own_pit_stop() -> None:
+    """Places swap all through a stop; the stop call says where we rejoined."""
+    sim = Sim([RaceDetector()])
+    sim.lap(0, lap_num=16, position=1)
+    sim.tick()
+    sim.lap(0, pit_status=1)
+    sim.event("OVTK", vehicle_idx=3, other_vehicle_idx=0)
+    sim.lap(0, position=2)
+    calls = sim.run(5)
+    assert not [c for c in calls if c.key == "move"]
+
+
 def test_pit_window_box_call() -> None:
     sim = Sim([RaceDetector()])
     sim.set_session(pit_window_ideal_lap=10, pit_window_latest_lap=12)
@@ -303,3 +315,12 @@ def test_a_crashing_detector_doesnt_stop_the_others() -> None:
     sim.run(0.3)
     sim.car_damage(0, tyre_damage=(0, 0, 70, 0))
     assert len(sim.run(0.3)) == 1
+
+
+def test_worn_tyre_creeping_past_60_percent_is_not_a_puncture() -> None:
+    """From a real race: a 20-lap-old hard's damage climbed 57 -> 60 and the engineer called a puncture."""
+    sim = Sim([CarDetector()])
+    sim.car_damage(0, tyre_damage=(45, 37, 59, 37), tyre_wear=(44.0, 36.0, 58.0, 36.0))
+    sim.run(0.3)
+    sim.car_damage(0, tyre_damage=(45, 37, 60, 37), tyre_wear=(44.5, 36.0, 59.0, 36.0))
+    assert not [c for c in sim.run(0.3) if c.key == "puncture"]

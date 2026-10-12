@@ -30,8 +30,9 @@ _LAP_TIME = re.compile(r"\b(\d):(\d{2})\.(\d)\b")
 
 
 class Humanizer:
-    def __init__(self, rng: random.Random | None = None) -> None:
+    def __init__(self, rng: random.Random | None = None, proper: set[str] | None = None) -> None:
         self._rng = rng or random.Random()
+        self.proper = proper if proper is not None else set()  # names that keep their capital
         self._since_slip = 99
         self._calls = 0
         self._last_number_slip = -99
@@ -67,17 +68,6 @@ class Humanizer:
 
     # ---- the slips ---------------------------------------------------------------------------------
 
-    def _filler(self, text: str) -> str | None:
-        """'Gap to Leclerc, uh, 1.2.' after the first comma, or after an opening 'Okay'."""
-        filler = self._rng.choice(["uh", "uh", "er"])
-        m = re.match(r"^(Okay|So|And|Yeah)(,?) ", text)
-        if m:
-            return f"{m.group(1)}, {filler}, " + text[m.end() :]
-        i = text.find(", ")
-        if 4 <= i <= 40:
-            return text[: i + 2] + f"{filler}, " + text[i + 2 :]
-        return None
-
     def _okay_so(self, text: str) -> str | None:
         """'Okay, so gap to Leclerc...': a spoken lead-in, without a stumble the voice can't pull off."""
         if text.startswith(("Okay", "So", "And", "Just for info", "Yeah")):
@@ -85,25 +75,9 @@ class Humanizer:
         first, _, rest = text.partition(" ")
         if not rest or not first[:1].isalpha():
             return None
-        from box_box.engineer.radio import LOWERCASE_OK
+        from box_box.engineer.radio import soften
 
-        if first.lower().strip(",.") in LOWERCASE_OK:
-            first = first.lower()
-        return self._rng.choice(["Okay, so ", "So, "]) + first + " " + rest
-
-    def _restart(self, text: str) -> str | None:
-        """'So, uh... gap to Leclerc...' — a false start before the real message."""
-        if text.startswith(("Okay", "So", "And", "Just for info")):
-            return None
-        first, _, rest = text.partition(" ")
-        if not rest or not first[:1].isalpha():
-            return None
-        lead = self._rng.choice(["So, uh... ", "Okay, so... ", "Okay... "])
-        from box_box.engineer.radio import LOWERCASE_OK
-
-        if first.lower().strip(",.") in LOWERCASE_OK | {"temps", "rears", "fronts", "deg"}:
-            first = first.lower()
-        return lead + first + " " + rest
+        return self._rng.choice(["Okay, so ", "So, "]) + soften(first, self.proper) + " " + rest
 
     def _mate(self, text: str) -> str | None:
         """'Good lap, mate.' on a short, friendly sentence."""
@@ -111,15 +85,17 @@ class Humanizer:
             return None
         if text.count(".") > 2 or any(ch.isdigit() for ch in text[-6:]):
             return None  # don't hang 'mate' off a number
+        if re.search(r",\s+[A-Z][\w'-]*\.$", text):
+            return None  # already ends on his name: "That's fastest lap, Ethan." not "..., Ethan, mate."
         return text[:-1] + ", mate."
 
     def _yeah(self, text: str) -> str | None:
         if text.startswith(("Yeah", "Copy", "Okay", "No ", "Negative", "Affirm")):
             return None
+        from box_box.engineer.radio import soften
+
         first, _, rest = text.partition(" ")
-        if first in {"I", "I'm"} or first[:1].isupper() and first.lower() not in _LOWER_OK:
-            return "Yeah, " + text
-        return "Yeah, " + first.lower() + (" " + rest if rest else "")
+        return "Yeah, " + soften(first, self.proper) + (" " + rest if rest else "")
 
     def _copy_copy(self, text: str) -> str | None:
         if text.startswith("Copy.") or text.startswith("Copy,"):
@@ -152,8 +128,3 @@ class Humanizer:
                 said = m.group(0)
                 return text[: m.start()] + f"{said[:3]} {wrong}, sorry, new {word}" + text[m.end() :]
         return None
-
-
-_LOWER_OK = {"gap", "tyres", "fuel", "that", "you", "your", "you're", "we", "we're", "it", "it's", "the",
-             "there", "good", "nice", "pace", "battery", "track", "rain", "box", "stay", "car", "no", "not",
-             "all", "still", "copy", "these", "just", "loud"}  # fmt: skip

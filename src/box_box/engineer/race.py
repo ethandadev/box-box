@@ -12,6 +12,7 @@ from box_box.telemetry import names
 from box_box.telemetry.packets import ResultStatus
 
 POINTS_POSITIONS = 10
+PIT_EXIT_QUIET_S = 8.0  # after rejoining, places still settle (cars passing on cold tyres) before we commentate
 
 
 @dataclass
@@ -39,6 +40,7 @@ class RaceDetector(Detector):
         self._overtake_said: dict[int, bool] = {}  # car behind -> last overtake status we mentioned
         self._told_gap: dict[int, float] = {}  # car index -> gap we last said out loud
         self._quiet_gap_updates = 0
+        self._pit_lane_at = -1e9  # last time we were in the pit lane
 
     def on_rewind(self) -> None:
         # Keep the one-off calls (start, finish); drop pending moves and gap trends from the rewound future.
@@ -175,7 +177,12 @@ class RaceDetector(Detector):
             if note and car is not None and self._offset_said.get(car.index) != note:
                 self._offset_said[car.index] = note
                 who = ctx.name(car, "He")
-                text += " " + note.replace("He's", f"{who}'s", 1).replace("Same tyre,", f"{who} on the same tyre,", 1)
+                other = behind if car is ahead else ahead
+                if who in text and (other is None or ctx.name(other, "") not in text):
+                    who = "He"  # "Antonelli is right with you. He's on mediums.", not his name twice
+                text += " " + note.replace("He's", "He's" if who == "He" else f"{who}'s", 1).replace(
+                    "Same tyre,", f"{who} on the same tyre," if who != "He" else "Same tyre,", 1
+                )
                 noted = True
                 break
         # 2026: whether the car right behind can use overtake mode on us.
@@ -449,8 +456,13 @@ class RaceDetector(Detector):
 
     def _overtakes(self, ctx: Context, me: CarState) -> list[RadioCall]:
         assert me.lap
+        if me.in_pit_lane:
+            # Places swap all through a stop; the stop call says where we came out, so no running commentary.
+            self._pit_lane_at = ctx.now
+            self._pending.clear()
+        stopping = ctx.now - self._pit_lane_at < PIT_EXIT_QUIET_S
         for e in ctx.events:
-            if e.code != "OVTK" or me.lap.lap_num < 2:
+            if e.code != "OVTK" or me.lap.lap_num < 2 or stopping:
                 continue
             if e.vehicle_idx == me.index and e.other_vehicle_idx is not None:
                 self._add_move(ctx, "gained", e.other_vehicle_idx)

@@ -65,9 +65,11 @@ class CarDetector(Detector):
         out: list[RadioCall] = []
         race = ctx.world.is_race
 
-        # Puncture: a tyre's damage jumps, or it's suddenly critical.
+        # Puncture: a tyre's damage jumps. Damage also creeps up with wear (a 20-lap-old hard reads 60%),
+        # so a slow climb past a threshold is a worn tyre, not a puncture.
         for i, (a, b) in enumerate(zip(prev.tyre_damage, dmg.tyre_damage, strict=True)):
-            if (b - a >= 25 or (b >= 60 > a)) and self._cooldown(f"puncture{i}", ctx.now, 60):
+            sudden = b - a >= 25 or (b >= 85 > a and b - dmg.tyre_wear[i] >= 30)
+            if sudden and self._cooldown(f"puncture{i}", ctx.now, 60):
                 out.append(
                     ctx.call(
                         "puncture", Priority.SAFETY, ctx.say("puncture", corner=CORNERS[i]), ttl=15, category="damage"

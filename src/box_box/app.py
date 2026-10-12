@@ -203,7 +203,9 @@ class Engine:
             self.stats.hit()
             if live and self.settings.telemetry.auto_record and len(data) >= 29:
                 uid = int.from_bytes(data[7:15], "little")
-                s = self.world.session
+                # This packet isn't applied yet: the world may still hold the previous session (that's how a
+                # race recording ended up named after the FP1 before it).
+                s = self.world.session if self.world.session_uid == uid else None
                 self.recorder.feed(data, uid, s.track_id if s else None, s.session_type if s else None)
             packet = self.decoder.decode(data)
             if packet is None:

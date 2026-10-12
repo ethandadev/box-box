@@ -11,6 +11,7 @@ from typing import Any
 from box_box.engineer.radio import lap_time
 from box_box.state.model import CarState, World
 from box_box.telemetry import names
+from box_box.telemetry.packets import ResultStatus
 
 CORNERS = ("rear_left", "rear_right", "front_left", "front_right")
 SLICKS = {16, 17, 18, 19, 20, 21, 22}
@@ -49,6 +50,8 @@ def session_info(world: World) -> dict[str, Any]:
         "my_lap": me.lap.lap_num,
         "cars": len(world.running()),
     }
+    if me.lap.result_status == ResultStatus.FINISHED:
+        info["finished"] = True
     if world.is_race:
         info["total_laps"] = world.total_laps
         info["laps_remaining"] = world.laps_remaining
@@ -333,6 +336,14 @@ def snapshot(world: World) -> str:
     if me.in_pit_lane:
         status = "in the pit lane"
     parts.append(status)
+    if me.lap.result_status == ResultStatus.FINISHED:
+        # Otherwise the model sees "lap 29 of 29" and keeps saying "bring it home" after the flag.
+        what = "RACE FINISHED" if world.is_race else "SESSION FINISHED"
+        return f"{what}: we've taken the flag, final result P{me.lap.position}. " + ", ".join(p for p in parts if p)
+    if world.is_race and world.chequered_flag:
+        parts.append("chequered flag is out, finishing the last lap")
+    elif world.is_race and world.laps_remaining == 1:
+        parts.append("LAST LAP")
     return ", ".join(p for p in parts if p)
 
 

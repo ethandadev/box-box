@@ -176,3 +176,34 @@ def test_why_quiet_explains_the_hold() -> None:
     d.on_ptt(False)
     d.mute(120)
     assert "Radio silence" in (d.why_quiet(sim.world) or "")
+
+
+def test_flashback_does_not_repeat_what_was_already_said() -> None:
+    """Retrying a move with flashbacks re-triggered the same wing-damage and overtake calls four times."""
+    d, clock, sim, _ = setup()
+    straight(sim)
+    d.on_telemetry(sim.world)
+    clock.t += 5
+    wing = RadioCall("wing", Priority.STRATEGY, "Heavy front wing damage. Box this lap.", 0.0, 30, category="damage")
+    d.offer([wing])
+    assert d.poll(sim.world, None)
+    sim.world._rewind()
+    d.on_telemetry(sim.world)
+    clock.t += 30
+    d.offer([wing, call("gaps", category="gaps")])
+    nxt = d.poll(sim.world, None)
+    assert nxt and nxt.call.key == "gaps"  # gaps are always fresh; the wing call isn't said again
+    clock.t += 10
+    assert d.poll(sim.world, None) is None
+
+
+def test_same_sentence_is_not_said_twice_in_a_row() -> None:
+    d, clock, sim, _ = setup()
+    straight(sim)
+    d.on_telemetry(sim.world)
+    clock.t += 5
+    d.offer([call("battery")])
+    assert d.poll(sim.world, None)
+    clock.t += 60
+    d.offer([call("battery")])
+    assert d.poll(sim.world, None) is None
