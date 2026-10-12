@@ -264,3 +264,11 @@ def test_only_short_direct_questions_get_the_instant_telemetry_answer() -> None:
     assert not quick_question("What's the optimal temperature for the inters?")
     assert not quick_question("Shall we go for softs or mediums?")
     assert not quick_question("What's the forecast for the race?")
+
+
+def test_a_lone_closing_think_tag_drops_the_reasoning_before_it() -> None:
+    from box_box.brain.backends import SentenceStream
+
+    out = SentenceStream(hold=600)
+    said = out.feed("The user asks about the gap. I'll answer briefly.</think>Gap is 1.2.") + out.flush()
+    assert said == ["Gap is 1.2."]

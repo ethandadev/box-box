@@ -72,8 +72,12 @@ def _normal(t: str, w: World, a: Actions, me: str) -> Answer:
 
 def _silence(t: str, w: World, a: Actions, me: str) -> Answer:
     minutes = _num(t, 5)
+    if re.search(r"\bsec(?:ond)?s?\b", t):
+        minutes = 1  # "quiet for 30 seconds": the shortest mute is a minute
     a.mute(minutes)
-    return Answer(f"Copy. Radio silence for {minutes} minutes, safety calls only.", command=True)
+    return Answer(
+        f"Copy. Radio silence for {minutes} minute{'' if minutes == 1 else 's'}, safety calls only.", command=True
+    )
 
 
 def _unmute(t: str, w: World, a: Actions, me: str) -> Answer:
@@ -234,7 +238,9 @@ def _weather(t: str, w: World, a: Actions, me: str) -> Answer | None:
 def _laps_left(t: str, w: World, a: Actions, me: str) -> Answer | None:
     if w.is_race and w.laps_remaining is not None:
         n = w.laps_remaining
-        return Answer("This is the last lap." if n <= 1 else f"{n} laps to go, including this one.")
+        if n == 0:
+            return Answer("That's it, we're done. Bring it back to the pits.")
+        return Answer("This is the last lap." if n == 1 else f"{n} laps to go, including this one.")
     s = w.session
     if s:
         return Answer(f"{max(0, s.time_left_s // 60)} minutes left in the session.")
@@ -262,11 +268,11 @@ def _best_lap(t: str, w: World, a: Actions, me: str) -> Answer | None:
 
 
 def _box(t: str, w: World, a: Actions, me: str) -> Answer:
-    return Answer("Copy, box this lap. Box, box. Confirm on the MFD.")
+    return Answer("Copy, box this lap. Box, box. Confirm on the MFD.", instant=True)
 
 
 def _stay_out(t: str, w: World, a: Actions, me: str) -> Answer:
-    return Answer("Copy, stay out.")
+    return Answer("Copy, stay out.", instant=True)
 
 
 def _energy(t: str, w: World, a: Actions, me: str) -> Answer | None:
@@ -313,6 +319,8 @@ def _plan(t: str, w: World, a: Actions, me: str) -> Answer | None:
             bits.append(f"Plan A. Box around lap {window['ideal_lap']}")
             if life is not None:
                 bits.append(f"tyres have about {life} laps in them")
+    elif remaining == 0:
+        bits.append("Race is done. We'll go through it all after")
     elif remaining is not None:
         if life is not None and life + 2 < remaining:
             bits.append(f"{remaining} to go and the tyres have about {life} laps. We'll need to look at another stop")
@@ -331,8 +339,8 @@ def _losing_time(t: str, w: World, a: Actions, me: str) -> Answer | None:
 
 def _remember(t: str, w: World, a: Actions, me: str) -> Answer | None:
     m = re.search(r"remember (?:that )?(.+)", t)
-    if not m:
-        return None
+    if not m or re.search(r"\b(?:do|did|don'?t|can) you remember\b|\bremember (?:what|when|how|if)\b", t):
+        return None  # a question about the past, not a note to keep
     a.remember(m.group(1).strip().rstrip("."))
     return Answer("Copy, noted.", command=True)
 
@@ -353,6 +361,7 @@ RULES: list[Rule] = [
         r"\bwhat(?:'s| is) the plan\b|\bplan [ab]\b|\bwhat(?:'s| is) (?:our|the) strategy\b|\bwhen (?:do|are) we (?:box|pit)",
         _plan,
     ),
+    (r"\b(?:stop talking about|no more|stop telling me about|don'?t tell me about) tyres?\b", _no_tyre_info),
     (r"\b(?:radio silence|stop talking|shut up|be quiet for|go quiet|no radio)\b", _silence),
     (r"\b(?:talk to me again|radio back on|you can talk|unmute|come back on)\b", _unmute),
     (
@@ -362,7 +371,7 @@ RULES: list[Rule] = [
     (r"\b(?:more (?:radio|updates|info)|talk more|chattier|keep me updated)\b", _chatty),
     (r"\bnormal (?:radio|amount)\b", _normal),
     (r"\bgaps? every\b", _gap_every),
-    (r"\b(?:no more|stop the|stop telling me about|don'?t tell me about) tyres?\b", _no_tyre_info),
+    (r"\bstop the tyres?\b", _no_tyre_info),
     (r"^(?:box|box box|boxing|i'?m boxing|box this lap|pitting|i'?m pitting)\b", _box),
     (r"^(?:stay(?:ing)? out|not boxing)\b", _stay_out),
     (r"\b(?:gap to|where(?:'s| is)|how far (?:is|to)|what about)\s+(?!the car|car |the leader|leader)\w", _driver_gap),

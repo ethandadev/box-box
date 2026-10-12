@@ -203,6 +203,9 @@ TOOL_DEFS: list[dict[str, Any]] = [
 LOCAL_TOOLS = {"radio_preferences", "remember"}
 
 
+MAX_REPLY_SENTENCES = 3  # an engineer on the radio, not an essay
+
+
 def session_mode(world: World) -> str | None:
     """What kind of session this is, so the AI talks practice in practice and race in a race."""
     if world.session is None:
@@ -346,7 +349,8 @@ class Brain:
     async def reply(self, transcript: str, world: World, actions: Actions) -> AsyncIterator[str]:
         """Stream the engineer's answer, sentence by sentence. Raises LLMError."""
         s = self._settings()
-        out = SentenceStream()
+        # Local reasoning models may open with bare reasoning and a lone </think>: hold the start back.
+        out = SentenceStream(hold=600 if providers.get(s.ai.provider).local else 0)
         started = time.perf_counter()
         said = f"{s.driver.name}: {transcript}"
 
@@ -382,9 +386,10 @@ class Brain:
             raise err from e
         finally:
             if out.spoken:
+                # Only what the driver heard: the conversation stops after MAX_REPLY_SENTENCES.
                 self.history += [
                     {"role": "user", "content": said},
-                    {"role": "assistant", "content": " ".join(out.spoken)},
+                    {"role": "assistant", "content": " ".join(out.spoken[:MAX_REPLY_SENTENCES])},
                 ]
                 self.history = self.history[-12:]
 

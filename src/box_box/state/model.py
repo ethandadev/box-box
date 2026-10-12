@@ -265,6 +265,8 @@ class World:
         me = self.player
         if not (self.is_race and me and me.lap and self.total_laps):
             return None
+        if me.lap.result_status == ResultStatus.FINISHED:
+            return 0  # past the flag the lap counter stays on the last lap
         return max(0, self.total_laps - me.lap.lap_num + 1)
 
     def others(self) -> list[CarState]:

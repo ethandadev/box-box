@@ -39,21 +39,38 @@ def split_sentences(buffer: str) -> tuple[list[str], str]:
 
 
 def clean_for_radio(text: str) -> str:
+    text = re.sub(r"</?think>", "", text)
     text = re.sub(r"[*_#`>\[\]]", "", text)
     text = re.sub(r"\s*\n+\s*", " ", text)
     return text.strip()
 
 
 class SentenceStream:
-    """Turns streamed text deltas into clean sentences, dropping <think>…</think> reasoning blocks."""
+    """Turns streamed text deltas into clean sentences, dropping <think>…</think> reasoning blocks.
 
-    def __init__(self) -> None:
+    Some local reasoning models put the opening <think> in the prompt template, so the output starts
+    with the reasoning and only the closing tag appears. With `hold`, the first `hold` characters are
+    kept back: if a lone </think> turns up in them, everything before it is dropped."""
+
+    def __init__(self, hold: int = 0) -> None:
         self.buffer = ""
         self._raw = ""
         self._thinking = False
+        self._hold = hold
+        self._held = ""
         self.spoken: list[str] = []
 
     def feed(self, delta: str) -> list[str]:
+        if self._hold:
+            self._held += delta
+            end = self._held.find("</think>")
+            if end >= 0 and "<think>" not in self._held[:end]:
+                delta, self._hold = self._held[end + len("</think>") :], 0
+            elif len(self._held) >= self._hold or "<think>" in self._held:
+                delta, self._hold = self._held, 0
+            else:
+                return []
+            self._held = ""
         self._raw += delta
         visible = ""
         while self._raw:
@@ -85,6 +102,10 @@ class SentenceStream:
         return self._keep(sentences)
 
     def flush(self) -> list[str]:
+        if self._hold:
+            self._hold, held, self._held = 0, self._held, ""
+            sentences = self.feed(held)
+            return sentences + self.flush()
         tail = "" if self._thinking else self._raw
         self._raw = ""
         rest, self.buffer = self.buffer + tail, ""
@@ -306,6 +327,7 @@ class OpenAICompatBackend:
         self._session: Any = None
         self._session_loop: asyncio.AbstractEventLoop | None = None
         self._quirks: dict[str, set[str]] = {}  # model -> adjustments that worked
+        self._trial: dict[str, set[str]] = {}  # model -> adjustments being tried after a 500; kept only if it works
         self._auto_model: str | None = None
 
     # ---- HTTP ---------------------------------------------------------------------------------------
@@ -391,11 +413,18 @@ class OpenAICompatBackend:
         """Forget what we learned about the server (the loaded model may have changed)."""
         self._auto_model = None
 
+    def _settle(self, model: str, ok: bool) -> None:
+        """A request finished: adjustments tried after a 500 become permanent only if it then worked."""
+        trial = self._trial.pop(model, set())
+        if ok and trial:
+            self._quirks.setdefault(model, set()).update(trial)
+
     def _fail(self, e: HTTPError, model: str) -> LLMError:
         if e.status == 404:
             self._auto_model = None  # the local server may have a different model loaded now
         label, msg, low = self.provider.label, e.message, e.message.lower()
-        if e.status == 401:
+        bad_key = "api key" in low and ("invalid" in low or "not valid" in low)  # Gemini says this with a 400
+        if e.status == 401 or bad_key:
             return LLMError(f"The {label} API key was rejected. Check it in Settings > AI.", fatal=True)
         if e.status == 402 or "credit" in low or "billing" in low or "insufficient" in low:
             return LLMError(f"Your {label} account is out of credit ({msg}).", fatal=True)
@@ -427,7 +456,7 @@ class OpenAICompatBackend:
         max_tokens: int,
         stream: bool,
     ) -> dict[str, Any]:
-        q = self._quirks.get(model, set())
+        q = self._quirks.get(model, set()) | self._trial.get(model, set())
         if "system_as_user" in q and messages and messages[0].get("role") == "system":
             # Some bots only take user/assistant turns: fold the instructions into the first user turn.
             rest = list(messages[1:])
@@ -462,14 +491,17 @@ class OpenAICompatBackend:
         if e.status >= 500:
             if attempt == 0:
                 return True  # plain retry
+            if e.status != 500:
+                return False  # 502/503/504/529: overloaded or a gateway hiccup, not a parameter it can't take
+            trial = self._trial.setdefault(model, set())
             for quirk, present in (
                 ("no_max_tokens", "max_tokens" in body or "max_completion_tokens" in body),
                 ("no_effort", "reasoning_effort" in body),
                 ("no_tools", "tools" in body),
                 ("system_as_user", bool(body.get("messages")) and body["messages"][0].get("role") == "system"),
             ):
-                if present and quirk not in q:
-                    q.add(quirk)
+                if present and quirk not in q and quirk not in trial:
+                    trial.add(quirk)
                     log.info("%s %s: server error %s, retrying without %s", self.provider.id, model, e.status, quirk)
                     return True
             return False
@@ -548,8 +580,14 @@ class OpenAICompatBackend:
                                 for sentence in out.feed(content):
                                     yield sentence
                             for tc in delta.get("tool_calls") or []:
-                                if "index" in tc:
-                                    idx = int(tc["index"])
+                                index = tc.get("index")
+                                if isinstance(index, int) and not (
+                                    # Some servers send each whole call with index 0: a new id is a new call.
+                                    index in calls and tc.get("id") and calls[index]["id"] not in ("", tc["id"])
+                                ):
+                                    idx = index
+                                elif isinstance(index, int):
+                                    idx = max(calls) + 1
                                 else:
                                     # No index (some servers send each whole call in its own chunk):
                                     # a new id means a new call, otherwise it continues the last one.
@@ -565,12 +603,14 @@ class OpenAICompatBackend:
                                 if fn.get("arguments"):
                                     args = fn["arguments"]
                                     entry["args"] += args if isinstance(args, str) else json.dumps(args)
+                    self._settle(model, ok=True)
                     break
                 except HTTPError as e:
                     if not got_any and attempt < 5 and self._adapt(model, e, body, attempt):
                         if e.status >= 500 and attempt == 0:
                             await asyncio.sleep(0.7)
                         continue
+                    self._settle(model, ok=False)
                     raise self._fail(e, model) from e
             for sentence in out.flush():
                 yield sentence
@@ -609,12 +649,14 @@ class OpenAICompatBackend:
             body = self._body(model, messages, None, max_tokens, stream=False)
             try:
                 data = await self._call("POST", "/chat/completions", body)
+                self._settle(model, ok=True)
                 break
             except HTTPError as e:
                 if attempt < 5 and self._adapt(model, e, body, attempt):
                     if e.status >= 500 and attempt == 0:
                         await asyncio.sleep(0.7)
                     continue
+                self._settle(model, ok=False)
                 raise self._fail(e, model) from e
         try:
             content = data["choices"][0]["message"].get("content") or ""

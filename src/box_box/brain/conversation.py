@@ -10,7 +10,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 
 from box_box.brain import intents
-from box_box.brain.llm import Brain, LLMError
+from box_box.brain.llm import MAX_REPLY_SENTENCES, Brain, LLMError
 from box_box.bus import Bus
 from box_box.config import Settings
 from box_box.engineer.radio import Phrasebook, lap_time, tenths
@@ -32,7 +32,6 @@ NEEDS_THOUGHT = re.compile(
     r"better|worse|compare|feel|feels|feeling|wrong|happening|what if|if we|if i|race|tomorrow|help)\b",
     re.I,
 )
-MAX_REPLY_SENTENCES = 3  # an engineer on the radio, not an essay
 
 
 def is_question(text: str) -> bool:
@@ -69,8 +68,8 @@ class Conversation:
         if time.monotonic() - asked_at > FEEDBACK_WINDOW_S:
             self.awaiting = None
             return None
-        if (local and local.command) or is_question(text):
-            return None
+        if (local and (local.command or local.instant)) or is_question(text):
+            return None  # "say again", "radio check", "box box" are never balance feedback
         self.awaiting = None
         return topic
 
@@ -140,6 +139,10 @@ class Conversation:
                     continue
                 first = False
                 if item is None:
+                    if not said_anything:
+                        # The AI finished without a word (only tool calls, or all reasoning): never leave
+                        # the driver hanging.
+                        yield local.text if local else self.say("didnt_catch", me=s.driver.name)
                     break
                 if isinstance(item, Exception):
                     log.warning("AI reply failed: %s", item)
