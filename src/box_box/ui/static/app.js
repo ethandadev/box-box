@@ -346,6 +346,13 @@ function renderStatus(st) {
   pill("voice", v.output_error ? "error" : v.speaking ? "active" : v.engine === v.wanted ? "ok" : v.wanted === "off" ? "off" : "warn");
   pill("mic", !st.mic.ok ? "error" : st.mic.recording ? "active" : st.stt.ready ? "ok" : "warn");
   pill("ptt", st.ptt.active ? "active" : st.ptt.kind === "none" ? "warn" : "ok");
+  const pttPill = $("#pill-ptt a");
+  if (pttPill) {
+    pttPill.textContent = st.ptt.active ? "TALKING" : "PTT";
+    pttPill.title = st.ptt.active
+      ? "Push-to-talk is pressed (if you're not pressing it, the button is stuck: learn it again in Setup)"
+      : st.ptt.kind === "none" ? "No push-to-talk button set" : `Push-to-talk: ${st.ptt.binding}`;
+  }
   pill("ai", st.ai.error ? "error" : !st.ai.enabled ? "off" : !st.ai.available ? "warn" : st.ai.status === "ready" ? "ok" : "warn");
 
   $("#setup-banner").hidden = st.onboarded || state.page === "setup";

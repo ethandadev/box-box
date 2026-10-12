@@ -93,3 +93,29 @@ def test_wheel_button_drives_push_to_talk() -> None:
     finally:
         ptt.stop()
     assert events == [True, False]
+
+
+def test_learning_skips_switches_that_stay_on() -> None:
+    import threading
+    import time as _t
+
+    from box_box.voice.ptt import PushToTalk
+
+    ptt = PushToTalk(lambda pressed: None)
+    states = {"g": ("MOZA R9", [False] * 8)}
+    ptt.joystick.start = lambda: None  # type: ignore[method-assign]
+    ptt.keyboard.start = lambda: None  # type: ignore[method-assign]
+    ptt.joystick.snapshot = lambda: {k: (n, list(b)) for k, (n, b) in states.items()}  # type: ignore[method-assign]
+    ptt.joystick.pressed = lambda guid, name, button: states["g"][1][button]  # type: ignore[method-assign]
+
+    def driver() -> None:
+        _t.sleep(0.4)
+        states["g"][1][5] = True  # a rotary switch clicks on and stays on
+        _t.sleep(3.5)
+        states["g"][1][2] = True  # then the real button: pressed...
+        _t.sleep(0.2)
+        states["g"][1][2] = False  # ...and released
+
+    threading.Thread(target=driver, daemon=True).start()
+    binding = ptt.learn(timeout=8)
+    assert binding is not None and binding.button == 2

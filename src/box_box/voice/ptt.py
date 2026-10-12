@@ -284,6 +284,14 @@ class PushToTalk:
         except Exception:  # noqa: BLE001
             log.exception("push-to-talk handler failed")
 
+    def _released_within(self, guid: str, name: str, button: int, seconds: float) -> bool:
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            if not self.joystick.pressed(guid, name, button):
+                return True
+            time.sleep(0.01)
+        return False
+
     # learning a new binding
     def learn(self, timeout: float = 15.0) -> Binding | None:
         """Wait for the driver to press a wheel button or a key; return the binding. Blocking."""
@@ -293,13 +301,20 @@ class PushToTalk:
         baseline = self.joystick.snapshot()
         self.keyboard.last_pressed = None
         deadline = time.monotonic() + timeout
+        latched: set[tuple[str, int]] = set()  # switches that stayed on: never a push-to-talk button
         while time.monotonic() < deadline:
             for guid, (name, buttons) in self.joystick.snapshot().items():
                 # Buttons already held when learning started don't count until they're released.
                 held = baseline.get(guid, (name, []))[1]
                 for i, down in enumerate(buttons):
-                    if down and not (i < len(held) and held[i]):
-                        return Binding("joystick", device_name=name, device_guid=guid, button=i)
+                    if down and not (i < len(held) and held[i]) and (guid, i) not in latched:
+                        # A real button is let go again. Rotary encoders and mode switches (common on
+                        # Moza and Fanatec wheels) stay "pressed": reject those, or the radio would be
+                        # keyed forever and the engineer would never talk.
+                        if self._released_within(guid, name, i, 3.0):
+                            return Binding("joystick", device_name=name, device_guid=guid, button=i)
+                        log.info("ignoring %s button %d while learning: it stays on (a switch?)", name, i)
+                        latched.add((guid, i))
                 baseline[guid] = (name, [i < len(held) and held[i] and d for i, d in enumerate(buttons)])
             key = self.keyboard.last_pressed
             if key and key not in ("esc",):
