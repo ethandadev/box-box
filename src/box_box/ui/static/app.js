@@ -137,10 +137,22 @@ function bindAutosaveForm(form) {
     syncOutput(input);
     if (input.dataset.bound) continue;
     input.dataset.bound = "1";
+    if (input.type === "password") {
+      // A saved key shows as ••••abcd; clicking in clears it so a pasted key replaces it cleanly.
+      input.addEventListener("focus", () => { if (input.value.startsWith("••••")) input.value = ""; });
+      input.addEventListener("blur", () => { if (!input.value) input.value = getSetting(input.name) || ""; });
+    }
     const evt = input.type === "range" ? "input" : "change";
     input.addEventListener(evt, () => {
       syncOutput(input);
-      if (input.type === "password" && input.value.startsWith("••••")) return;
+      if (input.type === "password" && input.value.startsWith("••••")) {
+        if (input.value.length > 12) toast("To change a saved key, clear the field first, then paste the new one.", "error");
+        return;
+      }
+      if (input.type === "number" && (input.value.trim() === "" || Number.isNaN(Number(input.value)))) {
+        input.value = getSetting(input.name) ?? "";  // an emptied number box isn't zero: put the saved value back
+        return;
+      }
       if (input.required && !input.value.trim()) return;
       queueSave(input.name, coerce(input));
       refreshAiFields();  // shows/hides fields that depend on this one (AI service, voice engine)
@@ -443,6 +455,7 @@ function connect() {
   ws.onopen = () => {
     wsBackoff = 500;
     $("#conn-lost").hidden = true;
+    $("#radio-log").replaceChildren();  // the server replays recent radio on every connect
   };
   ws.onmessage = (msg) => {
     let event;

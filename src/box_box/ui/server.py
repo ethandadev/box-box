@@ -40,12 +40,13 @@ async def guard(request: web.Request, handler):  # type: ignore[no-untyped-def]
     host = request.host.split(":")[0]
     if host not in ("127.0.0.1", "localhost"):
         return web.Response(status=403, text="Box Box only answers on localhost.")
-    if request.method == "POST":
-        origin = request.headers.get("Origin")
-        if origin and origin.split("://", 1)[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
-            return web.Response(status=403, text="Cross-origin request refused.")
-        if request.content_type != "application/json":
-            return web.Response(status=415, text="JSON only.")
+    # Any request from another site is refused, the live socket included: browsers let any page open a
+    # WebSocket to localhost, and it carries the radio log and the transcripts.
+    origin = request.headers.get("Origin")
+    if origin and origin.split("://", 1)[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
+        return web.Response(status=403, text="Cross-origin request refused.")
+    if request.method == "POST" and request.content_type != "application/json":
+        return web.Response(status=415, text="JSON only.")
     try:
         return await handler(request)
     except web.HTTPException:

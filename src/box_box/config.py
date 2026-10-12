@@ -281,8 +281,9 @@ class Settings:
         data = dataclasses.asdict(self)
         if redact:
             for section, key in SECRETS:
-                if data[section][key]:
-                    data[section][key] = REDACTED + data[section][key][-4:]
+                value = data[section][key]
+                if value:  # a short key would be shown whole by its last four characters
+                    data[section][key] = REDACTED + (value[-4:] if len(value) > 8 else "")
         return data
 
     @property

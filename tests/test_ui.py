@@ -63,6 +63,12 @@ def test_guards(tmp_path: Path) -> None:
         assert r.status == 404
         r = await client.post("/api/replay", json={"name": "../settings.json"})
         assert r.status == 404
+        # Any page can open a WebSocket to localhost: the live radio feed must refuse other sites.
+        r = await client.get("/ws", headers={"Origin": "https://evil.example", "Upgrade": "websocket"})
+        assert r.status == 403
+        await client.post("/api/settings", json={"ai": {"custom_key": "abc"}})
+        r = await client.get("/api/state")
+        assert (await r.json())["settings"]["ai"]["custom_key"] == "••••"  # a short key isn't shown whole
 
     run_with_client(tmp_path, scenario)
 

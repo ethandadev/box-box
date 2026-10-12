@@ -228,3 +228,17 @@ def test_stuck_push_to_talk_is_released_with_a_warning(tmp_path: Path) -> None:
     asyncio.run(scenario())
     assert not engine.director.ptt_down
     assert any("stuck" in e.get("message", "") for e in engine.bus.history if e["type"] == "warning")
+
+
+def test_no_second_recording_from_the_results_screen(tmp_path: Path) -> None:
+    from box_box.telemetry.autorecord import AutoRecorder
+
+    rec = AutoRecorder(tmp_path)
+    packet = bytes(400)
+    for _ in range(250):
+        rec.feed(packet, 7, 10, 15)
+    first = rec.close(ended=True)
+    for _ in range(250):  # the game keeps sending the same session after the flag
+        rec.feed(packet, 7, 10, 15)
+    assert first is not None and rec.close() is None
+    assert len(list(tmp_path.glob("*.f1raw*"))) == 1

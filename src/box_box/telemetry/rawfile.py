@@ -91,7 +91,7 @@ _SHARE_KEEP = {1, 2, 3, 4, 6, 7, 8, 10, 11, 16}  # no motion, setups, lobby, tyr
 def compact(src: str | Path, dest: str | Path) -> int:
     """Write a smaller copy of a recording that still replays the same through the engineer.
     Returns the number of datagrams kept."""
-    last: dict[int, int] = {}
+    last: dict[tuple[int, int], int] = {}
     kept = 0
     with RawWriter(dest, level=9) as out:
         for t_ns, data in read_records(src):
@@ -100,10 +100,12 @@ def compact(src: str | Path, dest: str | Path) -> int:
             pid = data[6]
             if pid not in _SHARE_KEEP:
                 continue
+            # Session history comes one car per packet, in rotation: thin it per car, not overall.
+            stream = (pid, data[29] if pid == 11 and len(data) > 29 else -1)
             rate = _SHARE_RATE_HZ.get(pid)
-            if rate and t_ns - last.get(pid, -(10**18)) < 1e9 / rate:
+            if rate and t_ns - last.get(stream, -(10**18)) < 1e9 / rate:
                 continue
-            last[pid] = t_ns
+            last[stream] = t_ns
             out.write(t_ns, data)
             kept += 1
     return kept

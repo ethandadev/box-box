@@ -116,6 +116,7 @@ class Engine:
         self.replay_speed = 1.0
         self._loop: asyncio.AbstractEventLoop | None = None
         self._kokoro_tried_at = -1e9
+        self._udp_sock = None
         self._tasks: list[asyncio.Task] = []
         self._udp_task: asyncio.Task | None = None
         self._replay_task: asyncio.Task | None = None
@@ -179,6 +180,9 @@ class Engine:
             return
         if self._udp_task and not self._udp_task.done():
             self._udp_task.cancel()
+        if self._udp_sock is not None:
+            self._udp_sock.close()  # now, not when the cancelled task gets round to it: we rebind straight away
+            self._udp_sock = None
         port = self.settings.telemetry.port
         host = "0.0.0.0" if self.settings.telemetry.listen_on_network else "127.0.0.1"
         try:
@@ -191,6 +195,7 @@ class Engine:
             log.error(self.port_error)
             return
         self.port_error = None
+        self._udp_sock = sock
         self._udp_task = asyncio.create_task(self._udp_loop(sock), name="udp")
         log.info("listening for F1 25 telemetry on UDP %d", port)
 
@@ -278,7 +283,7 @@ class Engine:
         if self._session_db_id and me and me.lap:
             self.memory.end_session(self._session_db_id, me.session_best_ms, me.lap.position)
         if self.settings.telemetry.auto_record and not self.replaying:
-            self.recorder.close()
+            self.recorder.close(ended=True)
         if not self.world.is_time_trial:
             self._spawn(self._debrief())
 
@@ -319,8 +324,11 @@ class Engine:
             log.error("replay of %s failed: %s", path.name, e)
             self.bus.publish("warning", message=f"Couldn't play {path.name}: {e}")
         finally:
-            if self.replaying == path.name:
+            # Only the replay that's still current may end it: restarting the same recording cancels the
+            # old task, whose cleanup must not switch the new one off.
+            if self._replay_task is asyncio.current_task():
                 self.replaying = None
+                self._replay_task = None
                 self.bus.publish("replay", state="finished", name=path.name)
 
     # ================================================================================================

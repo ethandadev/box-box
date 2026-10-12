@@ -31,6 +31,7 @@ class AutoRecorder:
         self._writer: RawWriter | None = None
         self._path: Path | None = None
         self._uid: int | None = None
+        self._closed_uid: int | None = None  # a session that ended (chequered flag/results): don't reopen it
         self._label: str | None = None
         self._started_ns = 0
         self._last_packet = 0.0
@@ -59,6 +60,8 @@ class AutoRecorder:
             return
         if self._writer is not None and session_uid != self._uid:
             self.close()
+        if self._writer is None and session_uid == self._closed_uid:
+            return  # the results screen after the flag: same session, already saved
         if self._writer is None:
             self._open(session_uid)
         if self._writer is None:
@@ -95,8 +98,12 @@ class AutoRecorder:
             log.error(self.error)
             self._writer = None
 
-    def close(self) -> Path | None:
+    def close(self, ended: bool = False) -> Path | None:
+        """Finish the current file. `ended`: the session itself is over, so later packets from it (the
+        results screen) don't start another recording."""
         writer, path = self._writer, self._path
+        if ended:
+            self._closed_uid = self._uid
         self._writer, self._path, self._uid = None, None, None
         if writer is None or path is None:
             return None
@@ -108,6 +115,10 @@ class AutoRecorder:
             final = path
             if self._label:
                 final = path.with_name(path.name.replace("recording", _safe(self._label)))
+                n = 2
+                while final.exists():  # never overwrite another recording
+                    final = path.with_name(path.name.replace("recording", f"{_safe(self._label)} ({n})"))
+                    n += 1
                 path.replace(final)
             self.last_file = final
             log.info("saved recording %s (%d packets)", final.name, writer.count)
