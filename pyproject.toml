@@ -1,6 +1,6 @@
 [project]
 name = "box-box"
-version = "1.0.0"
+version = "1.1.0"
 description = "An AI race engineer for F1 25 (2026 Season Pack): live telemetry, wheel push-to-talk, a real radio voice."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"

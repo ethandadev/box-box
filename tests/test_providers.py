@@ -335,3 +335,8 @@ def test_unknown_model_is_explained() -> None:
     hint = brain.unknown_model_hint(["Gemini-2.5-Flash-Lite", "Claude-Haiku-4.5", "GPT-5-mini"])
     assert hint and "Gemini-2.5-Flash-Lite" in hint
     assert brain.unknown_model_hint(["gemini-2.5-flash"]) is None
+
+
+def test_untouched_old_speed_moves_to_the_new_default_but_a_chosen_one_stays() -> None:
+    assert config.from_dict({"voice": {"speed": 1.15}}).voice.speed == 1.25
+    assert config.from_dict({"voice": {"speed": 1.4}}).voice.speed == 1.4

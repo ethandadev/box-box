@@ -183,7 +183,8 @@ class KeyboardReader:
         with self._lock:
             self._down.discard(key_name(key))
             # Released with a different modifier held ("7" pressed, "&" released): match the physical key.
-            pressed_as = self._by_vk.pop(getattr(key, "vk", None), None)
+            vk = getattr(key, "vk", None)
+            pressed_as = self._by_vk.pop(vk, None) if vk is not None else None
             if pressed_as is not None:
                 self._down.discard(pressed_as)
 

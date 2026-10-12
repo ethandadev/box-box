@@ -141,6 +141,8 @@ something to paste when asking for help.
 | Wheel button not detected | Make sure the wheel base is on (it can be plugged in any time), then Setup → **Learn button**. Or bind a wheel button to *UDP Action 1* in F1 25's controls and use that. |
 | Speech recognition is slow | Diagnostics → **Fix** on Speech recognition installs NVIDIA GPU support (about 1 GB, one time). |
 | The voice sounds robotic | That's the Windows backup voice while the natural voice downloads (about 350 MB). It switches automatically when ready. |
+| The voice changed mid-session | The cloud voice refused (out of credits, bad key) or the network dropped, and the local voice took over. Diagnostics says which; top up, fix the key, or pick another voice. |
+| He talks too slowly | Raise **Speaking speed** in Settings → Voice (up to 1.6). It applies to every voice. |
 | Game on another PC or a console | Settings → Telemetry → "Accept telemetry from other devices", and send to this PC's IP address. |
 
 Logs live in `%LOCALAPPDATA%\BoxBox\logs` (Diagnostics → **Open logs folder**).

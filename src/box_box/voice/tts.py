@@ -288,7 +288,7 @@ class TTS:
         order = [preferred] + [e for e in ("kokoro", "windows", "off") if e != preferred]
         self._dead.clear()  # settings changed (a new key, perhaps): give every voice a fresh chance
         self._failures.clear()
-        errors = []
+        errors: list[str] = []
         for name in order:
             engine = self.engines.get(name)
             if engine is None:

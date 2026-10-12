@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import itertools
 import logging
+import socket
 import threading
 import time
 from dataclasses import dataclass
@@ -116,7 +117,7 @@ class Engine:
         self.replay_speed = 1.0
         self._loop: asyncio.AbstractEventLoop | None = None
         self._kokoro_tried_at = -1e9
-        self._udp_sock = None
+        self._udp_sock: socket.socket | None = None
         self._tasks: list[asyncio.Task] = []
         self._udp_task: asyncio.Task | None = None
         self._replay_task: asyncio.Task | None = None

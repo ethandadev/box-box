@@ -241,6 +241,8 @@ class AnthropicBackend:
                     if self._effort_rejected(e, model):
                         continue
                     raise
+            else:
+                raise LLMError(f"{model} kept rejecting the request.")
         if msg.stop_reason == "refusal":
             raise LLMError("The model declined to answer.")
         return " ".join(b.text for b in msg.content if b.type == "text")

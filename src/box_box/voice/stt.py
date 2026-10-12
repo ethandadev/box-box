@@ -134,7 +134,7 @@ class SpeechToText:
                     self.gpu_libraries_missing = True
                     log.info("NVIDIA GPU found but cuBLAS/cuDNN aren't installed; speech recognition will use the CPU")
             attempts.append((cpu_model, "cpu", "int8"))  # always keep a CPU fallback
-            errors = []
+            errors: list[str] = []
             for name, dev, compute in attempts:
                 self.status = f"loading {name} on {dev.upper()} (first run downloads it)"
                 log.info("speech recognition: loading %s on %s", name, dev)

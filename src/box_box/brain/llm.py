@@ -485,7 +485,7 @@ class Brain:
                 fn = tools.TOOLS.get(name)
                 if fn is None:
                     raise ValueError(f"unknown tool {name}")
-                kwargs = {}
+                kwargs: dict[str, Any] = {}
                 for k, v in args.items():
                     if k == "name" and isinstance(v, str):
                         kwargs[k] = v

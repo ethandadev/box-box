@@ -327,6 +327,7 @@ SECRETS = [
     if f.metadata.get("secret")
 ]
 REDACTED = "••••"
+OLD_DEFAULT_SPEEDS = (1.08, 1.15)  # untouched old defaults move to today's (engineers talk fast)
 
 
 def _coerce(value: Any, default: Any, meta: dict[str, Any]) -> Any:
@@ -363,11 +364,11 @@ def from_dict(data: dict[str, Any]) -> Settings:
         return s
     s.onboarded = bool(data.get("onboarded", False))
     voice = data.get("voice")
-    if isinstance(voice, dict) and (voice.get("speed") == 1.08 or voice.get("radio_effect") == 0.7):
+    if isinstance(voice, dict) and (voice.get("speed") in OLD_DEFAULT_SPEEDS or voice.get("radio_effect") == 0.7):
         # Old defaults: too slow and drawn-out, and too much distortion. Untouched ones move to the new defaults.
         voice = {**voice}
-        if voice.get("speed") == 1.08:
-            voice["speed"] = 1.15
+        if voice.get("speed") in OLD_DEFAULT_SPEEDS:
+            voice["speed"] = VoiceSettings.speed
         if voice.get("radio_effect") == 0.7:
             voice["radio_effect"] = 0.5
         data = {**data, "voice": voice}

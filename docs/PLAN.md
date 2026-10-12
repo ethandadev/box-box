@@ -1,3 +1,6 @@
+> **Historical.** This is the original design plan, kept for the reasoning behind the early decisions.
+> The README describes how Box Box works today, and the git log has what changed and why.
+
 # "Box Box": an AI race engineer for F1 25 (2026 Season Pack)
 
 A voice race engineer that listens to the game's live telemetry, talks to you over a
