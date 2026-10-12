@@ -342,7 +342,10 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": ["Up {n} from the grid.", "{n} places gained today.", "That's {n} places from where we started."],
     },
     "finish_lost": {
-        "calm": ["Tough to lose those places. Head up, we go again next time.", "We'll get those places back next time."],
+        "calm": [
+            "Tough to lose those places. Head up, we go again next time.",
+            "We'll get those places back next time.",
+        ],
     },
     "fastest_lap_me": {
         "calm": ["Fastest lap of the race. Nice.", "That's fastest lap, {me}."],
