@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from box_box import paths
+from box_box.brain import providers
 
 log = logging.getLogger(__name__)
 
@@ -146,13 +147,36 @@ class TelemetrySettings:
 
 @dataclass
 class AISettings:
-    enabled: bool = opt(True, "Use Claude for conversation", "Without it the engineer still answers common questions.")
-    api_key: str = opt("", "Anthropic API key", "From console.anthropic.com. Stored only on this PC.", secret=True)
+    enabled: bool = opt(
+        True, "Use an AI model for conversation", "Without it the engineer still answers the common questions."
+    )
+    provider: str = opt(
+        "anthropic",
+        "AI service",
+        "Which AI the engineer thinks with. Ollama and LM Studio run on your PC for free.",
+        choices=providers.choices(),
+    )
     model: str = opt(
-        "claude-haiku-5-5",
+        "",
         "Model",
-        "Haiku is fastest. Sonnet is smarter but slower to answer on the radio.",
-        choices=[("claude-haiku-5-5", "Claude Haiku 5.5 (fast)"), ("claude-sonnet-5-5", "Claude Sonnet 5.5 (smarter)")],
+        "Leave empty for the recommended model, or type any model id your service offers.",
+        suggest="models",
+    )
+    api_key: str = opt(
+        "", "Anthropic API key", "Stored only on this PC.", secret=True, when={"provider": ["anthropic"]}
+    )
+    openai_key: str = opt("", "OpenAI API key", "Stored only on this PC.", secret=True, when={"provider": ["openai"]})
+    gemini_key: str = opt("", "Gemini API key", "Stored only on this PC.", secret=True, when={"provider": ["gemini"]})
+    openrouter_key: str = opt(
+        "", "OpenRouter API key", "Stored only on this PC.", secret=True, when={"provider": ["openrouter"]}
+    )
+    poe_key: str = opt("", "Poe API key", "Stored only on this PC.", secret=True, when={"provider": ["poe"]})
+    custom_key: str = opt("", "API key (if the server needs one)", "", secret=True, when={"provider": ["custom"]})
+    base_url: str = opt(
+        "",
+        "Server address",
+        "Leave empty for the usual address (Ollama: http://localhost:11434/v1, LM Studio: http://localhost:1234/v1).",
+        when={"provider": ["ollama", "lmstudio", "custom"]},
     )
     fast_answers: bool = opt(
         True,
@@ -209,13 +233,25 @@ class Settings:
 
     def to_dict(self, redact: bool = False) -> dict[str, Any]:
         data = dataclasses.asdict(self)
-        if redact and data["ai"]["api_key"]:
-            data["ai"]["api_key"] = "••••" + data["ai"]["api_key"][-4:]
+        if redact:
+            for key in SECRET_FIELDS:
+                if data["ai"][key]:
+                    data["ai"][key] = REDACTED + data["ai"][key][-4:]
         return data
 
     @property
+    def provider(self) -> providers.Provider:
+        return providers.get(self.ai.provider)
+
+    @property
     def api_key(self) -> str:
-        return self.ai.api_key.strip() or os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        """The key for the selected AI service (settings first, then its environment variable)."""
+        return providers.key_for(self.provider, self.ai)
+
+    @property
+    def ai_problem(self) -> str | None:
+        """Why the AI can't be used as configured, or None."""
+        return providers.missing(self.provider, self.ai)
 
     def recordings_dir(self) -> Path:
         if self.telemetry.recordings_dir.strip():
@@ -229,6 +265,8 @@ class Settings:
 
 
 SECTIONS = [f.name for f in fields(Settings) if f.name not in ("version", "onboarded")]
+SECRET_FIELDS = [f.name for f in fields(AISettings) if f.metadata.get("secret")]
+REDACTED = "••••"
 
 
 def _coerce(value: Any, default: Any, meta: dict[str, Any]) -> Any:
@@ -280,9 +318,15 @@ def merge(settings: Settings, patch: dict[str, Any]) -> Settings:
     data = settings.to_dict()
     for key, value in patch.items():
         if key in SECTIONS and isinstance(value, dict):
-            # Keep the stored key when the UI sends back the redacted placeholder.
-            if key == "ai" and str(value.get("api_key", "")).startswith("••••"):
-                value = {k: v for k, v in value.items() if k != "api_key"}
+            if key == "ai":
+                # Keep stored keys when the UI sends back the redacted placeholder.
+                value = {k: v for k, v in value.items() if not str(v).startswith(REDACTED)}
+                # A model id from one service means nothing to another: switching service resets it.
+                if "provider" in value and value["provider"] != data["ai"]["provider"] and "model" not in value:
+                    value["model"] = ""
+                for k in ("model", "base_url", *SECRET_FIELDS):
+                    if isinstance(value.get(k), str):
+                        value[k] = value[k].strip()
             data[key].update(value)
         elif key == "onboarded":
             data[key] = bool(value)
@@ -319,6 +363,8 @@ def schema() -> list[dict[str, Any]]:
                     "secret": meta.get("secret", False),
                     "hidden": meta.get("hidden", False),
                     "device": meta.get("device"),
+                    "when": meta.get("when"),
+                    "suggest": meta.get("suggest"),
                 }
             )
     return out

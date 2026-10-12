@@ -7,6 +7,8 @@ const state = {
   status: null,
   settings: null,
   schema: [],
+  providers: [],
+  models: {},
   devices: { output: [], input: [] },
   page: "dashboard",
   step: "you",
@@ -82,6 +84,10 @@ let pendingPatch = {};
 function queueSave(path, value, immediate = false) {
   const [section, key] = path.split(".");
   pendingPatch[section] = { ...(pendingPatch[section] || {}), [key]: value };
+  if (path === "ai.provider" && state.settings.ai.provider !== value) {
+    state.settings.ai.model = "";
+    for (const input of $$('input[name="ai.model"]')) input.value = "";
+  }
   state.settings[section][key] = value;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushSave, immediate ? 0 : 350);
@@ -137,7 +143,64 @@ function bindAutosaveForm(form) {
       if (input.type === "password" && input.value.startsWith("••••")) return;
       if (input.required && !input.value.trim()) return;
       queueSave(input.name, coerce(input));
+      if (input.name.startsWith("ai.")) refreshAiFields();
     });
+  }
+  refreshAiFields();
+}
+
+// ---------------------------------------------------------------------------------------- AI provider fields
+
+function currentProvider() {
+  const id = getSetting("ai.provider");
+  return state.providers.find((p) => p.id === id) || state.providers[0];
+}
+
+function refreshAiFields() {
+  const prov = currentProvider();
+  if (!prov || !state.settings) return;
+  for (const el of $$("[data-when]")) {
+    const cond = JSON.parse(el.dataset.when);
+    const section = el.dataset.section;
+    el.hidden = !Object.entries(cond).every(([k, vals]) => vals.includes(getSetting(`${section}.${k}`)));
+  }
+  const suggestions = [...new Set([...(prov.models || []), ...(state.models[prov.id] || [])])];
+  for (const list of $$("datalist[data-models]")) {
+    list.replaceChildren(...suggestions.map((m) => new Option(m === prov.default_model ? `${m} (recommended)` : "", m)));
+  }
+  for (const input of $$('input[name="ai.model"]')) {
+    input.placeholder = prov.default_model ? `${prov.default_model} (recommended)` : "Leave empty to use the loaded model";
+  }
+  for (const input of $$('input[name="ai.base_url"]')) input.placeholder = prov.base_url || "http://host:port/v1";
+  for (const note of $$("[data-ai-note]")) {
+    const key = prov.key_url ? ` Get a key at <a href="${escapeHtml(prov.key_url)}" target="_blank" rel="noopener">${escapeHtml(new URL(prov.key_url).host)}</a>.` : "";
+    note.innerHTML = `${escapeHtml(prov.note)}${key}`;
+  }
+  if (prov.key_field) {
+    for (const input of $$(`input[name="ai.${prov.key_field}"]`)) input.placeholder = prov.key_hint || "";
+  }
+}
+
+async function listModels(button) {
+  await flushSave();
+  const prov = currentProvider();
+  const status = button.parentElement.parentElement.querySelector("[data-models-status]");
+  button.disabled = true;
+  button.textContent = "Checking…";
+  try {
+    const res = await api("/api/ai/models", {});
+    if (res.ok) state.models[prov.id] = res.models;
+    if (status) {
+      status.hidden = false;
+      status.textContent = res.ok ? `${res.models.length} models available. Click the box to pick one.` : res.message;
+      status.dataset.state = res.ok ? "ok" : "error";
+    }
+    refreshAiFields();
+  } catch (e) {
+    toast(e.message, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "List models";
   }
 }
 
@@ -186,8 +249,8 @@ function renderSettings() {
   bindAutosaveForm(form);
 }
 
-function settingField(f) {
-  const id = `set-${f.section}-${f.key}`;
+function settingField(f, prefix = "set") {
+  const id = `${prefix}-${f.section}-${f.key}`;
   const name = `${f.section}.${f.key}`;
   const wrap = document.createElement("div");
   wrap.className = "setting";
@@ -200,14 +263,21 @@ function settingField(f) {
   } else if (f.choices) {
     const opts = f.choices.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join("");
     wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><select id="${id}" name="${name}" ${describedBy}>${opts}</select>${help}`;
+    if (f.section === "ai" && f.key === "provider") wrap.insertAdjacentHTML("beforeend", `<small class="ai-note" data-ai-note></small>`);
   } else if (f.type === "float") {
     wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><div class="range-row"><input type="range" id="${id}" name="${name}" min="${f.min}" max="${f.max}" step="${f.step || 0.05}" ${describedBy}><output for="${id}"></output></div>${help}`;
   } else if (f.type === "int") {
     wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><input type="number" id="${id}" name="${name}" min="${f.min ?? ""}" max="${f.max ?? ""}" ${describedBy}>${help}`;
+  } else if (f.suggest === "models") {
+    wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><div class="row"><input type="text" id="${id}" name="${name}" list="${id}-list" autocomplete="off" spellcheck="false" ${describedBy}><button class="btn" type="button" data-list-models>List models</button></div><datalist id="${id}-list" data-models></datalist>${help}<small data-models-status hidden></small>`;
   } else if (f.secret) {
     wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><div class="row"><input type="password" id="${id}" name="${name}" autocomplete="off" spellcheck="false" ${describedBy}><button class="btn" type="button" data-toggle-secret="${id}">Show</button></div>${help}`;
   } else {
     wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><input type="text" id="${id}" name="${name}" ${describedBy}>${help}`;
+  }
+  if (f.when) {
+    wrap.dataset.when = JSON.stringify(f.when);
+    wrap.dataset.section = f.section;
   }
   return wrap;
 }
@@ -260,7 +330,7 @@ function renderStatus(st) {
   pill("voice", v.output_error ? "error" : v.speaking ? "active" : v.engine === v.wanted ? "ok" : v.wanted === "off" ? "off" : "warn");
   pill("mic", !st.mic.ok ? "error" : st.mic.recording ? "active" : st.stt.ready ? "ok" : "warn");
   pill("ptt", st.ptt.active ? "active" : st.ptt.kind === "none" ? "warn" : "ok");
-  pill("ai", st.ai.error ? "error" : st.ai.available ? "ok" : "off");
+  pill("ai", st.ai.error ? "error" : !st.ai.enabled ? "off" : !st.ai.available ? "warn" : st.ai.status === "ready" ? "ok" : "warn");
 
   $("#setup-banner").hidden = st.onboarded || state.page === "setup";
   $("#replay-banner").hidden = !t.replaying;
@@ -446,8 +516,20 @@ function showStep(step) {
     sel.value = getSetting("voice.voice");
   }
   if (state.step === "game") setText("#w-port", getSetting("telemetry.port"));
+  if (state.step === "ai") renderWizardAi();
   if (state.step === "done") renderDoneSummary();
   if (state.status) updateWizardLive(state.status);
+}
+
+const WIZARD_AI_FIELDS = ["provider", "model", "api_key", "openai_key", "gemini_key", "openrouter_key", "poe_key", "custom_key", "base_url"];
+
+function renderWizardAi() {
+  const form = $("#w-ai-form");
+  if (form.dataset.rendered) return refreshAiFields();
+  form.dataset.rendered = "1";
+  const fields = state.schema.filter((f) => f.section === "ai" && WIZARD_AI_FIELDS.includes(f.key));
+  form.replaceChildren(...fields.map((f) => settingField(f, "w")));
+  bindAutosaveForm(form);
 }
 
 function updateWizardLive(st) {
@@ -495,7 +577,7 @@ function renderDoneSummary() {
     [st.voice.engine === st.voice.wanted ? "ok" : "warn", `Voice: ${st.voice.status}`],
     [st.mic.ok ? "ok" : "error", st.mic.ok ? "Microphone working" : `Microphone: ${st.mic.error}`],
     [st.ptt.kind !== "none" ? "ok" : "warn", `Push-to-talk: ${st.ptt.binding}`],
-    [st.ai.available ? "ok" : "warn", st.ai.available ? "Claude connected" : "Claude off: common questions only"],
+    [st.ai.available ? "ok" : "warn", st.ai.available ? `AI: ${st.ai.provider_label} (${st.ai.model})` : `AI off: common questions only${st.ai.problem ? ` (${st.ai.problem})` : ""}`],
   ];
   $("#done-summary").replaceChildren(...items.map(([s, text]) => {
     const li = document.createElement("li");
@@ -525,6 +607,8 @@ function bindWizard() {
     }
     const open = e.target.closest("[data-open]");
     if (open) api("/api/open", { which: open.dataset.open }).then((r) => toast(`Opened ${r.path}`)).catch((err) => toast(err.message, "error"));
+    const lm = e.target.closest("[data-list-models]");
+    if (lm) listModels(lm);
     const step = e.target.closest("a[data-step]");
     if (step) state.step = step.dataset.step;
   });
@@ -689,6 +773,7 @@ async function boot() {
     const data = await api("/api/state");
     state.settings = data.settings;
     state.schema = data.schema;
+    state.providers = data.providers || [];
     state.devices = data.devices;
     renderStatus(data.status);
     if (!data.status.onboarded && !location.hash) location.hash = "#setup";

@@ -1,4 +1,4 @@
-"""Handles what the driver says: instant local answers for the common things, Claude for the rest."""
+"""Handles what the driver says: instant local answers for the common things, the AI for the rest."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import logging
 from collections.abc import AsyncIterator, Callable
 
 from box_box.brain import intents
-from box_box.brain.llm import ClaudeBrain, LLMError
+from box_box.brain.llm import Brain, LLMError
 from box_box.bus import Bus
 from box_box.config import Settings
 from box_box.engineer.radio import Phrasebook, lap_time, tenths
@@ -22,7 +22,7 @@ STAND_BY_AFTER_S = 1.5
 
 class Conversation:
     def __init__(
-        self, brain: ClaudeBrain, actions: intents.Actions, settings: Callable[[], Settings], bus: Bus | None = None
+        self, brain: Brain, actions: intents.Actions, settings: Callable[[], Settings], bus: Bus | None = None
     ) -> None:
         self.brain = brain
         self.actions = actions
@@ -76,7 +76,7 @@ class Conversation:
                 if item is None:
                     break
                 if isinstance(item, Exception):
-                    log.warning("Claude failed: %s", item)
+                    log.warning("AI reply failed: %s", item)
                     if isinstance(item, LLMError):
                         self.bus.publish("warning", message=str(item))
                     if not said_anything:

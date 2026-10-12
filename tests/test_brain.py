@@ -7,7 +7,7 @@ import pytest
 
 from box_box.brain import intents, tools
 from box_box.brain.conversation import Conversation
-from box_box.brain.llm import ClaudeBrain, LLMError, split_sentences
+from box_box.brain.llm import Brain, LLMError, split_sentences
 from box_box.config import Settings
 from box_box.memory.store import Memory
 from box_box.state.model import LapRecord
@@ -142,12 +142,12 @@ class FakeClient:
         return FakeStream(self.turns[len(self.requests) - 1])
 
 
-def make_brain(turns: list[dict]) -> tuple[ClaudeBrain, FakeClient, Settings]:
+def make_brain(turns: list[dict]) -> tuple[Brain, FakeClient, Settings]:
     settings = Settings()
     settings.ai.api_key = "sk-test"
-    brain = ClaudeBrain(lambda: settings, lambda: "- prefers gaps every lap")
+    brain = Brain(lambda: settings, lambda: "- prefers gaps every lap", lambda: ["Box this lap."])
     client = FakeClient(turns)
-    brain._get_client = lambda: client  # type: ignore[method-assign]
+    brain.backend().client = client
     return brain, client, settings
 
 
@@ -170,6 +170,8 @@ def test_claude_tool_loop_streams_sentences() -> None:
     system = client.requests[0]["system"][0]
     assert "Jake" in system["text"] and "Ethan" in system["text"] and "gaps every lap" in system["text"]
     assert len(brain.history) == 2
+    context = client.requests[0]["messages"][0]["content"][0]["text"]
+    assert "P3" in context and "Box this lap." in context
 
 
 def test_conversation_routes_and_falls_back() -> None:
@@ -209,7 +211,7 @@ def test_conversation_routes_and_falls_back() -> None:
 
     # No API key at all: still useful.
     settings2 = Settings()
-    conv = Conversation(ClaudeBrain(lambda: settings2, lambda: ""), acts, lambda: settings2)
+    conv = Conversation(Brain(lambda: settings2, lambda: ""), acts, lambda: settings2)
     assert asyncio.run(collect(conv, "radio check")) == ["Loud and clear, Ethan."]
     assert "Ask me about" in asyncio.run(collect(conv, "tell me a joke"))[0]
 

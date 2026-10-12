@@ -28,7 +28,7 @@
       <li id="pill-voice" class="pill" data-state="off" title="Engineer's voice"><a href="#diagnostics">Voice</a></li>
       <li id="pill-mic" class="pill" data-state="off" title="Microphone and speech recognition"><a href="#diagnostics">Mic</a></li>
       <li id="pill-ptt" class="pill" data-state="off" title="Push-to-talk button"><a href="#diagnostics">PTT</a></li>
-      <li id="pill-ai" class="pill" data-state="off" title="Claude conversation"><a href="#diagnostics">AI</a></li>
+      <li id="pill-ai" class="pill" data-state="off" title="AI conversation"><a href="#diagnostics">AI</a></li>
     </ul>
   </header>
 
@@ -135,7 +135,7 @@
         <li data-step="game">Game</li>
         <li data-step="mic">Microphone</li>
         <li data-step="ptt">Button</li>
-        <li data-step="ai">Claude</li>
+        <li data-step="ai">AI</li>
         <li data-step="done">Done</li>
       </ol>
 
@@ -228,19 +228,14 @@
       </div>
 
       <div class="card step" data-step="ai" hidden>
-        <h2>Conversation with Claude <span class="tag">optional</span></h2>
+        <h2>Conversation <span class="tag">optional</span></h2>
         <p class="muted">
-          Without it he still answers the common questions (gaps, tyres, fuel, weather, damage) instantly.
-          With an Anthropic API key he can discuss anything: strategy, rivals, your driving.
-          Costs cents per race.
+          Without an AI he still answers the common questions (gaps, tyres, fuel, weather, damage) instantly.
+          With one he can talk strategy, rivals and your driving like a real engineer.
+          Use Claude, OpenAI, Gemini, OpenRouter or Poe with an API key (cents per race),
+          or run a model on your own PC with Ollama or LM Studio for free.
         </p>
-        <form class="form" data-autosave>
-          <div class="field">
-            <label for="w-key">Anthropic API key</label>
-            <div class="row"><input id="w-key" name="ai.api_key" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"><button class="btn" type="button" data-toggle-secret="w-key">Show</button></div>
-            <small class="muted">Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. It's stored only on this PC.</small>
-          </div>
-        </form>
+        <form class="form" id="w-ai-form" data-autosave></form>
         <button class="btn" type="button" id="ai-test">Test connection</button>
         <p id="ai-status" class="detect" data-state="idle" role="status" hidden></p>
         <div class="step-nav"><button class="btn" data-prev>Back</button><button class="btn primary" data-next>Next</button></div>

@@ -19,7 +19,7 @@ from typing import Any
 
 from box_box import config
 from box_box.brain.conversation import Conversation
-from box_box.brain.llm import ClaudeBrain
+from box_box.brain.llm import Brain
 from box_box.bus import Bus
 from box_box.engineer.base import Context
 from box_box.engineer.detectors import all_detectors
@@ -97,7 +97,7 @@ class Engine:
         self.mic = mic or Microphone()
         self.stt = stt or SpeechToText()
         self.memory = memory or Memory()
-        self.brain = ClaudeBrain(lambda: self.settings, self.memory.driver_profile)
+        self.brain = Brain(lambda: self.settings, self.memory.driver_profile, self._recent_radio)
         self.conversation = Conversation(self.brain, self, lambda: self.settings, self.bus)
         self.ptt = PushToTalk(self._ptt_from_thread) if enable_ptt else None
         self.recorder = AutoRecorder(self.settings.recordings_dir(), self.settings.telemetry.keep_recordings)
@@ -116,6 +116,7 @@ class Engine:
         self._ended_sessions: set[int] = set()
         self._tts_wanted: str | None = None
         self._ptt_pressed_at = 0.0
+        self._ai_check: asyncio.Task | None = None
         self.started_at = time.time()
         store.on_change(self._settings_changed_from_any_thread)
 
@@ -136,6 +137,7 @@ class Engine:
         self._setup_voice()
         self._load_stt()
         self._configure_ptt()
+        self._check_ai()
         self._tasks += [
             asyncio.create_task(self._radio_loop(), name="radio"),
             asyncio.create_task(self._status_loop(), name="status"),
@@ -144,7 +146,7 @@ class Engine:
         log.info("Box Box engine started")
 
     async def stop(self) -> None:
-        for t in [*self._tasks, self._udp_task, self._replay_task, self._speak_task]:
+        for t in [*self._tasks, self._udp_task, self._replay_task, self._speak_task, self._ai_check]:
             if t is not None and not t.done():
                 t.cancel()
                 with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -156,6 +158,7 @@ class Engine:
         self.player.close()
         self.mic.close()
         self.tts.shutdown()
+        await self.brain.aclose()
         self.memory.close()
         log.info("Box Box engine stopped")
 
@@ -334,6 +337,22 @@ class Engine:
         self.director.offer([call])
         self.speaker.prefetch([call])
 
+    def _check_ai(self) -> None:
+        if self._loop is None:
+            return
+        if self._ai_check and not self._ai_check.done():
+            self._ai_check.cancel()
+        self._ai_check = self._loop.create_task(self.brain.check(), name="ai-check")
+
+    def _recent_radio(self) -> list[str]:
+        """What the engineer said on his own in the last few minutes, for the AI's context."""
+        cutoff = time.time() - 240
+        return [
+            e["text"]
+            for e in list(self.bus.history)[-40:]
+            if e["type"] == "radio" and e.get("source") == "engineer" and e["at"] >= cutoff
+        ][-5:]
+
     def say_now(self, text: str) -> None:
         """Speak a line straight away (voice tests, onboarding)."""
         self._offer_reply(text, next(_reply_ids), 0)
@@ -505,8 +524,9 @@ class Engine:
             ):
                 self.recorder.close()
                 self.recorder = AutoRecorder(new.recordings_dir(), new.telemetry.keep_recordings)
-            if old.ai.api_key != new.ai.api_key or old.ai.model != new.ai.model or old.ai.enabled != new.ai.enabled:
+            if old.ai != new.ai:
                 self.brain.reset_errors()
+                self._check_ai()
             self.bus.publish("settings", settings=new.to_dict(redact=True))
         except Exception:
             log.exception("applying settings failed")
@@ -644,10 +664,15 @@ class Engine:
             },
             "ai": {
                 "available": self.brain.available,
+                "enabled": self.settings.ai.enabled,
+                "provider": self.brain.provider.id,
+                "provider_label": self.brain.provider.label,
+                "problem": self.settings.ai_problem,
                 "has_key": bool(self.settings.api_key),
                 "status": self.brain.status,
                 "error": self.brain.disabled_reason or self.brain.last_error,
-                "model": self.settings.ai.model,
+                "model": self.brain.model or "auto",
+                "latency": round(self.brain.last_latency, 2) if self.brain.last_latency else None,
             },
             "radio": {
                 "pending": [c.text for c in self.director.pending()][:5],

@@ -1,66 +1,98 @@
-"""Claude as the engineer's brain for open conversation: streaming, tool use, short radio-style replies."""
+"""The engineer's brain for open conversation: any AI service, streaming, tools, radio-style replies.
+
+The service-specific wire protocols live in `backends.py`; this module owns what is the same for all of
+them: who the engineer is (the system prompt), what he can look up (the tools), and the conversation.
+"""
 
 from __future__ import annotations
 
 import json
 import logging
-import re
+import time
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from box_box.brain import tools
+from box_box.brain import providers, tools
+from box_box.brain.backends import LLMError, SentenceStream, clean_for_radio, make_backend, split_sentences
 from box_box.brain.intents import Actions
 from box_box.config import Settings
 from box_box.state.model import World
 
+__all__ = ["Brain", "LLMError", "clean_for_radio", "split_sentences"]
+
 log = logging.getLogger(__name__)
 
 PERSONALITY = {
-    "calm": "Calm, precise and supportive, like the best F1 race engineers. You only raise your tone for big moments.",
-    "fired_up": "Energetic and passionate. You get properly excited about overtakes and results, but stay clear and short.",
-    "dry": "Calm with a dry, deadpan sense of humour. Occasionally a wry one-liner, never at the expense of clarity.",
+    "calm": "Calm, precise and quietly supportive, like the best F1 race engineers. You raise your voice only "
+    "for big moments, and a 'well done, mate' from you means something.",
+    "fired_up": "Energetic and passionate. You get properly loud for overtakes, purple laps and results, "
+    "but you stay clear and short when it's busy.",
+    "dry": "Calm with a dry, deadpan sense of humour. Occasionally a wry one-liner when things are quiet, "
+    "never when it's busy and never at the expense of clarity.",
 }
 
 SYSTEM = """You are {engineer}, race engineer for {driver} in their EA Sports F1 25 career, racing against AI drivers. \
-You talk to {driver} over team radio while they drive. Everything you write is read aloud by text-to-speech.
+You talk to {driver} over team radio while they drive at 300 km/h. Everything you write is read aloud by \
+text-to-speech over a crackly radio.
 
-How you talk:
-- Real F1 team radio: one or two short sentences, usually under 20 words. Lead with the answer. No filler, \
-no "great question", no sign-offs.
+You are a real race engineer, not an assistant. You own the strategy, you have opinions, and you have \
+{driver}'s back. You think one step ahead: what the gap means, what the rivals' tyres mean, when the \
+stop should be, what could go wrong. When {driver} asks something, answer it and, if it matters, add the \
+one thing they should do about it.
+
+How real F1 radio sounds (match this):
+- "Sainz 1.2 ahead, last lap 47.7, six lap offset, he's on the medium."
+- "Okay, Carlos has stayed out. We've already got the gap, so the opportunity is to pass the cars we've \
+got a tyre advantage over."
+- "These tyres are robust, happy to push on them."
+- "Still plan A for now." / "Thinking plan B. Plan B." / "We're in the window for a safety car."
+- "Hamilton yet to stop, he started on the hard."
+- "Copy. Box this lap, box this lap. Confirm on the MFD."
+- "Good lap. Clean air is king, keep it going."
+- "Ten laps to go. Ten of your finest."
+- When the driver is frustrated: steady them in a few words, then give them something useful to do.
+
+Rules for every reply:
+- One to three short sentences, usually under 25 words total. Lead with the answer. No filler, no \
+"great question", no sign-offs, no questions back unless you genuinely need their call (plan A or B?).
 - Plain spoken English only. No lists, markdown, emoji, brackets or stage directions.
-- Numbers the way engineers say them: gaps like "1.2", deltas like "three tenths", positions like "P4", \
-lap times like "1:26.4", percentages as "40 percent".
-- Use {driver}'s name sparingly, for emphasis.
+- Numbers the way engineers say them: gaps "1.2", deltas "three tenths", positions "P4", lap times \
+"1:26.4", percentages "40 percent". Round sensibly; never read out more than one decimal.
+- Use {driver}'s name sparingly, for emphasis or warmth.
+- Repeat a critical instruction once for clarity ("Box now. Box now.").
 - {personality}
 
 Facts:
-- Never invent data. Use the live snapshot in the message or call a tool. If the data isn't there, say \
-"Stand by" or that you don't have it.
-- You can't touch the car or the game. If {driver} wants to pit or change something, confirm it and tell them \
-to do it on the MFD ("Copy, box this lap, confirm on the MFD").
-- If {driver} asks you to talk more or less, change how often you give gaps, go quiet for a while, or remember \
-something about them, use the radio_preferences or remember tools and confirm in a few words.
+- Never invent data. Use the live pit-wall snapshot in the message or call a tool. If the data isn't \
+there, say you don't have it yet.
+- You can't touch the car or the game. If {driver} wants to pit or change something, confirm and tell them \
+to do it on the MFD.
+- If {driver} gives feedback (balance, tyres, the car), acknowledge it like an engineer ("Copy, understeer \
+in the slow stuff, noted") and save anything lasting with the remember tool.
+- If {driver} asks you to talk more or less, change how often you give gaps, go quiet for a while, or \
+remember something, use the radio_preferences or remember tools and confirm in a few words.
 - If you can't understand what {driver} said, ask them to say again.
-- You are the engineer on the pit wall, in character. Don't mention being an AI, tools or telemetry packets.
+- Stay in character as the engineer on the pit wall. Never mention being an AI, tools, data feeds or \
+telemetry packets.
 
-What you know about {driver}:
+What you know about {driver} from previous sessions:
 {profile}"""
 
 TOOL_DEFS: list[dict[str, Any]] = [
     {
         "name": "session_info",
         "description": "Track, session type, weather, safety car, laps or time remaining, the driver's position and the pit window.",
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "gaps",
         "description": "Race: gaps to the cars directly ahead and behind and to the leader. Practice/quali: the driver's best lap vs the fastest.",
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "standings",
         "description": "Current order with each car's tyres, tyre age, pit stops and best/last lap.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"top": {"type": "integer", "description": "How many positions, default 10."}},
         },
@@ -68,7 +100,7 @@ TOOL_DEFS: list[dict[str, Any]] = [
     {
         "name": "driver",
         "description": "Everything about one rival: position, gap to us, tyres, pit stops, best lap.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"name": {"type": "string", "description": "Driver surname, e.g. 'Leclerc'."}},
             "required": ["name"],
@@ -77,32 +109,32 @@ TOOL_DEFS: list[dict[str, Any]] = [
     {
         "name": "tyres",
         "description": "Our tyres: compound, age, wear per corner, wear rate, laps of life left, temperatures, pressures.",
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "car_health",
         "description": "Our damage (wings, floor, diffuser, sidepods, engine, gearbox), faults, brake and engine temps.",
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "fuel",
         "description": "Fuel on board and, in a race, the margin at the finish.",
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "energy",
         "description": "Battery level, deploy mode, overtake mode availability, active aero mode (2026 cars).",
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "weather",
         "description": "Current weather and the forecast.",
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "lap_times",
         "description": "Recent lap and sector times for us or a named driver.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Driver surname; omit for our own laps."},
@@ -113,12 +145,12 @@ TOOL_DEFS: list[dict[str, Any]] = [
     {
         "name": "strategy",
         "description": "Pit window, predicted rejoin position, tyre life estimate, laps remaining, and the tyres of the cars around us.",
-        "input_schema": {"type": "object", "properties": {}},
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "radio_preferences",
         "description": "Change how the engineer talks: verbosity, how often to give gaps, or radio silence for some minutes.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "verbosity": {"type": "string", "enum": ["quiet", "normal", "chatty"]},
@@ -130,63 +162,96 @@ TOOL_DEFS: list[dict[str, Any]] = [
     {
         "name": "remember",
         "description": "Remember a lasting note about the driver (a preference, a weakness, something to bring up later).",
-        "input_schema": {"type": "object", "properties": {"note": {"type": "string"}}, "required": ["note"]},
+        "parameters": {"type": "object", "properties": {"note": {"type": "string"}}, "required": ["note"]},
     },
 ]
-for _tool in TOOL_DEFS:
-    _tool["eager_input_streaming"] = True
 
 
-class LLMError(RuntimeError):
-    def __init__(self, message: str, *, fatal: bool = False) -> None:
-        super().__init__(message)
-        self.fatal = fatal  # bad key, no access: stop trying until settings change
+LOCAL_TOOLS = {"radio_preferences", "remember"}
 
 
-def split_sentences(buffer: str) -> tuple[list[str], str]:
-    """Pull complete sentences off the front of a streaming buffer."""
-    parts = re.split(r"(?<=[.!?])\s+", buffer)
-    if len(parts) == 1:
-        return [], buffer
-    return [p.strip() for p in parts[:-1] if p.strip()], parts[-1]
+class Brain:
+    """Conversation with whichever AI service is configured. Safe to use when it isn't: check `available`."""
 
-
-def clean_for_radio(text: str) -> str:
-    text = re.sub(r"[*_#`>\[\]]", "", text)
-    text = re.sub(r"\s*\n+\s*", " ", text)
-    return text.strip()
-
-
-class ClaudeBrain:
-    def __init__(self, settings: Callable[[], Settings], profile: Callable[[], str]) -> None:
+    def __init__(
+        self,
+        settings: Callable[[], Settings],
+        profile: Callable[[], str],
+        recent_radio: Callable[[], list[str]] | None = None,
+    ) -> None:
         self._settings = settings
         self._profile = profile
-        self._client = None
-        self._client_key = ""
+        self._recent_radio = recent_radio or (lambda: [])
+        self._backend: Any = None
+        self._backend_key: tuple[str, str, str] | None = None
         self.history: list[dict[str, Any]] = []
         self.status = "not configured"
         self.last_error: str | None = None
         self.disabled_reason: str | None = None
+        self.last_latency: float | None = None  # seconds to the first spoken sentence
+
+    # ---- configuration -------------------------------------------------------------------------------
+
+    @property
+    def provider(self) -> providers.Provider:
+        return self._settings().provider
+
+    @property
+    def model(self) -> str:
+        s = self._settings()
+        return providers.model_for(s.provider, s.ai)
+
+    @property
+    def problem(self) -> str | None:
+        """Why the AI can't be used right now, or None."""
+        s = self._settings()
+        if not s.ai.enabled:
+            return "AI conversation is off."
+        return s.ai_problem or self.disabled_reason
 
     @property
     def available(self) -> bool:
-        s = self._settings()
-        return bool(s.ai.enabled and s.api_key and not self.disabled_reason)
+        return self.problem is None
+
+    def describe(self) -> str:
+        """'Anthropic Claude, claude-haiku-5-5' for status lines."""
+        model = self.model or "the loaded model"
+        return f"{self.provider.label}, {model}"
 
     def reset_errors(self) -> None:
         self.disabled_reason = None
+        self.last_error = None
 
-    def _get_client(self):  # type: ignore[no-untyped-def]
-        key = self._settings().api_key
-        if self._client is None or key != self._client_key:
-            import anthropic
-
-            self._client = anthropic.AsyncAnthropic(
-                api_key=key, timeout=anthropic.Timeout(20.0, connect=5.0), max_retries=1
-            )
-            self._client_key = key
+    def backend(self) -> Any:
+        s = self._settings()
+        p = s.provider
+        key = (p.id, providers.key_for(p, s.ai), providers.base_url_for(p, s.ai))
+        if self._backend is None or key != self._backend_key:
+            old = self._backend
+            self._backend = make_backend(p, key[1], key[2])
+            self._backend_key = key
             self.disabled_reason = None
-        return self._client
+            if old is not None:
+                self._close_later(old)
+        return self._backend
+
+    @staticmethod
+    def _close_later(backend: Any) -> None:
+        import asyncio
+
+        try:
+            asyncio.get_running_loop().create_task(backend.aclose())
+        except RuntimeError:
+            pass  # no loop: it'll be garbage collected
+
+    async def aclose(self) -> None:
+        if self._backend is not None:
+            try:
+                await self._backend.aclose()
+            except Exception:  # noqa: BLE001
+                pass
+            self._backend = None
+            self._backend_key = None
 
     def system_prompt(self) -> str:
         s = self._settings()
@@ -197,97 +262,122 @@ class ClaudeBrain:
             profile=self._profile() or "- Nothing yet. This is one of your first sessions together.",
         )
 
-    async def reply(self, transcript: str, world: World, actions: Actions) -> AsyncIterator[str]:
-        """Stream the engineer's answer, sentence by sentence."""
-        import anthropic
+    def _context(self, world: World) -> str:
+        parts = [f"[Live pit wall: {tools.snapshot(world)}]"]
+        recent = self._recent_radio()
+        if recent:
+            parts.append("[Your own recent calls to the driver, oldest first: " + " | ".join(recent[-5:]) + "]")
+        return "\n".join(parts)
 
+    def _fail(self, e: LLMError) -> None:
+        self.last_error = str(e)
+        if e.fatal:
+            self.disabled_reason = str(e)
+            self.status = "error"
+        elif "rate limit" in str(e).lower():
+            self.status = "rate limited"
+        else:
+            self.status = "offline"
+
+    # ---- talking -------------------------------------------------------------------------------------
+
+    async def reply(self, transcript: str, world: World, actions: Actions) -> AsyncIterator[str]:
+        """Stream the engineer's answer, sentence by sentence. Raises LLMError."""
         s = self._settings()
-        client = self._get_client()
-        user_turn = {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": f"[Live pit wall: {tools.snapshot(world)}]"},
-                {"type": "text", "text": f"{s.driver.name}: {transcript}"},
-            ],
-        }
-        messages = [*self.history[-12:], user_turn]
-        spoken: list[str] = []
+        out = SentenceStream()
+        started = time.perf_counter()
+        said = f"{s.driver.name}: {transcript}"
+
+        def run_tool(name: str, args: dict[str, Any]) -> tuple[str, bool]:
+            return self._run_tool(name, args, world, actions)
+
         try:
-            for _round in range(4):
-                buffer = ""
-                async with client.messages.stream(
-                    model=s.ai.model,
-                    max_tokens=1024,
-                    system=[{"type": "text", "text": self.system_prompt(), "cache_control": {"type": "ephemeral"}}],
-                    tools=TOOL_DEFS,
-                    messages=messages,
-                    output_config={"effort": "low"},
-                ) as stream:
-                    async for event in stream:
-                        if event.type == "text":
-                            buffer += event.text
-                            sentences, buffer = split_sentences(buffer)
-                            for sentence in sentences:
-                                sentence = clean_for_radio(sentence)
-                                if sentence:
-                                    spoken.append(sentence)
-                                    yield sentence
-                    final = await stream.get_final_message()
-                tail = clean_for_radio(buffer)
-                if tail:
-                    spoken.append(tail)
-                    yield tail
-                if final.stop_reason == "refusal":
-                    yield "Say again?"
-                    return
-                tool_uses = [b for b in final.content if b.type == "tool_use"]
-                if final.stop_reason != "tool_use" or not tool_uses:
-                    break  # end_turn, max_tokens: nothing to run
-                messages.append({"role": "assistant", "content": final.content})
-                messages.append({"role": "user", "content": [self._run_tool(b, world, actions) for b in tool_uses]})
+            stream = self.backend().reply(
+                self.model,
+                self.system_prompt(),
+                self.history[-12:],
+                self._context(world),
+                said,
+                TOOL_DEFS,
+                run_tool,
+                out,
+            )
+            first = True
+            async for sentence in stream:
+                if first:
+                    self.last_latency = time.perf_counter() - started
+                    first = False
+                yield sentence
             self.status = "ready"
             self.last_error = None
-        except anthropic.AuthenticationError as e:
-            self.disabled_reason = "The API key was rejected. Check it in Settings > AI."
-            raise LLMError(self.disabled_reason, fatal=True) from e
-        except anthropic.PermissionDeniedError as e:
-            self.disabled_reason = "This API key can't use that model. Check your Anthropic console."
-            raise LLMError(self.disabled_reason, fatal=True) from e
-        except anthropic.NotFoundError as e:
-            self.disabled_reason = f"Model {s.ai.model} wasn't found. Pick another model in Settings > AI."
-            raise LLMError(self.disabled_reason, fatal=True) from e
-        except anthropic.RateLimitError as e:
-            self.status = "rate limited"
-            raise LLMError("Rate limited by the Anthropic API.") from e
-        except anthropic.BadRequestError as e:
-            msg = getattr(e, "message", str(e))
-            if "credit" in msg.lower() or "billing" in msg.lower():
-                self.disabled_reason = "Your Anthropic account is out of credit."
-                raise LLMError(self.disabled_reason, fatal=True) from e
-            raise LLMError(f"Request rejected: {msg}") from e
-        except (anthropic.APIConnectionError, anthropic.APITimeoutError) as e:
-            self.status = "offline"
-            raise LLMError("Can't reach the Anthropic API (offline?).") from e
-        except anthropic.APIStatusError as e:
-            raise LLMError(f"Anthropic API error {e.status_code}.") from e
+        except LLMError as e:
+            self._fail(e)
+            raise
+        except Exception as e:  # noqa: BLE001 - a backend bug must not kill the radio
+            log.exception("AI reply failed")
+            err = LLMError(f"AI reply failed: {e}")
+            self._fail(err)
+            raise err from e
         finally:
-            if spoken:
+            if out.spoken:
                 self.history += [
-                    {"role": "user", "content": f"{s.driver.name}: {transcript}"},
-                    {"role": "assistant", "content": " ".join(spoken)},
+                    {"role": "user", "content": said},
+                    {"role": "assistant", "content": " ".join(out.spoken)},
                 ]
                 self.history = self.history[-12:]
 
-    def _run_tool(self, block: Any, world: World, actions: Actions) -> dict[str, Any]:
-        args = block.input if isinstance(block.input, dict) else {}
+    async def complete(self, prompt: str, max_tokens: int = 400) -> str:
+        """One-shot text (debriefs, the connection test). Raises LLMError."""
         try:
-            if block.name == "radio_preferences":
+            text = await self.backend().complete(self.model, self.system_prompt(), prompt, max_tokens)
+        except LLMError as e:
+            self._fail(e)
+            raise
+        except Exception as e:  # noqa: BLE001
+            log.exception("AI completion failed")
+            err = LLMError(f"AI request failed: {e}")
+            self._fail(err)
+            raise err from e
+        self.status = "ready"
+        self.last_error = None
+        return clean_for_radio(text)
+
+    async def list_models(self) -> list[str]:
+        return await self.backend().list_models()
+
+    async def check(self) -> None:
+        """A free connection check (lists models) so the status is honest before the first question."""
+        if not self.available:
+            return
+        self.status = "checking"
+        try:
+            await self.backend().list_models()
+        except LLMError as e:
+            low = str(e).lower()
+            if "rejected" in low or "credit" in low or "can't reach" in low or "too long" in low:
+                self._fail(e)
+            else:
+                self.status = "unverified"  # some services don't list models; the first answer will tell
+            log.info("AI check (%s): %s", self.describe(), e)
+            return
+        except Exception as e:  # noqa: BLE001
+            self.status = "unverified"
+            log.info("AI check (%s) failed: %s", self.describe(), e)
+            return
+        self.status = "ready"
+        self.last_error = None
+        log.info("AI ready: %s", self.describe())
+
+    def _run_tool(self, name: str, args: dict[str, Any], world: World, actions: Actions) -> tuple[str, bool]:
+        try:
+            if name == "radio_preferences":
                 done = []
                 if isinstance(args.get("verbosity"), str) and args["verbosity"] in ("quiet", "normal", "chatty"):
                     actions.set_verbosity(args["verbosity"])
                     done.append(f"verbosity {args['verbosity']}")
-                if isinstance(args.get("gap_every_laps"), int):
-                    actions.set_gap_every(max(1, min(10, args["gap_every_laps"])))
+                gap_every = args.get("gap_every_laps")
+                if isinstance(gap_every, (int, float)) and not isinstance(gap_every, bool):
+                    actions.set_gap_every(max(1, min(10, int(gap_every))))
                     done.append("gap frequency")
                 if isinstance(args.get("silence_minutes"), (int, float)):
                     minutes = float(args["silence_minutes"])
@@ -297,39 +387,24 @@ class ClaudeBrain:
                         actions.unmute()
                     done.append("radio silence" if minutes > 0 else "radio back on")
                 result: Any = {"ok": True, "changed": done}
-            elif block.name == "remember":
+            elif name == "remember":
                 note = args.get("note")
                 if not isinstance(note, str) or not note.strip():
                     raise ValueError("note must be a non-empty string")
                 actions.remember(note.strip())
                 result = {"ok": True}
             else:
-                fn = tools.TOOLS.get(block.name)
+                fn = tools.TOOLS.get(name)
                 if fn is None:
-                    raise ValueError(f"unknown tool {block.name}")
-                kwargs = {k: v for k, v in args.items() if k in ("name", "top", "last") and isinstance(v, (str, int))}
+                    raise ValueError(f"unknown tool {name}")
+                kwargs = {}
+                for k, v in args.items():
+                    if k == "name" and isinstance(v, str):
+                        kwargs[k] = v
+                    elif k in ("top", "last") and isinstance(v, (int, float)) and not isinstance(v, bool):
+                        kwargs[k] = int(v)
                 result = fn(world, **kwargs)
-            return {"type": "tool_result", "tool_use_id": block.id, "content": json.dumps(result, default=str)}
+            return json.dumps(result, default=str), False
         except Exception as e:  # noqa: BLE001
-            log.warning("tool %s failed: %s", block.name, e)
-            return {"type": "tool_result", "tool_use_id": block.id, "content": f"error: {e}", "is_error": True}
-
-    async def complete(self, prompt: str, max_tokens: int = 400) -> str:
-        """One-shot text (debriefs). Raises LLMError on failure."""
-        import anthropic
-
-        s = self._settings()
-        client = self._get_client()
-        try:
-            msg = await client.messages.create(
-                model=s.ai.model,
-                max_tokens=max_tokens,
-                system=[{"type": "text", "text": self.system_prompt(), "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": prompt}],
-                output_config={"effort": "low"},
-            )
-        except anthropic.APIError as e:
-            raise LLMError(str(e)) from e
-        if msg.stop_reason == "refusal":
-            raise LLMError("refused")
-        return clean_for_radio(" ".join(b.text for b in msg.content if b.type == "text"))
+            log.warning("tool %s failed: %s", name, e)
+            return f"error: {e}", True

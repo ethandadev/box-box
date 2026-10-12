@@ -228,39 +228,34 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
 
     # ---- AI -----------------------------------------------------------------------------------------
     ai = st["ai"]
+    prov = s.provider
+    label = f"Conversation ({prov.label})"
     if not s.ai.enabled:
         out.append(
             check(
                 "ai",
-                "Conversation (Claude)",
+                "Conversation (AI)",
                 "off",
                 "Off. The engineer still answers common questions.",
-                "Turn it on in Settings > AI.",
+                "Turn it on in Settings > AI conversation.",
             )
         )
-    elif not ai["has_key"]:
-        out.append(
-            check(
-                "ai",
-                "Conversation (Claude)",
-                "warn",
-                "No API key. The engineer answers common questions only.",
-                "Get a key at console.anthropic.com and paste it in Settings > AI.",
-            )
-        )
+    elif ai["problem"]:
+        if prov.needs_key:
+            fix = f"Get a key at {prov.key_url} and paste it in Settings > AI conversation, or pick another AI service."
+        else:
+            fix = "Set the server address in Settings > AI conversation."
+        out.append(check("ai", label, "warn", ai["problem"] + " The engineer answers common questions only.", fix))
     elif ai["error"]:
-        out.append(
-            check(
-                "ai",
-                "Conversation (Claude)",
-                "error",
-                ai["error"],
-                "Fix the key or model in Settings > AI, then click Fix to retry.",
-                action="retry_ai",
-            )
+        fix = (
+            f"Start {prov.label.split(' (')[0]} and load a model, then click Fix to retry."
+            if prov.local
+            else "Check the key and model in Settings > AI conversation, then click Fix to retry."
         )
+        out.append(check("ai", label, "error", ai["error"], fix, action="retry_ai"))
     else:
-        out.append(check("ai", "Conversation (Claude)", "ok", f"Ready ({ai['model']})."))
+        speed = f", first words in {ai['latency']} s" if ai.get("latency") else ""
+        out.append(check("ai", label, "ok", f"Ready ({ai['model']}{speed})."))
 
     # ---- storage ------------------------------------------------------------------------------------
     rec = st["recording"]

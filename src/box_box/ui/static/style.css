@@ -281,3 +281,9 @@ dialog::backdrop { background: rgb(0 0 0 / 55%); backdrop-filter: blur(2px); }
   .talk { grid-column: 1 / -1; justify-content: center; }
   .session-meta { flex-wrap: wrap; }
 }
+
+/* AI provider fields */
+.setting[hidden], .field[hidden] { display: none !important; }
+.ai-note { display: block; margin-top: .35rem; color: var(--muted); }
+[data-models-status][data-state="ok"] { color: var(--ok); }
+[data-models-status][data-state="error"] { color: var(--err); }

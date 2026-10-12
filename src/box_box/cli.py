@@ -130,7 +130,12 @@ def doctor() -> int:
     )
     gpu = diagnostics.gpu_name()
     line("ok", "GPU", gpu or "no NVIDIA GPU (speech recognition will use the CPU)")
-    line("ok" if s.api_key else "warn", "Claude API key", "set" if s.api_key else "not set (common questions only)")
+    problem = s.ai_problem if s.ai.enabled else "off"
+    line(
+        "warn" if problem else "ok",
+        "AI conversation",
+        f"{s.provider.label}: " + (f"{problem} (common questions only)" if problem else "configured"),
+    )
     line("ok", "app folder", str(paths.app_home()))
     print("\nAll good." if ok else "\nSome checks failed; see above.")
     return 0 if ok else 1

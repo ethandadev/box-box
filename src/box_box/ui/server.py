@@ -13,6 +13,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ from aiohttp import WSMsgType, web
 
 from box_box import __version__, config, diagnostics, logs, paths
 from box_box.app import Engine
+from box_box.brain import providers
 from box_box.telemetry.autorecord import list_recordings
 from box_box.voice.player import list_devices
 
@@ -79,6 +81,7 @@ class UIServer:
         r.add_post("/api/replay", self.replay)
         r.add_post("/api/replay/stop", self.replay_stop)
         r.add_post("/api/ai/test", self.ai_test)
+        r.add_post("/api/ai/models", self.ai_models)
         r.add_post("/api/open", self.open_folder)
         r.add_get("/api/logs", self.logs)
         self._runner: web.AppRunner | None = None
@@ -156,6 +159,7 @@ class UIServer:
                 "status": e.status(),
                 "settings": e.settings.to_dict(redact=True),
                 "schema": config.schema(),
+                "providers": providers.public(),
                 "devices": self._devices(),
                 "home": str(paths.app_home()),
                 "recordings_dir": str(e.settings.recordings_dir()),
@@ -299,16 +303,37 @@ class UIServer:
 
     async def ai_test(self, request: web.Request) -> web.Response:
         e = self.engine
-        if not e.settings.api_key:
-            return _json({"ok": False, "message": "No API key set."})
+        s = e.settings
+        if not s.ai.enabled:
+            return _json({"ok": False, "message": "AI conversation is turned off."})
+        if s.ai_problem:
+            return _json({"ok": False, "message": s.ai_problem})
         e.brain.reset_errors()
+        started = time.perf_counter()
         try:
             text = await asyncio.wait_for(
-                e.brain.complete("Radio check. Reply with one short sentence.", max_tokens=200), 30
+                e.brain.complete("Radio check. Reply with one short sentence.", max_tokens=300), 45
             )
-            return _json({"ok": True, "message": f"Claude says: {text}"})
+        except TimeoutError:
+            return _json({"ok": False, "message": f"{s.provider.label} didn't answer within 45 seconds."})
         except Exception as err:  # noqa: BLE001
-            return _json({"ok": False, "message": str(err) or "Couldn't reach Claude."})
+            return _json({"ok": False, "message": str(err) or f"Couldn't reach {s.provider.label}."})
+        took = time.perf_counter() - started
+        if not text:
+            return _json({"ok": False, "message": f"{e.brain.describe()} answered with nothing. Try another model."})
+        return _json({"ok": True, "message": f"{e.brain.describe()} ({took:.1f} s): {text}"})
+
+    async def ai_models(self, request: web.Request) -> web.Response:
+        """The models the configured key/server can use, for the model picker."""
+        e = self.engine
+        s = e.settings
+        if s.ai_problem:
+            return _json({"ok": False, "message": s.ai_problem, "models": []})
+        try:
+            models = await asyncio.wait_for(e.brain.list_models(), 20)
+        except Exception as err:  # noqa: BLE001
+            return _json({"ok": False, "message": str(err) or "Couldn't list models.", "models": []})
+        return _json({"ok": True, "models": sorted(set(models)), "message": f"{len(models)} models available."})
 
     # ---- recordings -------------------------------------------------------------------------------
 
