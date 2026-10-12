@@ -128,3 +128,14 @@ def test_out_of_credits_switches_to_the_local_voice_for_good(server) -> None:  #
     assert tts.degraded and "out of credits" in (tts.error or "")
     assert max(speeds) <= 1.2  # the stand-in voice doesn't suddenly rush
     tts.shutdown()
+
+
+def test_voice_keys_work_without_the_ai_provider_and_stay_secret() -> None:
+    """Chatting through Poe left no way to enter a Gemini key for the voice."""
+    from box_box.config import SECRETS
+
+    s = Settings()
+    s.voice.gemini_key, s.voice.openai_key = "AIza-voice", "sk-voice"
+    engines = cloud.cloud_engines(lambda: s)
+    assert engines["gemini"].key() == "AIza-voice" and engines["openai"].key() == "sk-voice"
+    assert ("voice", "gemini_key") in SECRETS and ("voice", "openai_key") in SECRETS

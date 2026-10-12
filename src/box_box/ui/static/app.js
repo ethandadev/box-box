@@ -536,14 +536,7 @@ function showStep(step) {
   });
   const card = $(`.step[data-step="${state.step}"]`);
   for (const form of $$("form[data-autosave]", card)) bindAutosaveForm(form);
-  if (state.step === "voice") {
-    const sel = $("#w-voice");
-    if (!sel.options.length) {
-      const field = state.schema.find((f) => f.section === "voice" && f.key === "voice");
-      for (const [v, l] of field?.choices || []) sel.append(new Option(l, v));
-    }
-    sel.value = getSetting("voice.voice");
-  }
+  if (state.step === "voice") renderWizardFields("#w-voice-engine", "voice", WIZARD_VOICE_FIELDS);
   if (state.step === "game") setText("#w-port", getSetting("telemetry.port"));
   if (state.step === "ai") renderWizardAi();
   if (state.step === "done") renderDoneSummary();
@@ -552,13 +545,20 @@ function showStep(step) {
 
 const WIZARD_AI_FIELDS = ["provider", "model", "api_key", "openai_key", "gemini_key", "openrouter_key", "poe_key", "custom_key", "base_url"];
 
-function renderWizardAi() {
-  const form = $("#w-ai-form");
+const WIZARD_VOICE_FIELDS = ["engine", "voice", "gemini_key", "openai_key", "elevenlabs_key", "cloud_voice"];
+
+function renderWizardFields(selector, section, keys) {
+  const form = $(selector);
   if (form.dataset.rendered) return refreshAiFields();
   form.dataset.rendered = "1";
-  const fields = state.schema.filter((f) => f.section === "ai" && WIZARD_AI_FIELDS.includes(f.key));
+  const fields = state.schema.filter((f) => f.section === section && keys.includes(f.key));
   form.replaceChildren(...fields.map((f) => settingField(f, "w")));
   bindAutosaveForm(form);
+  refreshAiFields();
+}
+
+function renderWizardAi() {
+  renderWizardFields("#w-ai-form", "ai", WIZARD_AI_FIELDS);
 }
 
 function updateWizardLive(st) {

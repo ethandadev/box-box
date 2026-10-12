@@ -86,17 +86,38 @@ class VoiceSettings:
     engine: str = opt(
         "kokoro",
         "Voice engine",
-        "Kokoro is a natural neural voice that runs on your PC. Windows uses the built-in voice as a backup.",
+        "Kokoro runs on your PC. The cloud voices sound properly human; if one fails, Kokoro steps in.",
         choices=[
             ("kokoro", "Kokoro (on your PC, free)"),
-            ("openai", "OpenAI voice (most natural, uses your OpenAI key)"),
-            ("elevenlabs", "ElevenLabs (very natural, needs an ElevenLabs key)"),
-            ("gemini", "Google Gemini voice (natural, free tier, uses your Gemini key)"),
+            ("gemini", "Google Gemini (very human, free tier)"),
+            ("openai", "OpenAI (very human, about 1.5 cents a minute)"),
+            ("elevenlabs", "ElevenLabs (very human, needs credits)"),
             ("windows", "Windows built-in"),
             ("off", "Off (text only)"),
         ],
     )
     voice: str = opt("am_michael", "Voice", "", choices=VOICES, when={"engine": ["kokoro"]})
+    gemini_key: str = opt(
+        "",
+        "Gemini API key",
+        "Free from aistudio.google.com/apikey. Leave empty to use the AI section's Gemini key.",
+        secret=True,
+        when={"engine": ["gemini"]},
+    )
+    openai_key: str = opt(
+        "",
+        "OpenAI API key",
+        "From platform.openai.com. Leave empty to use the AI section's OpenAI key.",
+        secret=True,
+        when={"engine": ["openai"]},
+    )
+    elevenlabs_key: str = opt(
+        "",
+        "ElevenLabs API key",
+        "From elevenlabs.io (free tier works). Stored only on this PC.",
+        secret=True,
+        when={"engine": ["elevenlabs"]},
+    )
     cloud_voice: str = opt(
         "",
         "Cloud voice",
@@ -110,13 +131,6 @@ class VoiceSettings:
         "Directions for the OpenAI and Gemini voices, e.g. 'calm British race engineer, quick and dry'. "
         "Leave empty for a classic F1 engineer.",
         when={"engine": ["openai", "gemini"]},
-    )
-    elevenlabs_key: str = opt(
-        "",
-        "ElevenLabs API key",
-        "From elevenlabs.io (free tier works). Stored only on this PC.",
-        secret=True,
-        when={"engine": ["elevenlabs"]},
     )
     speed: float = opt(1.15, "Speaking speed", "", min=0.8, max=1.4, step=0.02)
     volume: float = opt(0.9, "Volume", "", min=0.0, max=1.0, step=0.05)

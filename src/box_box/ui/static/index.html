@@ -158,13 +158,13 @@
 
       <div class="card step" data-step="voice" hidden>
         <h2>His voice</h2>
-        <p class="muted">A natural voice that runs on your PC, through a team-radio filter.</p>
+        <p class="muted">Kokoro runs on your PC with nothing to set up. For a properly human voice, pick Google Gemini and paste a free key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</p>
         <div id="voice-download" class="notice" hidden>
           <span id="voice-download-text">Downloading the voice (about 350 MB, first time only)…</span>
           <progress id="voice-progress" max="100" value="0"></progress>
         </div>
+        <form class="form" data-autosave id="w-voice-engine"></form>
         <form class="form" data-autosave>
-          <div class="field"><label for="w-voice">Voice</label><select id="w-voice" name="voice.voice"></select></div>
           <div class="field"><label for="w-out">Speakers / headset</label><select id="w-out" name="voice.output_device" data-device="output"></select></div>
           <div class="field range"><label for="w-fx">Radio effect</label><input id="w-fx" type="range" name="voice.radio_effect" min="0" max="1" step="0.05"><output for="w-fx"></output></div>
           <div class="field range"><label for="w-speed">Speaking speed</label><input id="w-speed" type="range" name="voice.speed" min="0.8" max="1.4" step="0.02"><output for="w-speed"></output></div>

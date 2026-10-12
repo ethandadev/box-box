@@ -552,19 +552,20 @@ class Engine:
         try:
             if old.voice.output_device != new.voice.output_device:
                 self.player.open(new.voice.output_device)
-            cloud_changed = (
-                old.voice.cloud_voice,
-                old.voice.style,
-                old.voice.elevenlabs_key,
-                old.ai.openai_key,
-                old.ai.gemini_key,
-            ) != (
-                new.voice.cloud_voice,
-                new.voice.style,
-                new.voice.elevenlabs_key,
-                new.ai.openai_key,
-                new.ai.gemini_key,
-            )
+
+            def cloud(c: config.Settings) -> tuple[str, ...]:
+                v = c.voice
+                return (
+                    v.cloud_voice,
+                    v.style,
+                    v.elevenlabs_key,
+                    v.gemini_key,
+                    v.openai_key,
+                    c.ai.openai_key,
+                    c.ai.gemini_key,
+                )
+
+            cloud_changed = cloud(old) != cloud(new)
             if cloud_changed:
                 self.tts.clear_cache()  # cached lines were spoken with the old voice or style
             if old.voice.engine != new.voice.engine or (

@@ -27,7 +27,8 @@ log = logging.getLogger(__name__)
 TIMEOUT_S = 15
 STYLE_DEFAULT = (
     "You are an experienced Formula 1 race engineer talking to your driver on team radio during a session. "
-    "Calm, quick, clipped and confident; matter-of-fact, a little dry; short natural phrases with no drama. "
+    "Natural American accent. Calm, quick, clipped and confident; matter-of-fact, a little dry; short natural "
+    "phrases with no drama, like a real person talking, not reading. "
     "Numbers and names said crisply. Raise urgency only for warnings like 'box box' or 'safety car'."
 )
 
@@ -79,7 +80,8 @@ class OpenAIVoice(CloudEngine):
     URL = "https://api.openai.com/v1/audio/speech"
 
     def key(self) -> str:
-        return self._settings().ai.openai_key.strip() or os.environ.get("OPENAI_API_KEY", "").strip()
+        s = self._settings()
+        return s.voice.openai_key.strip() or s.ai.openai_key.strip() or os.environ.get("OPENAI_API_KEY", "").strip()
 
     def synthesize(self, text: str, voice: str, speed: float) -> Audio:
         v = self._settings().voice
@@ -134,7 +136,8 @@ class GeminiVoice(CloudEngine):
     def key(self) -> str:
         s = self._settings()
         return (
-            s.ai.gemini_key.strip()
+            s.voice.gemini_key.strip()
+            or s.ai.gemini_key.strip()
             or os.environ.get("GEMINI_API_KEY", "").strip()
             or os.environ.get("GOOGLE_API_KEY", "").strip()
         )
