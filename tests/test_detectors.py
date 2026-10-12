@@ -304,7 +304,7 @@ def test_rain_forecast_then_rain() -> None:
     assert sim.run(5) == []  # not repeated
     sim.set_session(weather=3)
     calls = sim.run(0.3)
-    assert len(calls) == 1 and "light rain" in calls[0].text
+    assert len(calls) == 1 and "light rain" in calls[0].text.lower()
 
 
 def test_overtake_mode_available() -> None:

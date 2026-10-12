@@ -222,3 +222,12 @@ def test_long_pauses_are_tightened() -> None:
     out = tighten(np.concatenate([silence, tone, silence, tone, silence]), sr)
     assert len(out) < 1.4 * sr  # 2.5 s in, the dead air mostly gone
     assert len(out) > 0.95 * sr  # both phrases kept
+
+
+def test_symbols_are_said_the_way_engineers_say_them() -> None:
+    """From a real session: 'apex speed 5 km/h down' came out as 'kilometres slash h'."""
+    assert "slash" not in for_speech("Apex speed 5 km/h down.") and "k p h" in for_speech("Apex speed 5 km/h down.")
+    assert for_speech("Softs/mediums?") == "Softs or mediums?"
+    assert for_speech("Turns 1 to 3 - front left will grain.") == "Turns one to three, front left will grain."
+    assert for_speech("2.6s back at T14.") == "two point six seconds back at turn fourteen."
+    assert "/" not in for_speech("50/50 call") and "1990s" in for_speech("like the 1990s")

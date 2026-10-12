@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import random
+import re
 from dataclasses import dataclass, field
 from enum import IntEnum
 
@@ -156,7 +157,9 @@ class Phrasebook:
             i = (i + 1) % len(options)
         self._last[key] = i
         text = options[i].format(**fmt)
-        return text[:1].upper() + text[1:]  # a sentence-opening placeholder ("{part} damage") still gets a capital
+        # A sentence-opening placeholder ("{part} damage", "... rain. {intensity}.") still gets a capital.
+        text = re.sub(r"([.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+        return text[:1].upper() + text[1:]
 
     def chance(self, p: float) -> bool:
         return self._rng.random() < p

@@ -48,7 +48,9 @@ def _post(url: str, body: dict[str, Any], headers: dict[str, str], what: str) ->
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
             return resp.read()
     except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", "replace")[:200]
+        detail = e.read().decode("utf-8", "replace")[:300]
+        if "quota" in detail.lower() or "credits" in detail.lower() or e.code == 402:
+            raise TTSUnavailable(f"{what} is out of credits.") from e
         if e.code in (401, 403):
             raise TTSUnavailable(f"{what} rejected the key ({e.code}). Check it in Settings.") from e
         raise RuntimeError(f"{what} error {e.code}: {detail}") from e

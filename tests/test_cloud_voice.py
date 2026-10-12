@@ -18,10 +18,16 @@ PCM = (np.sin(np.linspace(0, 50, 2400)) * 12000).astype("<i2").tobytes()  # 0.1 
 class Fake(BaseHTTPRequestHandler):
     requests: list[tuple[str, dict, dict]] = []
     fail = False
+    out_of_credits = False
 
     def do_POST(self) -> None:  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         Fake.requests.append((self.path, dict(self.headers), body))
+        if Fake.out_of_credits:
+            self.send_response(401)
+            self.end_headers()
+            self.wfile.write(b'{"detail": {"status": "quota_exceeded", "message": "This request exceeds your quota."}}')
+            return
         if Fake.fail:
             self.send_response(500)
             self.end_headers()
@@ -49,7 +55,7 @@ def server(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     monkeypatch.setattr(cloud.OpenAIVoice, "URL", base + "/v1/audio/speech")
     monkeypatch.setattr(cloud.ElevenLabsVoice, "URL", base + "/v1/text-to-speech/{voice}?output_format=pcm_24000")
     monkeypatch.setattr(cloud.GeminiVoice, "URL", base + "/v1beta/models/{model}:generateContent")
-    Fake.requests, Fake.fail = [], False
+    Fake.requests, Fake.fail, Fake.out_of_credits = [], False, False
     yield
     srv.shutdown()
 
@@ -97,4 +103,28 @@ def test_a_failing_cloud_voice_falls_back_to_kokoro(server) -> None:  # type: ig
     Fake.fail = True
     audio, _ = tts.submit("Radio check.", "am_michael", 1.15).result(10)
     assert len(audio) == 100  # said with the local voice instead of going silent
+    tts.shutdown()
+
+
+def test_out_of_credits_switches_to_the_local_voice_for_good(server) -> None:  # type: ignore[no-untyped-def]
+    """From a real session: ElevenLabs ran out of credits and every line waited on a refusal first."""
+    speeds: list[float] = []
+
+    class FakeKokoro(Engine):
+        name = "kokoro"
+
+        def synthesize(self, text: str, voice: str, speed: float):  # type: ignore[no-untyped-def]
+            speeds.append(speed)
+            return np.ones(100, dtype=np.float32) * 0.1, 24_000
+
+    s = settings()
+    tts = TTS({"kokoro": FakeKokoro(), "off": SilentEngine(), **cloud.cloud_engines(lambda: s)})
+    assert tts.choose("elevenlabs") == "elevenlabs"
+    Fake.out_of_credits = True
+    for i in range(3):
+        audio, _ = tts.submit(f"Line {i}.", "am_michael", 1.4).result(10)
+        assert len(audio) == 100
+    assert len(Fake.requests) == 1  # asked once, then straight to the local voice
+    assert tts.degraded and "out of credits" in (tts.error or "")
+    assert max(speeds) <= 1.2  # the stand-in voice doesn't suddenly rush
     tts.shutdown()

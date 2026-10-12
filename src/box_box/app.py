@@ -706,6 +706,7 @@ class Engine:
                 "wanted": self.settings.voice.engine,
                 "status": self.tts.status,
                 "error": self.tts.error,
+                "degraded": self.tts.degraded,
                 "model": self.downloader.progress(),
                 "output_error": self.player.error,
                 "speaking": self.speaker.speaking.text if self.speaker.speaking else None,

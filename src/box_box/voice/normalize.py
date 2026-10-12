@@ -5,6 +5,9 @@
 "1.2"     -> "one point two"             (gaps)
 "+0.3"    -> "plus zero point three"
 "FP1"     -> "F P one"
+"5 km/h"  -> "five k p h"                (never "slash")
+"T14"     -> "turn fourteen"
+"2.6s"    -> "two point six seconds"
 """
 
 from __future__ import annotations
@@ -55,8 +58,24 @@ def _decimal(m: re.Match[str]) -> str:
     return prefix + number_words(int(whole)) + " point " + digits
 
 
+def _symbols(t: str) -> str:
+    """Units, slashes and dashes, written the way they're said (the voices read "/" as "slash")."""
+    t = re.sub(r"(\d:\d{2}(?:\.\d+)?)s\b", r"\1", t)  # "1:30.2s" is just a lap time
+    t = re.sub(r"\s*km\s*/\s*h\b|\bkph\b", " k p h", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bmph\b", "m p h", t, flags=re.IGNORECASE)
+    t = re.sub(r"(\d)\s?kg\b", r"\1 kilos", t)
+    t = re.sub(r"(?<![\d:.])(\d{1,2}(?:\.\d+)?)s\b", r"\1 seconds", t)  # "2.6s"; never "1990s"
+    t = re.sub(r"\bT(\d{1,2})\b", r"turn \1", t)
+    t = re.sub(r"\b(\d+)\s*/\s*(\d+)\b", r"\1 of \2", t)  # "lap 3/5" -> "lap 3 of 5"
+    t = re.sub(r"(?<=[A-Za-z])\s*/\s*(?=[A-Za-z])", " or ", t)  # "softs/mediums"
+    t = t.replace("/", " ")
+    t = re.sub(r"\s+[-\u2013\u2014]+\s+|[\u2013\u2014]", ", ", t)  # spoken dashes are a pause
+    return t.replace("&", " and ").replace("~", "about ")
+
+
 def for_speech(text: str) -> str:
     t = text.replace("...", ",")  # long pauses sound like the voice is stuck on a word
+    t = _symbols(t)
     t = re.sub(r"\b(\d{1,2}):(\d{2}(?:\.\d+)?)\b", _lap_time, t)
     t = re.sub(r"\bFP(\d)\b", lambda m: "F P " + ONES[int(m.group(1))], t)
     t = re.sub(r"\bP(\d{1,2})\b", lambda m: "P " + number_words(int(m.group(1))), t)

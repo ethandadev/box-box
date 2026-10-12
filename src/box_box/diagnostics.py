@@ -117,6 +117,16 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
                 "Retry, or pick another engine.",
             )
         )
+    elif v.get("degraded"):
+        out.append(
+            check(
+                "voice",
+                "Engineer's voice",
+                "warn",
+                f"{v['error']} Lines are being said by the local voice for now.",
+                "Top up or fix the key, or pick the local voice in Settings > Voice for one consistent voice.",
+            )
+        )
     else:
         out.append(check("voice", "Engineer's voice", "ok", f"{v['engine'].capitalize()} voice ready."))
 
