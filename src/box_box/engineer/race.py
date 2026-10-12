@@ -378,4 +378,6 @@ class RaceDetector(Detector):
                 text += " " + ctx.say("finish_gained", n=grid - pos)
             elif pos - grid >= 3 and key == "finish_no_points":
                 text += " " + ctx.say("finish_lost")
+            elif pos - grid >= 2:
+                text += " " + ctx.say("finish_damage_limitation")
         return [ctx.call("finish", Priority.STRATEGY, text, ttl=60)]

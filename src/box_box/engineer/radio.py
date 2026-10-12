@@ -84,6 +84,14 @@ def tenths(seconds: float) -> str:
     return f"{s:.1f} seconds"
 
 
+def fine_delta(seconds: float) -> str:
+    """Qualifying margins: '11 thousandths' when it's that close, otherwise like `tenths`."""
+    ms = round(abs(seconds) * 1000)
+    if 0 < ms < 100:
+        return "one thousandth" if ms == 1 else f"{ms} thousandths"
+    return tenths(seconds)
+
+
 def lap_time(ms: int) -> str:
     """1:26.7 style, for display; the TTS normaliser turns it into 'one twenty-six seven'."""
     if ms <= 0:
@@ -162,7 +170,8 @@ class Phrasebook:
         if len(options) > 1 and i == self._last.get(key):
             i = (i + 1) % len(options)
         self._last[key] = i
-        return options[i].format(**fmt)
+        text = options[i].format(**fmt)
+        return text[:1].upper() + text[1:]  # a sentence-opening placeholder ("{part} damage") still gets a capital
 
     def chance(self, p: float) -> bool:
         return self._rng.random() < p

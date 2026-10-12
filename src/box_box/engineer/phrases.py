@@ -90,8 +90,24 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "dry": ["And that's practice. {best}, P{pos}. Nobody hit anything. Success."],
     },
     "session_end_quali": {
-        "calm": ["That's qualifying. P{pos}, {me}. Good job.", "Quali done, P{pos}. We'll take it."],
+        "calm": [
+            "That's qualifying. P{pos}, {me}. Good job.",
+            "Quali done, P{pos}. We'll take it.",
+            "P{pos}. Good lap considering. We'll go to work for tomorrow.",
+        ],
         "fired_up": ["P{pos} in qualifying! Great job, {me}!"],
+    },
+    "quali_out": {
+        "calm": [
+            "That's P{pos}, we're out. Sorry {me}. We'll regroup for tomorrow.",
+            "P{pos}, not enough to go through. You got the best out of it. We'll get better.",
+        ],
+        "dry": ["P{pos}. We're out. The good news is the tyres are very fresh for tomorrow."],
+    },
+    "quali_pole": {
+        "calm": ["Pole position, {me}! P1! Great job.", "That's pole! P1, {me}. Brilliant lap."],
+        "fired_up": ["POLE! Pole position, {me}! What a lap! Get in there!"],
+        "dry": ["P1. Pole position. I'll allow a small celebration."],
     },
     # ---- traffic --------------------------------------------------------------------------------
     "behind_early": {
@@ -292,7 +308,11 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "dry": ["P1. That's a win. I'm told I'm allowed to be excited. Get in there!"],
     },
     "finish_podium": {
-        "calm": ["P{pos}! That's a podium, {me}. Great job.", "Podium, P{pos}. Well done, {me}."],
+        "calm": [
+            "P{pos}! That's a podium, {me}. Great job.",
+            "Podium, P{pos}. Well done, {me}.",
+            "P{pos}, not a bad day. You earned your money today, mate.",
+        ],
         "fired_up": ["P{pos}! Podium! Brilliant drive, {me}!"],
     },
     "finish_points": {
@@ -312,11 +332,17 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         ],
         "dry": ["P{pos}. We'll call that character building."],
     },
+    "finish_damage_limitation": {
+        "calm": [
+            "Damage limitation today, but we'll take the points.",
+            "Not the day we wanted, but good damage limitation.",
+        ],
+    },
     "finish_gained": {
         "calm": ["Up {n} from the grid.", "{n} places gained today.", "That's {n} places from where we started."],
     },
     "finish_lost": {
-        "calm": ["We'll look at where we lost those places.", "Some places lost today, we'll review it."],
+        "calm": ["Tough to lose those places. Head up, we go again next time.", "We'll get those places back next time."],
     },
     "fastest_lap_me": {
         "calm": ["Fastest lap of the race. Nice.", "That's fastest lap, {me}."],
@@ -326,7 +352,11 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": ["{name} is out of the race.", "{name} has retired. One less to worry about."],
     },
     "overtake_available": {
-        "calm": ["Overtake available.", "You've got overtake mode, {name} is within range."],
+        "calm": [
+            "Overtake available.",
+            "You've got overtake mode, {name} is within range.",
+            "Overtake is on. Press and hold.",
+        ],
         "fired_up": ["Overtake is on! Use it!"],
     },
     "battery_low": {
@@ -337,6 +367,16 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": ["{time}. That's a personal best.", "Good lap, {time}. Best so far.", "{time}, new best."],
         "fired_up": ["{time}! Personal best, mega!", "Purple for you, {time}! Great lap!"],
         "dry": ["{time}. Best so far. Keep that up."],
+    },
+    "lap_provisional_pole": {
+        "calm": ["{time}. Provisional pole, {me}.", "{time}, that's P1. Good lap."],
+        "fired_up": ["{time}! Provisional pole! Mega lap, {me}!"],
+    },
+    "lap_so_close_to_pole": {
+        "calm": [
+            "P2, just {delta} to {name}. So tight. Really good effort.",
+            "P2, {delta} off pole. That's tight, {me}.",
+        ],
     },
     "lap_pb_session_best": {
         "calm": ["{time}! Fastest of anyone. P1.", "{time}. That's quickest overall."],
@@ -353,7 +393,11 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": ["{time}. Just {delta} off your best.", "{time}. Very close, {delta} off."],
     },
     "lap_position": {
-        "calm": ["That's P{pos}, {delta} off {name}.", "P{pos}, {delta} behind {name}."],
+        "calm": [
+            "That's P{pos}, {delta} off {name}.",
+            "P{pos}, {delta} behind {name}.",
+            "Currently P{pos}, {delta} to {name}.",
+        ],
     },
     "purple_sector": {
         "calm": ["Purple sector {sector}.", "Sector {sector}, purple."],
@@ -453,6 +497,40 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": ["Track's drying. Slicks will be quicker soon.", "Dry line is forming. We're looking at slicks."],
     },
     # ---- strategy ---------------------------------------------------------------------------------
+    "plan_a_target": {
+        "calm": [
+            "Still plan A, target lap {lap}. Tyres look good, happy to push.",
+            "Currently thinking plan A, target lap {lap}. Deg is fine.",
+        ],
+    },
+    "tyres_to_the_end": {
+        "calm": [
+            "Target is to get to the end on this tyre. They're holding up, happy to push.",
+            "These will go to the end. Happy for you to push on them.",
+        ],
+    },
+    "rhythm": {
+        "calm": [
+            "Okay, let's get back in the rhythm.",
+            "Shake it off. Back into the rhythm, please.",
+            "That one's gone. Let's get back in the rhythm, {me}.",
+        ],
+        "dry": ["Let's not do that again. Back in the rhythm."],
+    },
+    "nothing_to_prove": {
+        "calm": [
+            "Gap is {gap}, {me}. You've got nothing to prove. Look after the car and bring it home.",
+            "{gap} in hand. No risks now, nothing to prove. Bring it home.",
+        ],
+        "fired_up": ["{gap} in hand! Nothing to prove, {me}, just bring it home!"],
+    },
+    "tyre_offset_attack": {
+        "calm": [
+            "Big offset on tyres to {name}, {n} laps fresher. You might have some fun towards the end.",
+            "We're {n} laps fresher than {name}. He'll be struggling, go get him.",
+        ],
+        "fired_up": ["{n} laps fresher than {name}! You're going to have some fun, {me}!"],
+    },
     "tyres_robust": {
         "calm": [
             "These tyres are robust, happy to push on them.",

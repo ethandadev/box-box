@@ -179,3 +179,52 @@ def test_second_quali_run_gets_its_own_call() -> None:
     sim.lap(0, driver_status=3)
     second = sim.run(0.3)
     assert len(second) == 1 and "second run" in second[0].text.lower() and "7 minutes" in second[0].text
+
+
+def test_back_in_the_rhythm_after_a_scruffy_lap() -> None:
+    sim = Sim([StrategyDetector()], session=replace(SESSION, total_laps=30))
+    racing(sim)
+    for _ in range(6):
+        sim.complete_lap(0, 90_000)
+        sim.run(0.3)
+    sim.complete_lap(0, 93_200)  # off by 3.2 s
+    calls = [c for c in sim.run(0.3) if c.key == "rhythm"]
+    assert len(calls) == 1 and "rhythm" in calls[0].text.lower()
+
+
+def test_leading_comfortably_late_on() -> None:
+    sim = Sim([StrategyDetector()], session=replace(SESSION, total_laps=12))
+    racing(sim)
+    sim.lap(0, lap_num=5, position=1, delta_to_leader_ms=0)
+    sim.lap(1, position=2, delta_to_leader_ms=7400)
+    sim.tick()
+    sim.complete_lap(0, 90_000)
+    calls = [c for c in sim.run(0.3) if c.key == "lead"]
+    assert len(calls) == 1 and "7 seconds" in calls[0].text and "nothing to prove" in calls[0].text
+
+
+def test_fresher_tyres_than_the_car_ahead() -> None:
+    sim = Sim([StrategyDetector()], session=replace(SESSION, total_laps=40))
+    racing(sim)
+    sim.lap(0, position=3, lap_num=25, num_pit_stops=1, delta_to_leader_ms=6000)
+    sim.lap(2, position=2, num_pit_stops=1, delta_to_leader_ms=3000)
+    sim.lap(1, position=1, delta_to_leader_ms=0)
+    sim.car_status(0, tyre_age_laps=3)
+    sim.car_status(2, tyre_age_laps=14)
+    sim.tick()
+    sim.complete_lap(0, 90_000)
+    calls = [c for c in sim.run(0.3) if c.key.startswith("rival")]
+    assert len(calls) == 1 and "Leclerc" in calls[0].text and "11 laps fresher" in calls[0].text
+
+
+def test_quali_margins_in_thousandths_and_elimination() -> None:
+    from box_box.engineer.radio import fine_delta
+    from box_box.engineer.session import SessionDetector
+
+    assert fine_delta(0.011) == "11 thousandths" and fine_delta(0.3) == "three tenths"
+    sim = Sim([SessionDetector()], cars=20, session=replace(SESSION, session_type=5))
+    sim.lap(0, position=17)
+    sim.tick()
+    sim.event("SEND")
+    calls = [c for c in sim.run(0.3) if c.key == "session_end"]
+    assert len(calls) == 1 and "P17" in calls[0].text and ("out" in calls[0].text or "through" in calls[0].text)

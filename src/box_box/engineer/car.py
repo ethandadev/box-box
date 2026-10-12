@@ -105,7 +105,7 @@ class CarDetector(Detector):
                     ctx.call(
                         f"dmg:{part}",
                         Priority.INFO,
-                        ctx.say("floor_damage", part=part.capitalize(), pct=b),
+                        ctx.say("floor_damage", part=part, pct=b),
                         ttl=20,
                         category="damage",
                     )

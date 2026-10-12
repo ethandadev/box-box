@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from box_box.engineer.base import Context, Detector
-from box_box.engineer.radio import Priority, RadioCall, Verbosity, lap_time, tenths
+from box_box.engineer.radio import Priority, RadioCall, Verbosity, fine_delta, lap_time, tenths
 from box_box.state.model import CarState, LapCompleted, LapRecord, PitEntered
 from box_box.telemetry.packets import DriverStatus
 
@@ -51,7 +51,8 @@ class LapFeedbackDetector(Detector):
 
         if best_before is None or rec.lap_ms < best_before:
             if overall and overall[0].index == me.index and others_have_times:
-                text = ctx.say("lap_pb_session_best", time=t, me=ctx.me)
+                key = "lap_provisional_pole" if world.is_qualifying else "lap_pb_session_best"
+                text = ctx.say(key, time=t, me=ctx.me)
             else:
                 text = ctx.say("lap_pb", time=t, me=ctx.me)
                 text += self._position_suffix(ctx, me)
@@ -59,7 +60,7 @@ class LapFeedbackDetector(Detector):
 
         delta = (rec.lap_ms - best_before) / 1000.0
         if delta < 0.15:
-            text = ctx.say("lap_close", time=t, delta=tenths(delta))
+            text = ctx.say("lap_close", time=t, delta=fine_delta(delta))
         else:
             sector = self._worst_sector(me, rec)
             text = ctx.say("lap_slower", time=t, delta=tenths(delta), sector=sector)
@@ -75,7 +76,9 @@ class LapFeedbackDetector(Detector):
         if not overall or not mine or overall[0].index == me.index:
             return ""
         delta = (mine - overall[1]) / 1000.0
-        return " " + ctx.say("lap_position", pos=me.lap.position, delta=tenths(delta), name=overall[0].name)
+        if world.is_qualifying and me.lap.position == 2 and delta < 0.1:
+            return " " + ctx.say("lap_so_close_to_pole", delta=fine_delta(delta), name=overall[0].name, me=ctx.me)
+        return " " + ctx.say("lap_position", pos=me.lap.position, delta=fine_delta(delta), name=overall[0].name)
 
     @staticmethod
     def _worst_sector(me: CarState, rec: LapRecord) -> int:

@@ -68,6 +68,9 @@ class StrategyDetector(Detector):
         self._sc_boxed_stint: int | None = None
         self._yet_to_stop: set[int] = set()
         self._asked: set[str] = set()
+        self._offset_attack: set[int] = set()
+        self._rhythm_lap = -10
+        self._nothing_to_prove = False
 
     def on_rewind(self) -> None:
         self._verdicts.clear()
@@ -86,6 +89,9 @@ class StrategyDetector(Detector):
                 out += self._tyre_plan(ctx, me)
                 out += self._sc_window(ctx, me)
                 out += self._rivals_yet_to_stop(ctx, me)
+                out += self._tyre_offset_attack(ctx, me)
+                out += self._rhythm(ctx, me)
+                out += self._nothing_to_prove_call(ctx, me)
                 out += self._ask_tyre_feedback(ctx, me)
             out += self._safety_car_box(ctx, me)
         elif world.is_practice:
@@ -182,7 +188,12 @@ class StrategyDetector(Detector):
                 return [ctx.call("tyre_plan", Priority.STRATEGY, text, ttl=40, category="pit")]
         # Comfortably inside the plan: let the driver lean on them.
         if target >= 3 and life >= target + 4 and 4 <= age <= 14 and self._say_once(ctx, stint, "robust"):
-            text = ctx.say("tyres_robust", me=ctx.me)
+            if to_stop and s.pit_window_ideal_lap and ctx.say.chance(0.5):
+                text = ctx.say("plan_a_target", lap=s.pit_window_ideal_lap, me=ctx.me)
+            elif not to_stop and me.pit_stops > 0:
+                text = ctx.say("tyres_to_the_end", me=ctx.me)
+            else:
+                text = ctx.say("tyres_robust", me=ctx.me)
             return [ctx.call("tyre_plan", Priority.INFO, text, ttl=40, category="tyres", verbosity=Verbosity.NORMAL)]
         return []
 
@@ -249,6 +260,53 @@ class StrategyDetector(Detector):
             )
             return [ctx.call(f"rival:{car.index}", Priority.INFO, text, ttl=40, category="pit")]
         return []
+
+    def _tyre_offset_attack(self, ctx: Context, me: CarState) -> list[RadioCall]:
+        """We've stopped, the car ahead stopped long ago: fresher tyres, so the end of the race is ours."""
+        world = ctx.world
+        if me.status is None or me.lap is None or me.pit_stops == 0:
+            return []
+        if (world.laps_remaining or 0) < 4:
+            return []
+        car = world.car_at_position(me.lap.position - 1)
+        if car is None or car.status is None or car.pit_stops == 0 or car.index in self._offset_attack:
+            return []  # cars yet to stop are covered by _rivals_yet_to_stop
+        n = car.status.tyre_age_laps - me.status.tyre_age_laps
+        gap_s = world.race_gap_s(car, me)
+        if n < 8 or gap_s is None or gap_s > 12:
+            return []
+        self._offset_attack.add(car.index)
+        text = ctx.say("tyre_offset_attack", name=car.name, n=count_word(n), me=ctx.me)
+        return [ctx.call(f"rival:{car.index}", Priority.INFO, text, ttl=30, category="pit", verbosity=Verbosity.NORMAL)]
+
+    def _rhythm(self, ctx: Context, me: CarState) -> list[RadioCall]:
+        """A scruffy lap (a mistake, not traffic in the pits or a safety car): steady the driver."""
+        world = ctx.world
+        s = world.session
+        assert s and me.lap
+        laps = [r for r in me.laps if r.lap_ms > 0 and not r.pit_lap]
+        if len(laps) < 5 or s.safety_car_status != 0 or me.lap.lap_num - self._rhythm_lap < 5:
+            return []
+        last, recent = laps[-1], sorted(r.lap_ms for r in laps[-6:-1])
+        median = recent[len(recent) // 2]
+        if last.lap_ms - median < 1500 or last.lap_ms - median > 15000:  # >15 s: an incident, not rhythm
+            return []
+        self._rhythm_lap = me.lap.lap_num
+        return [ctx.call("rhythm", Priority.COLOUR, ctx.say("rhythm", me=ctx.me), ttl=20, verbosity=Verbosity.NORMAL)]
+
+    def _nothing_to_prove_call(self, ctx: Context, me: CarState) -> list[RadioCall]:
+        world = ctx.world
+        assert me.lap
+        remaining = world.laps_remaining
+        if self._nothing_to_prove or me.lap.position != 1 or remaining is None or not 2 <= remaining <= 10:
+            return []
+        behind = world.car_at_position(2)
+        g = world.race_gap_s(me, behind) if behind else None
+        if g is None or g < 5:
+            return []
+        self._nothing_to_prove = True
+        text = ctx.say("nothing_to_prove", gap=f"{round(g)} seconds", me=ctx.me)
+        return [ctx.call("lead", Priority.INFO, text, ttl=30, verbosity=Verbosity.QUIET)]
 
     # ---- asking the driver -----------------------------------------------------------------------
 

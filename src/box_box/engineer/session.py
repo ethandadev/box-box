@@ -138,8 +138,7 @@ class SessionDetector(Detector):
         assert s and me and me.lap
         if s.session_type not in (Q1, Q2):
             return []
-        running = len(world.running())
-        cutoff = 10 if s.session_type == Q2 else max(10, running - 6)
+        cutoff = self._cutoff(ctx)
         pos = me.lap.position
         danger = pos > cutoff
         prev, self._in_drop_zone = self._in_drop_zone, danger
@@ -148,6 +147,13 @@ class SessionDetector(Detector):
         if prev:
             return [ctx.call("quali_pos", Priority.INFO, ctx.say("quali_safe", pos=pos), ttl=30)]
         return []
+
+    @staticmethod
+    def _cutoff(ctx: Context) -> int:
+        """Last position that goes through to the next quali segment."""
+        s = ctx.world.session
+        assert s
+        return 10 if s.session_type == Q2 else max(10, len(ctx.world.running()) - 6)
 
     def _last_chance(self, ctx: Context) -> list[RadioCall]:
         world = ctx.world
@@ -176,11 +182,13 @@ class SessionDetector(Detector):
         self._ended = True
         best = me.session_best_ms
         if world.is_qualifying:
-            return [
-                ctx.call(
-                    "session_end", Priority.INFO, ctx.say("session_end_quali", pos=me.lap.position, me=ctx.me), ttl=120
-                )
-            ]
+            pos = me.lap.position
+            key = "session_end_quali"
+            if s.session_type in (Q1, Q2) and pos > self._cutoff(ctx):
+                key = "quali_out"
+            elif pos == 1:
+                key = "quali_pole"
+            return [ctx.call("session_end", Priority.INFO, ctx.say(key, pos=pos, me=ctx.me), ttl=120)]
         if best:
             text = ctx.say("session_end_practice", best=lap_time(best), pos=me.lap.position, me=ctx.me)
             return [ctx.call("session_end", Priority.INFO, text, ttl=120)]
