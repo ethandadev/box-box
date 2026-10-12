@@ -79,14 +79,17 @@ class Conversation:
             )
             self.actions.remember(f"{topic.capitalize()} feedback at {where}: {text}")
             if not self.brain.available:
-                yield self.say("feedback_ack", me=s.driver.name)
+                yield self.say.human.apply(
+                    self.say("feedback_ack", me=s.driver.name), s.engineer.natural_speech, reply=True
+                )
                 return
             local = None  # it's feedback, not a question about tyres or whatever it mentioned
             llm_text = f"(answering your question about the {topic}) {text}"
         use_llm = self.brain.available and not (local and (local.command or s.ai.fast_answers))
         if not use_llm:
             if local:
-                yield local.text
+                text = self.say.human.apply(local.text, s.engineer.natural_speech, reply=True)
+                yield text[:1].upper() + text[1:]
             elif self.brain.disabled_reason:
                 yield "I can only do the basics right now. Check the AI settings after the session."
                 self.bus.publish("warning", message=self.brain.disabled_reason)

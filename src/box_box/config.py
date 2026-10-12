@@ -69,6 +69,13 @@ class EngineerSettings:
         "Quiet only gives the essentials. Chatty adds more gaps, lap times and encouragement.",
         choices=[("quiet", "Quiet"), ("normal", "Normal"), ("chatty", "Chatty")],
     )
+    natural_speech: str = opt(
+        "subtle",
+        "Natural speech",
+        "Real engineers say 'uh', restart a sentence or correct themselves ('1.3... sorry, 1.2'). "
+        "Never on urgent calls, and a correction always ends on the right number.",
+        choices=[("off", "Off (scripted)"), ("subtle", "Subtle"), ("human", "Very human")],
+    )
     units: str = opt(
         "metric", "Units", "", choices=[("metric", "Metric (km/h, °C, kg)"), ("imperial", "Imperial (mph, °F, lb)")]
     )

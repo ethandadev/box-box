@@ -31,6 +31,14 @@ PERSONALITY = {
     "never when it's busy and never at the expense of clarity.",
 }
 
+NATURAL = {
+    "off": "Speak cleanly, like a scripted message.",
+    "subtle": "Sound like a person keying a radio, not a script: you may open with 'Yeah,' or 'Okay, so,' and "
+    "very occasionally say 'uh' mid-sentence. Never in urgent calls.",
+    "human": "Sound like a person keying a radio: open with 'Yeah,' / 'Okay, so,' when natural, say 'uh' now and "
+    "then, call the driver 'mate' sometimes, and say 'copy, copy' when acknowledging. Never in urgent calls.",
+}
+
 SYSTEM = """You are {engineer}, race engineer for {driver} in their EA Sports F1 25 career, racing against AI drivers. \
 You talk to {driver} over team radio while they drive at 300 km/h. Everything you write is read aloud by \
 text-to-speech over a crackly radio.
@@ -69,6 +77,7 @@ Rules for every reply:
 - Numbers the way engineers say them: gaps "1.2", deltas "three tenths", positions "P4", lap times \
 "1:26.4", percentages "40 percent". Round sensibly; never read out more than one decimal.
 - Use {driver}'s name sparingly, for emphasis or warmth.
+- {natural}
 - Repeat a critical instruction once for clarity ("Box now. Box now.").
 - {personality}
 
@@ -269,6 +278,7 @@ class Brain:
             engineer=s.engineer.name,
             driver=s.driver.name,
             personality=PERSONALITY.get(s.engineer.personality, PERSONALITY["calm"]),
+            natural=NATURAL.get(s.engineer.natural_speech, NATURAL["subtle"]),
             profile=self._profile() or "- Nothing yet. This is one of your first sessions together.",
         )
 

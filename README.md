@@ -103,6 +103,10 @@ checks it end to end. Cloud models cost cents per race.
 | **Qualifying** | As practice, plus: each new run with the clock and out-lap job · the drop-zone warning and "you're safe" · "last chance" on your final lap · lap deleted for track limits · **only traffic and safety calls on your push lap** |
 | **Race** | Grid tyre brief and lap-one summary · plan A / plan B / "plan A plus three" from your tyre deg · "happy to push on these tyres" · the safety-car window, and box under the safety car · rivals yet to stop and tyre offsets · gaps and whether you're closing · within a second of the car ahead · overtakes made and lost · cars around you pitting (undercut threat) · pit window and "box box" · your stop time and position · tyre wear, overheating, punctures, damage · fuel saving · rain on the radar, rain starting, wrong tyres · 2026 overtake mode and low battery · safety car / VSC / red flag / green · penalties and track-limit warnings · laps to go · last lap · the result |
 
+He sounds like a person, not a script: now and then an "uh", a restart ("Okay, so..."), a "mate", or a
+quick self-correction like *"P9 2.1... sorry, 2.2 ahead"* (the correction is always the real number).
+Never on urgent calls. **Settings → Engineer → Natural speech** sets it to Off, Subtle (default) or Very human.
+
 Everything is tunable in **Settings**: personality (calm / fired up / dry), how much he talks, which
 categories, gap frequency, only-on-straights, voice, speed, radio effect, devices and more. Changes apply
 instantly.

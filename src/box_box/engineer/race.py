@@ -209,7 +209,15 @@ class RaceDetector(Detector):
             and ctx.world.regulations_2026
             and behind.telemetry2 is not None
         ):
-            text += " He has overtake." if behind.telemetry2.overtake_available else " He does not have overtake."
+            if behind.telemetry2.overtake_available:
+                text += " He has overtake."
+                # Like Leclerc in Miami: the car behind using overtake on us may itself be under attack.
+                third = ctx.world.car_at_position(me.lap.position + 2)
+                g3 = ctx.world.race_gap_s(behind, third) if third else None
+                if third is not None and g3 is not None and 0 <= g3 < 1.2:
+                    text += f" {ctx.name(third, 'Another car')} right behind him."
+            else:
+                text += " He does not have overtake."
         return [ctx.call("gaps", Priority.INFO, text, ttl=20, category="gaps", verbosity=Verbosity.NORMAL)]
 
     def _within_second(self, ctx: Context, me: CarState) -> list[RadioCall]:

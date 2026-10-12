@@ -1,0 +1,136 @@
+"""Small, human imperfections in how the engineer talks.
+
+Real race engineers don't read from a script. They say "uh", restart a sentence, correct themselves
+("this is another new medium... sorry, another new hard"), say "copy, copy", and call you "mate".
+Done rarely and in the right places, this is what stops a radio voice sounding like a machine.
+
+Rules that keep it safe:
+- Never on safety calls (flags, punctures, box-now under a safety car): those stay crisp.
+- At most one slip per transmission, and a cooldown between slips so it never becomes a tic.
+- A self-correction always ends on the true value: "1.3... sorry, 1.2" only when 1.2 is the real gap.
+- Off, subtle (default) or very human, from Settings > Engineer.
+"""
+
+from __future__ import annotations
+
+import random
+import re
+
+# Chance that a transmission gets a slip, and the minimum number of clean calls in between.
+RATES = {"off": 0.0, "subtle": 0.16, "human": 0.32}
+COOLDOWN = {"off": 99, "subtle": 3, "human": 1}
+
+# Calls where a misspoken number is harmless and immediately corrected.
+NUMBER_SLIP_KEYS = {"gaps", "lap", "pit_done", "rival", "time_left", "laps_to_go", "tyre_plan"}
+COMPOUND_WORDS = ["softs", "mediums", "hards"]
+
+_DECIMAL = re.compile(r"(?<![\d:.])(\d+)\.(\d)(?!\d)")
+_LAP_TIME = re.compile(r"\b(\d):(\d{2})\.(\d)\b")
+
+
+class Humanizer:
+    def __init__(self, rng: random.Random | None = None) -> None:
+        self._rng = rng or random.Random()
+        self._since_slip = 99
+
+    def apply(self, text: str, level: str, *, key: str = "", safety: bool = False, reply: bool = False) -> str:
+        """Maybe add one natural imperfection. `reply` limits it to spoken-reply habits (no number slips)."""
+        rate = RATES.get(level, 0.0)
+        if safety or not rate or not text:
+            return text
+        self._since_slip += 1
+        if self._since_slip <= COOLDOWN.get(level, 3) or self._rng.random() >= rate:
+            return text
+        options = [self._filler, self._restart, self._mate]
+        if reply:
+            options = [self._filler, self._yeah, self._copy_copy, self._mate]
+        else:
+            if key.split(":")[0] in NUMBER_SLIP_KEYS:
+                options += [self._number_slip, self._number_slip]  # the most human one: weight it up
+            if key == "pit_done":
+                options.append(self._compound_slip)
+        self._rng.shuffle(options)
+        for slip in options:
+            out = slip(text)
+            if out and out != text:
+                self._since_slip = 0
+                return out
+        return text
+
+    # ---- the slips ---------------------------------------------------------------------------------
+
+    def _filler(self, text: str) -> str | None:
+        """'Gap to Leclerc, uh, 1.2.' after the first comma, or after an opening 'Okay'."""
+        filler = self._rng.choice(["uh", "uh", "er"])
+        m = re.match(r"^(Okay|So|And|Yeah)(,?) ", text)
+        if m:
+            return f"{m.group(1)}, {filler}, " + text[m.end() :]
+        i = text.find(", ")
+        if 4 <= i <= 40:
+            return text[: i + 2] + f"{filler}, " + text[i + 2 :]
+        return None
+
+    def _restart(self, text: str) -> str | None:
+        """'So, uh... gap to Leclerc...' — a false start before the real message."""
+        if text.startswith(("Okay", "So", "And", "Just for info")):
+            return None
+        first, _, rest = text.partition(" ")
+        if not rest or not first[:1].isalpha():
+            return None
+        lead = self._rng.choice(["So, uh... ", "Okay, so... ", "Okay... "])
+        if first.lower() in {"gap", "tyres", "fuel", "that", "you", "you're", "we", "we're", "the", "these", "still"}:
+            first = first.lower()
+        return lead + first + " " + rest
+
+    def _mate(self, text: str) -> str | None:
+        """'Good lap, mate.' on a short, friendly sentence."""
+        if "mate" in text or len(text) > 70 or not text.endswith("."):
+            return None
+        if text.count(".") > 2 or any(ch.isdigit() for ch in text[-6:]):
+            return None  # don't hang 'mate' off a number
+        return text[:-1] + ", mate."
+
+    def _yeah(self, text: str) -> str | None:
+        if text.startswith(("Yeah", "Copy", "Okay", "No ", "Negative", "Affirm")):
+            return None
+        first, _, rest = text.partition(" ")
+        if first in {"I", "I'm"} or first[:1].isupper() and first.lower() not in _LOWER_OK:
+            return "Yeah, " + text
+        return "Yeah, " + first.lower() + (" " + rest if rest else "")
+
+    def _copy_copy(self, text: str) -> str | None:
+        if text.startswith("Copy.") or text.startswith("Copy,"):
+            return "Copy, copy" + text[4:]
+        return None
+
+    def _number_slip(self, text: str) -> str | None:
+        """Misread a number by one digit and correct it straight away; the correction is the real value."""
+        m = _LAP_TIME.search(text)
+        if m:
+            wrong_tenth = (int(m.group(3)) + self._rng.choice([1, -1])) % 10
+            wrong = f"{m.group(1)}:{m.group(2)}.{wrong_tenth}"
+            return text[: m.start()] + f"{wrong}... sorry, {m.group(0)}" + text[m.end() :]
+        m = _DECIMAL.search(text)
+        if m:
+            whole, tenth = int(m.group(1)), int(m.group(2))
+            wrong_tenth = tenth + self._rng.choice([1, -1])
+            if not 0 <= wrong_tenth <= 9:
+                wrong_tenth = tenth - 1 if tenth > 0 else tenth + 1
+            wrong = f"{whole}.{wrong_tenth}"
+            return text[: m.start()] + f"{wrong}... sorry, {m.group(0)}" + text[m.end() :]
+        return None
+
+    def _compound_slip(self, text: str) -> str | None:
+        """'New mediums... sorry, new hards.' as in the real thing."""
+        for word in COMPOUND_WORDS:
+            m = re.search(rf"\b[Nn]ew {word}\b", text)
+            if m:
+                wrong = self._rng.choice([w for w in COMPOUND_WORDS if w != word])
+                said = m.group(0)
+                return text[: m.start()] + f"{said[:3]} {wrong}... sorry, new {word}" + text[m.end() :]
+        return None
+
+
+_LOWER_OK = {"gap", "tyres", "fuel", "that", "you", "your", "you're", "we", "we're", "it", "it's", "the",
+             "there", "good", "nice", "pace", "battery", "track", "rain", "box", "stay", "car", "no", "not",
+             "all", "still", "copy", "these", "just", "loud"}  # fmt: skip

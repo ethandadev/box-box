@@ -18,6 +18,13 @@ log = logging.getLogger(__name__)
 CONVERSATIONAL_KEYS = {"gaps", "pit_window", "rival", "tyre_plan", "sc_window", "grid_tyres", "pit_done", "tyres"}
 
 
+# Calls that must sound exactly as written, whatever the natural-speech setting.
+CRISP_KEYS = {
+    "box", "last_chance", "quali_pos", "wing", "puncture", "sc", "red", "finish", "last_lap",
+    "traffic", "blue", "penalty", "lap_deleted", "yellow", "warning",
+}  # fmt: skip
+
+
 @dataclass
 class Context:
     world: World
@@ -53,6 +60,8 @@ class Context:
     ) -> RadioCall:
         if priority == Priority.INFO and key.split(":")[0] in CONVERSATIONAL_KEYS:
             text = self.say.lead(text, me=self.me)
+        crisp = priority == Priority.SAFETY or key.split(":")[0] in CRISP_KEYS
+        text = self.say.human.apply(text, self.settings.engineer.natural_speech, key=key, safety=crisp)
         return RadioCall(
             key=key,
             priority=priority,

@@ -108,45 +108,68 @@ def ordinal_position(p: int) -> str:
 
 # Sentence-opening words that read naturally in lower case after "Okay, " (everything else, like
 # driver names, "P4" or numbers, keeps its capital).
-LOWERCASE_OK = {
-    "gap",
-    "tyres",
-    "fuel",
-    "that",
-    "you",
-    "your",
-    "you're",
-    "we",
-    "we're",
-    "it",
-    "it's",
-    "the",
-    "there",
-    "good",
-    "nice",
-    "pace",
-    "battery",
-    "track",
-    "rain",
-    "box",
-    "stay",
-    "brakes",
-    "front",
-    "car",
-    "radar",
-    "inside",
-    "taking",
-    "wear",
-    "deg",
-    "these",
-    "still",
-    "most",
-    "whole",
-    "pit",
-    "just",
-    "tyre",
-    "this",
-}
+LOWERCASE_OK = set(
+    [
+        "battery",
+        "big",
+        "box",
+        "brakes",
+        "car",
+        "clear",
+        "currently",
+        "deg",
+        "drop",
+        "front",
+        "fuel",
+        "gap",
+        "good",
+        "green",
+        "heads",
+        "inside",
+        "it",
+        "it's",
+        "just",
+        "lap",
+        "laps",
+        "mixed",
+        "most",
+        "new",
+        "nice",
+        "on",
+        "pace",
+        "pit",
+        "purple",
+        "radar",
+        "rain",
+        "rear",
+        "red",
+        "safety",
+        "sector",
+        "slow",
+        "stay",
+        "still",
+        "taking",
+        "target",
+        "that",
+        "the",
+        "there",
+        "these",
+        "this",
+        "time",
+        "track",
+        "traffic",
+        "tyre",
+        "tyres",
+        "we",
+        "we're",
+        "wear",
+        "whole",
+        "yellow",
+        "you",
+        "you're",
+        "your",
+    ]
+)
 
 
 class Phrasebook:
@@ -156,9 +179,12 @@ class Phrasebook:
     """
 
     def __init__(self, personality: str = "calm", seed: int | None = None) -> None:
+        from box_box.engineer.human import Humanizer
+
         self.personality = personality
         self._rng = random.Random(seed)
         self._last: dict[str, int] = {}
+        self.human = Humanizer(random.Random(None if seed is None else seed + 1))
 
     def __call__(self, key: str, **fmt: object) -> str:
         table = PHRASES[key]

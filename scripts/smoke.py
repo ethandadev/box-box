@@ -95,6 +95,7 @@ async def engine_and_ui() -> None:
         {
             "telemetry": {"port": port},
             "callouts": {"straights_only": False},
+            "engineer": {"natural_speech": "off"},  # exact lines are checked below
             "voice": {"engine": "windows" if sys.platform == "win32" else "off"},
         }
     )
