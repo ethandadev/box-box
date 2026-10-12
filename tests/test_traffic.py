@@ -5,7 +5,7 @@ from box_box.engineer.base import Context
 from box_box.engineer.radio import Phrasebook, Priority, RadioCall
 from box_box.engineer.traffic import TrafficDetector
 from box_box.state.model import World
-from box_box.state.track import in_zone, road_offset
+from box_box.state.track import road_offset
 from box_box.telemetry.packets import Decoder, DriverStatus
 from tests.builders import Car, Scenario
 
@@ -30,7 +30,6 @@ def run(scenario: Scenario, seconds: float, dt: float = 0.1) -> list[RadioCall]:
 def test_road_offset_wraps_the_line() -> None:
     assert road_offset(4950, 50, 5000) == pytest.approx(100)  # just across the line, ahead
     assert road_offset(50, 4950, 5000) == pytest.approx(-100)  # behind, on the previous lap's end
-    assert in_zone(0.98, (0.95, 0.15)) and in_zone(0.05, (0.95, 0.15)) and not in_zone(0.5, (0.95, 0.15))
 
 
 def test_outlap_car_closing_from_behind_gets_two_calls_then_silence() -> None:

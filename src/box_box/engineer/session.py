@@ -9,7 +9,7 @@ from box_box.telemetry import names
 from box_box.telemetry.packets import DriverStatus
 
 WEATHER_WORDS = {0: "clear skies", 1: "light cloud", 2: "overcast", 3: "light rain", 4: "heavy rain", 5: "stormy"}
-Q1, Q2, SHORT_Q, OSQ = 5, 6, 8, 9
+Q1, Q2 = 5, 6
 SQ1, SQ2 = 10, 11
 KNOCKOUT = {Q1, Q2, SQ1, SQ2}  # segments where the slowest are eliminated
 FINAL_QUALI = {7, 8, 9, 12, 13, 14}  # Q3, short, one-shot, SQ3, short sprint, one-shot sprint

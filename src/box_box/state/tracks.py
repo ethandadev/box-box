@@ -24,11 +24,6 @@ class Corner:
         """How it's said on the radio: 'Copse', 'the hairpin', or 'turn 9'."""
         return self.name or f"turn {self.turn}"
 
-    @property
-    def full(self) -> str:
-        """'turn 9, Copse' for written context."""
-        return f"turn {self.turn}" + (f" ({self.name})" if self.name and self.name != f"turn {self.turn}" else "")
-
 
 @dataclass(frozen=True, slots=True)
 class Track:
@@ -45,15 +40,6 @@ class Track:
         """Each corner with its position in the game's lap distance."""
         k = self.scale(game_length)
         return [(c, c.at_m * k) for c in self.corners]
-
-    def corner_near(self, lap_distance: float, game_length: float | None, within: float = 200.0) -> Corner | None:
-        """The corner closest to a point on the lap, if one is within `within` metres."""
-        best: tuple[float, Corner] | None = None
-        for c, at in self.corners_on(game_length):
-            d = abs(at - lap_distance)
-            if d <= within and (best is None or d < best[0]):
-                best = (d, c)
-        return best[1] if best else None
 
     def corner_after(self, lap_distance: float, game_length: float | None, within: float = 600.0) -> Corner | None:
         """The next corner from a point on the lap (wrapping past the line), if within `within` metres."""

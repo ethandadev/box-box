@@ -76,7 +76,6 @@ class CornerCoach:
         self._trace = LapTrace()
         self.laps: dict[int, LapTrace] = {}
         self.best: tuple[int, LapTrace] | None = None  # (lap ms, trace)
-        self.last_finding: Finding | None = None
 
     def rewind(self) -> None:
         self._trace = LapTrace()
@@ -136,8 +135,6 @@ class CornerCoach:
         finding = None
         if self.best is not None and lap_ms > self.best[0]:
             finding = self._compare(trace, self.best[1])
-            if finding:
-                self.last_finding = finding
         if self.best is None or lap_ms < self.best[0]:
             self.best = (lap_ms, trace)
         return finding

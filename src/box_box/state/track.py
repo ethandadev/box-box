@@ -33,11 +33,3 @@ def gap_seconds(gap_m: float, chaser_kph: float) -> float | None:
     if v < 5:
         return None
     return gap_m / v
-
-
-def in_zone(lap_fraction: float, zone: tuple[float, float]) -> bool:
-    """Zones are (start, end) lap fractions and may wrap the start/finish line (start > end)."""
-    start, end = zone
-    if start <= end:
-        return start <= lap_fraction <= end
-    return lap_fraction >= start or lap_fraction <= end

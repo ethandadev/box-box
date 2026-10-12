@@ -145,9 +145,6 @@ PHRASES: dict[str, dict[str, list[str]]] = {
             "{name} coming out of the pits ahead of you.",
         ],
     },
-    "release_clear": {
-        "calm": ["Clear behind. You're good to go.", "Gap is good, go now."],
-    },
     # ---- flags ----------------------------------------------------------------------------------
     "yellow_ahead": {
         "calm": [
@@ -156,9 +153,6 @@ PHRASES: dict[str, dict[str, list[str]]] = {
             "Yellow flag ahead, {where}.",
         ],
         "fired_up": ["Yellow flag, yellow flag, {where}!"],
-    },
-    "double_yellow": {
-        "calm": ["Double yellow ahead, {where}. Be ready to stop."],
     },
     "safety_car": {
         "calm": [
@@ -234,25 +228,6 @@ PHRASES: dict[str, dict[str, list[str]]] = {
     "after_lap_one_same": {
         "calm": ["P{pos} after lap one. Good, settle in.", "Held position, P{pos}. Settle in."],
     },
-    "gaps_both": {
-        "calm": [
-            "Gap ahead to {ahead} {gap_ahead}, {trend_ahead}. {behind} behind, {gap_behind}.",
-            "{ahead} {gap_ahead} ahead, {trend_ahead}. {behind} {gap_behind} behind.",
-        ],
-    },
-    "gaps_ahead": {
-        "calm": ["Gap to {ahead}, {gap_ahead}. {trend_ahead}.", "{ahead} is {gap_ahead} up the road, {trend_ahead}."],
-    },
-    "gaps_behind": {
-        "calm": [
-            "{behind} behind, {gap_behind}. {trend_behind}.",
-            "Gap behind to {behind}, {gap_behind}, {trend_behind}.",
-        ],
-    },
-    "gaps_leading": {
-        "calm": ["Gap to {behind} is {gap_behind}, {trend_behind}.", "You're leading by {gap_behind}. {trend_behind}."],
-        "fired_up": ["Leading by {gap_behind}! {trend_behind}."],
-    },
     "drs_range": {
         "calm": ["You're within a second of {name}.", "Inside a second to {name}. Go get them."],
     },
@@ -293,9 +268,6 @@ PHRASES: dict[str, dict[str, list[str]]] = {
             "Okay {me}, box this lap. Box this lap.",
         ],
         "fired_up": ["Box, box, box! This lap!"],
-    },
-    "stay_out": {
-        "calm": ["Stay out, stay out.", "Stay out this lap."],
     },
     "pit_stop_time": {
         "calm": ["Good stop, {seconds} seconds. Out in P{pos}.", "{seconds} second stop. You're P{pos}."],
@@ -657,27 +629,7 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "dry": ["Copy. Writing it down. In pen."],
     },
     # ---- encouragement --------------------------------------------------------------------------
-    "catching": {
-        "calm": ["You're catching {name}, {rate} a lap.", "Taking {rate} a lap out of {name}."],
-        "fired_up": ["You're reeling in {name}, {rate} a lap!"],
-    },
-    "being_caught": {
-        "calm": ["{name} is catching, {rate} a lap.", "{name} closing, {rate} a lap. Keep it tidy."],
-    },
-    "keep_going_clean_air": {
-        "calm": ["Good lap. Clean air is king, keep it going.", "Nice. Clean air, use it."],
-    },
-    "keep_going": {
-        "calm": ["Good pace, keep it up.", "Pace is good, {me}.", "Nice and tidy."],
-        "fired_up": ["Great pace! Keep pushing!", "Mega, {me}. Keep it going!"],
-        "dry": ["Pace is good. Don't tell anyone.", "Nice and boring. Perfect."],
-    },
     # ---- radio system ---------------------------------------------------------------------------
-    "radio_check": {
-        "calm": ["Loud and clear, {me}.", "Got you loud and clear."],
-        "dry": ["Loud and clear. Unfortunately."],
-    },
-    "copy": {"calm": ["Copy.", "Copy that.", "Understood."]},
     "stand_by": {"calm": ["Stand by.", "Stand by one."]},
     "didnt_catch": {
         "calm": ["Say again, {me}? Didn't catch that.", "Sorry, say again?", "Radio's broken up, say again?"],

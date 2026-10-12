@@ -43,9 +43,6 @@ class RadioCall:
     source: str = "engineer"  # "engineer" (proactive), "reply" (answering the driver), "system"
     id: int = field(default_factory=lambda: next(_ids))
 
-    def stale(self, now: float) -> bool:
-        return now > self.expires_at
-
 
 # ---- how numbers are said on the radio -----------------------------------------------------------
 
@@ -101,10 +98,6 @@ def lap_time(ms: int) -> str:
     minutes = int(total // 60)
     seconds = total - minutes * 60
     return f"{minutes}:{seconds:04.1f}" if minutes else f"{seconds:.1f}"
-
-
-def ordinal_position(p: int) -> str:
-    return f"P{p}"
 
 
 # Words that keep their capital mid-sentence ("Okay, so Russell is through"). Driver names in the session

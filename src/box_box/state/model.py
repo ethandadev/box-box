@@ -198,7 +198,6 @@ class World:
     # Bumped whenever time jumps backwards (flashback, save reload), so detectors can drop their memory.
     timeline: int = 0
     _rewound_at: float = -1e9  # session time of the last flashback we handled
-    session_started: bool = False
     lights_out: bool = False
     chequered_flag: bool = False
     session_ended: bool = False
@@ -415,7 +414,6 @@ class World:
         self.events = []
         self.changes = [SessionChanged()]
         self.timeline += 1
-        self.session_started = False
         self.lights_out = False
         self.chequered_flag = False
         self.session_ended = False
@@ -518,8 +516,6 @@ class World:
         if event.code == "BUTN":
             return  # spams while any button is held; handled by the push-to-talk service directly
         match event.code:
-            case "SSTA":
-                self.session_started = True
             case "SEND":
                 self.session_ended = True
             case "LGOT":
