@@ -41,8 +41,13 @@ def tyre_life_left(me: CarState) -> float | None:
     return max(0.0, (TYRE_CLIFF_PCT - wear) / rate)
 
 
-def tyre_offset(me: CarState, car: CarState) -> str | None:
-    """'He's on hards, six laps older.' when the rival's tyres differ enough to matter, else None."""
+SOFTNESS = {"softs": 0, "super softs": 0, "mediums": 1, "hards": 2}
+
+
+def tyre_offset(me: CarState, car: CarState, behind: bool = False) -> str | None:
+    """'He's on hards, six laps older.' when the rival's tyres differ enough to matter, else None.
+
+    For the car behind on a softer tyre, add what that means: he'll have higher deg."""
     if me.status is None or car.status is None:
         return None
     mine, theirs = names.compound_name(me.status.visual_compound), names.compound_name(car.status.visual_compound)
@@ -51,7 +56,10 @@ def tyre_offset(me: CarState, car: CarState) -> str | None:
     diff = car.status.tyre_age_laps - me.status.tyre_age_laps
     age = f"{count_word(abs(diff))} laps {'older' if diff > 0 else 'newer'}" if abs(diff) >= 4 else ""
     if theirs != mine:
-        return f"He's on {theirs}" + (f", {age}." if age else ".")
+        note = f"He's on {theirs}" + (f", {age}." if age else ".")
+        if behind and SOFTNESS.get(theirs, 1) < SOFTNESS.get(mine, 1):
+            note += " He'll have higher deg."
+        return note
     if age:
         return f"Same tyre, {age}."
     return None
@@ -71,6 +79,7 @@ class StrategyDetector(Detector):
         self._offset_attack: set[int] = set()
         self._rhythm_lap = -10
         self._nothing_to_prove = False
+        self._sc_temps_called = False
 
     def on_rewind(self) -> None:
         self._verdicts.clear()
@@ -94,6 +103,9 @@ class StrategyDetector(Detector):
                 out += self._nothing_to_prove_call(ctx, me)
                 out += self._ask_tyre_feedback(ctx, me)
             out += self._safety_car_box(ctx, me)
+            out += self._safety_car_tyre_temps(ctx, me)
+            if completed and world.lights_out:
+                out += self._ask_conditions(ctx, me)
         elif world.is_practice:
             if any(isinstance(c, LapCompleted) and c.car_index == me.index for c in ctx.changes):
                 out += self._ask_balance(ctx, me)
@@ -234,6 +246,23 @@ class StrategyDetector(Detector):
         key = "box_under_sc" if s.safety_car_status == 1 else "box_under_vsc"
         return [ctx.call("box", Priority.STRATEGY, ctx.say(key, me=ctx.me), ttl=25, category="pit")]
 
+    def _safety_car_tyre_temps(self, ctx: Context, me: CarState) -> list[RadioCall]:
+        """Behind the safety car the tyres cool fast: tell the driver to weave and keep temperature in."""
+        s = ctx.world.session
+        assert s
+        if s.safety_car_status not in (1, 2):
+            self._sc_temps_called = False
+            return []
+        t = me.telemetry
+        if self._sc_temps_called or t is None or me.in_pit_lane or not me.on_track:
+            return []
+        avg = sum(t.tyre_inner_temps) / 4
+        if not 0 < avg < 78:
+            return []
+        self._sc_temps_called = True
+        text = ctx.say("sc_cold_tyres", me=ctx.me)
+        return [ctx.call("sc_temps", Priority.INFO, text, ttl=30, category="tyres", verbosity=Verbosity.NORMAL)]
+
     # ---- rivals ----------------------------------------------------------------------------------
 
     def _rivals_yet_to_stop(self, ctx: Context, me: CarState) -> list[RadioCall]:
@@ -318,6 +347,15 @@ class StrategyDetector(Detector):
         self._asked.add("tyres")
         text = ctx.say("ask_tyres", me=ctx.me)
         return [ctx.call("ask:tyres", Priority.COLOUR, text, ttl=40, verbosity=Verbosity.NORMAL)]
+
+    def _ask_conditions(self, ctx: Context, me: CarState) -> list[RadioCall]:
+        s = ctx.world.session
+        assert s and me.lap
+        if "conditions" in self._asked or s.weather < 3 or me.lap.lap_num < 3:
+            return []
+        self._asked.add("conditions")
+        text = ctx.say("ask_conditions", me=ctx.me)
+        return [ctx.call("ask:conditions", Priority.INFO, text, ttl=40, verbosity=Verbosity.NORMAL)]
 
     def _ask_balance(self, ctx: Context, me: CarState) -> list[RadioCall]:
         if "balance" in self._asked or len(me.valid_laps()) < 2:

@@ -177,6 +177,7 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": [
             "Red flag, red flag. Slow down and bring it to the pits.",
             "Red flag. Session stopped. Come in slowly.",
+            "Red flag, red flag. No overtaking. Follow the cars into the pit lane, pit limiter on the way in.",
         ],
     },
     "blue_flags": {
@@ -574,6 +575,25 @@ PHRASES: dict[str, dict[str, list[str]]] = {
     },
     "box_under_vsc": {
         "calm": ["VSC, we're in the window. Box this lap, box this lap.", "Box under the VSC. Box this lap."],
+    },
+    "new_tyres": {
+        "calm": [
+            "New {tyre} on. Give them a lap to come in.",
+            "That's new {tyre}. Build the temperature, then they're yours.",
+            "On the {tyre} now. Careful for a lap, they'll be cold.",
+        ],
+    },
+    "sc_cold_tyres": {
+        "calm": [
+            "Tyres are on the cold side. Keep weaving, get the temperature in.",
+            "Temps are dropping behind the safety car. Weaving is good, keep it up.",
+        ],
+    },
+    "ask_conditions": {
+        "calm": [
+            "Update on the conditions when you can. Grip and visibility.",
+            "Any comments on the conditions, {me}?",
+        ],
     },
     "rival_yet_to_stop": {
         "calm": [

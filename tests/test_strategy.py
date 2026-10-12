@@ -228,3 +228,32 @@ def test_quali_margins_in_thousandths_and_elimination() -> None:
     sim.event("SEND")
     calls = [c for c in sim.run(0.3) if c.key == "session_end"]
     assert len(calls) == 1 and "P17" in calls[0].text and ("out" in calls[0].text or "through" in calls[0].text)
+
+
+def test_softer_tyre_behind_means_higher_deg() -> None:
+    sim = Sim([])
+    sim.car_status(0, tyre_age_laps=10, visual_compound=18)
+    sim.car_status(3, tyre_age_laps=4, visual_compound=16)
+    sim.tick()
+    me, ham = sim.world.cars[0], sim.world.cars[3]
+    assert tyre_offset(me, ham, behind=True) == "He's on softs, six laps newer. He'll have higher deg."
+
+
+def test_cold_tyres_behind_the_safety_car_and_new_tyre_briefing() -> None:
+    sim = Sim([StrategyDetector(), RaceDetector()], session=replace(SESSION, total_laps=30))
+    racing(sim)
+    sim.lap(0, lap_num=10, position=3)
+    sim.car_telemetry(0, tyre_inner_temps=(70, 70, 72, 72))
+    sim.set_session(safety_car_status=1)
+    calls = [c for c in sim.run(0.5) if c.key == "sc_temps"]
+    assert len(calls) == 1 and "weav" in calls[0].text.lower()
+    sim.set_session(safety_car_status=0)
+    sim.car_telemetry(0, tyre_inner_temps=(90, 90, 90, 90))
+    sim.lap(0, pit_status=1)
+    sim.tick()
+    sim.lap(0, pit_status=2, pit_stop_timer_ms=2500)
+    sim.car_status(0, visual_compound=18, tyre_age_laps=0)
+    sim.tick()
+    sim.lap(0, pit_status=0, num_pit_stops=1)
+    done = [c for c in sim.run(0.3) if c.key == "pit_done"]
+    assert len(done) == 1 and "2.5" in done[0].text and "hards" in done[0].text

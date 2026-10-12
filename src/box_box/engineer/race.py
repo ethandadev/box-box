@@ -9,6 +9,7 @@ from box_box.engineer.base import Context, Detector
 from box_box.engineer.radio import Priority, RadioCall, Verbosity, gap, tenths
 from box_box.engineer.strategy import tyre_offset
 from box_box.state.model import CarState, LapCompleted, PitEntered, PitExited, Retired
+from box_box.telemetry import names
 from box_box.telemetry.packets import ResultStatus
 
 POINTS_POSITIONS = 10
@@ -193,12 +194,22 @@ class RaceDetector(Detector):
         text = re.sub(r"([.!?] )([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
         # Like a real pit wall: add the rival's tyre situation when it's new information.
         for car, ok in ((ahead, valid_ahead and me.lap.position > 1), (behind, valid_behind)):
-            note = tyre_offset(me, car) if ok and car is not None else None
+            note = tyre_offset(me, car, behind=car is behind) if ok and car is not None else None
             if note and car is not None and self._offset_said.get(car.index) != note:
                 self._offset_said[car.index] = note
                 who = ctx.name(car, "He")
                 text += " " + note.replace("He's", f"{who}'s", 1).replace("Same tyre,", f"{who} on the same tyre,", 1)
                 break
+        # 2026: whether the car right behind can use overtake mode on us.
+        if (
+            valid_behind
+            and behind is not None
+            and g_behind is not None
+            and g_behind < 1.5
+            and ctx.world.regulations_2026
+            and behind.telemetry2 is not None
+        ):
+            text += " He has overtake." if behind.telemetry2.overtake_available else " He does not have overtake."
         return [ctx.call("gaps", Priority.INFO, text, ttl=20, category="gaps", verbosity=Verbosity.NORMAL)]
 
     def _within_second(self, ctx: Context, me: CarState) -> list[RadioCall]:
@@ -284,6 +295,9 @@ class RaceDetector(Detector):
             return []
         secs = f"{change.stationary_ms / 1000:.1f}"
         text = ctx.say("pit_stop_done", seconds=secs, pos=me.lap.position)
+        tyre = names.compound_name(change.new_compound) if change.new_compound else "unknown tyres"
+        if tyre != "unknown tyres":
+            text += " " + ctx.say("new_tyres", tyre=tyre, me=ctx.me)
         return [ctx.call("pit_done", Priority.INFO, text, ttl=20, category="pit", verbosity=Verbosity.NORMAL)]
 
     # -- overtakes ----------------------------------------------------------------------------------
