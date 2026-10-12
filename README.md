@@ -105,13 +105,23 @@ checks it end to end. Cloud models cost cents per race.
 
 **Voices.** Kokoro runs on your PC for free, with a pronunciation dictionary for the grid and the
 corners (luh-CLAIR, oh-CON, Eau Rouge) and clipped, radio-paced delivery. For a properly human voice pick
-**OpenAI**, **ElevenLabs** or **Google Gemini** in Settings → Voice: OpenAI and Gemini take plain-English
-directions ("calm British race engineer, quick and dry") and reuse your AI keys; Gemini has a free tier.
-If a cloud voice fails mid-session, that line is spoken with Kokoro instead.
+**Google Gemini** (free tier: paste a key from aistudio.google.com/apikey into Settings → Voice), **OpenAI**
+or **ElevenLabs**. Each has its own key field in the Voice section, so it works whichever AI you chat with.
+If a cloud voice refuses (bad key, out of credits) the app switches to Kokoro for the rest of the session
+and Diagnostics says why.
 
-He sounds like a person, not a script: now and then an "uh", a restart ("Okay, so..."), a "mate", or a
-quick self-correction like *"P9 2.1... sorry, 2.2 ahead"* (the correction is always the real number).
-Never on urgent calls. **Settings → Engineer → Natural speech** sets it to Off, Subtle (default) or Very human.
+**The radio.** Every transmission keys up like the real thing: a click and the beep, a moment of open
+channel, the voice swelling in narrow-band over a hiss floor, then the hiss tail and the closing beep.
+Sometimes he holds the key between two sentences while he checks something. Your own push-to-talk
+clicks and chirps too. **Radio effect** goes from studio-clean (0) to a crackly onboard radio (1).
+
+He sounds like a person, not a script: now and then a "mate", an "Okay, so...", "copy, copy", or a quick
+self-correction on a gap like *"1.3, sorry, 1.2"* (the correction is always the real number). Never on
+urgent calls or lap times. **Settings → Engineer → Natural speech** sets it to Off, Subtle (default) or
+Very human.
+
+**Sprint weekends.** The sprint is called the Sprint (the game says "Race"), with no pit-stop talk and
+points for the top 8; sprint qualifying is SQ1 to SQ3.
 
 Everything is tunable in **Settings**: personality (calm / fired up / dry), how much he talks, which
 categories, gap frequency, only-on-straights, voice, speed, radio effect, devices and more. Changes apply
