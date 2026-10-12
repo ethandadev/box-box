@@ -1,0 +1,2002 @@
+{
+ "_source": "Corner numbers and distances: TracingInsights F1 data (https://github.com/TracingInsights/2026 and /2025), Apache-2.0, from FastF1 circuit info. Names and notes: Box Box.",
+ "tracks": {
+  "0": {
+   "name": "Melbourne",
+   "length_m": 5278,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 354
+    },
+    {
+     "turn": "2",
+     "at": 437
+    },
+    {
+     "turn": "3",
+     "at": 1082
+    },
+    {
+     "turn": "4",
+     "at": 1240
+    },
+    {
+     "turn": "5",
+     "at": 1435
+    },
+    {
+     "turn": "6",
+     "at": 1865
+    },
+    {
+     "turn": "7",
+     "at": 1987
+    },
+    {
+     "turn": "8",
+     "at": 2157
+    },
+    {
+     "turn": "9",
+     "at": 3279
+    },
+    {
+     "turn": "10",
+     "at": 3384
+    },
+    {
+     "turn": "11",
+     "at": 4088
+    },
+    {
+     "turn": "12",
+     "at": 4359
+    },
+    {
+     "turn": "13",
+     "at": 4608
+    },
+    {
+     "turn": "14",
+     "at": 4765
+    }
+   ],
+   "notes": [
+    "Fast, flowing street-park circuit; turns 9 and 10 are the high-speed chicane.",
+    "Overtaking: into turn 1, turn 3 and turn 11.",
+    "Rear tyre management out of turns 3 and 13."
+   ]
+  },
+  "2": {
+   "name": "Shanghai",
+   "length_m": 5451,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 592,
+     "name": "the snail"
+    },
+    {
+     "turn": "2",
+     "at": 769,
+     "name": "the snail"
+    },
+    {
+     "turn": "3",
+     "at": 939
+    },
+    {
+     "turn": "4",
+     "at": 1032
+    },
+    {
+     "turn": "5",
+     "at": 1357
+    },
+    {
+     "turn": "6",
+     "at": 1599,
+     "name": "the turn 6 hairpin"
+    },
+    {
+     "turn": "7",
+     "at": 2066
+    },
+    {
+     "turn": "8",
+     "at": 2362
+    },
+    {
+     "turn": "9",
+     "at": 2532
+    },
+    {
+     "turn": "10",
+     "at": 2653
+    },
+    {
+     "turn": "11",
+     "at": 3122
+    },
+    {
+     "turn": "12",
+     "at": 3198
+    },
+    {
+     "turn": "13",
+     "at": 3383
+    },
+    {
+     "turn": "14",
+     "at": 4758,
+     "name": "the turn 14 hairpin"
+    },
+    {
+     "turn": "15",
+     "at": 4846
+    },
+    {
+     "turn": "16",
+     "at": 5130
+    }
+   ],
+   "notes": [
+    "Turns 1 to 3 tighten like a snail: front-left graining.",
+    "Huge back straight into the turn 14 hairpin: main overtaking spot.",
+    "Turn 6 hairpin is the other place to pass."
+   ]
+  },
+  "3": {
+   "name": "Bahrain",
+   "length_m": 5412,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 710
+    },
+    {
+     "turn": "2",
+     "at": 813
+    },
+    {
+     "turn": "3",
+     "at": 921
+    },
+    {
+     "turn": "4",
+     "at": 1509
+    },
+    {
+     "turn": "5",
+     "at": 1781
+    },
+    {
+     "turn": "6",
+     "at": 1881
+    },
+    {
+     "turn": "7",
+     "at": 1967
+    },
+    {
+     "turn": "8",
+     "at": 2214
+    },
+    {
+     "turn": "9",
+     "at": 2592
+    },
+    {
+     "turn": "10",
+     "at": 2683
+    },
+    {
+     "turn": "11",
+     "at": 3451
+    },
+    {
+     "turn": "12",
+     "at": 3863
+    },
+    {
+     "turn": "13",
+     "at": 4072
+    },
+    {
+     "turn": "14",
+     "at": 4880
+    },
+    {
+     "turn": "15",
+     "at": 4967
+    }
+   ],
+   "notes": [
+    "Stop-start, hard on the rear tyres: traction is everything.",
+    "Overtaking: turn 1, turn 4 and turn 11.",
+    "Turn 10 is the tricky downhill braking zone where cars lock the front-left."
+   ]
+  },
+  "4": {
+   "name": "Barcelona",
+   "length_m": 4657,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 815,
+     "name": "Elf"
+    },
+    {
+     "turn": "2",
+     "at": 893
+    },
+    {
+     "turn": "3",
+     "at": 1148,
+     "name": "Renault"
+    },
+    {
+     "turn": "4",
+     "at": 1727,
+     "name": "Repsol"
+    },
+    {
+     "turn": "5",
+     "at": 2167,
+     "name": "Seat"
+    },
+    {
+     "turn": "6",
+     "at": 2352
+    },
+    {
+     "turn": "7",
+     "at": 2522
+    },
+    {
+     "turn": "8",
+     "at": 2625
+    },
+    {
+     "turn": "9",
+     "at": 2884,
+     "name": "Campsa"
+    },
+    {
+     "turn": "10",
+     "at": 3480,
+     "name": "La Caixa"
+    },
+    {
+     "turn": "11",
+     "at": 3633
+    },
+    {
+     "turn": "12",
+     "at": 3739
+    },
+    {
+     "turn": "13",
+     "at": 4024
+    },
+    {
+     "turn": "14",
+     "at": 4335
+    }
+   ],
+   "notes": [
+    "High-energy front-left corners, turn 3 and turn 9 load the tyres.",
+    "Overtaking almost only into turn 1.",
+    "Last sector is all traction."
+   ]
+  },
+  "5": {
+   "name": "Monaco",
+   "length_m": 3337,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 194,
+     "name": "Sainte Devote"
+    },
+    {
+     "turn": "2",
+     "at": 584
+    },
+    {
+     "turn": "3",
+     "at": 749,
+     "name": "Massenet"
+    },
+    {
+     "turn": "4",
+     "at": 875,
+     "name": "Casino"
+    },
+    {
+     "turn": "5",
+     "at": 1101,
+     "name": "Mirabeau"
+    },
+    {
+     "turn": "6",
+     "at": 1220,
+     "name": "the hairpin"
+    },
+    {
+     "turn": "7",
+     "at": 1299
+    },
+    {
+     "turn": "8",
+     "at": 1386,
+     "name": "Portier"
+    },
+    {
+     "turn": "9",
+     "at": 1717,
+     "name": "the tunnel"
+    },
+    {
+     "turn": "10",
+     "at": 2045,
+     "name": "the chicane"
+    },
+    {
+     "turn": "11",
+     "at": 2097
+    },
+    {
+     "turn": "12",
+     "at": 2325,
+     "name": "Tabac"
+    },
+    {
+     "turn": "13",
+     "at": 2477,
+     "name": "Swimming Pool"
+    },
+    {
+     "turn": "14",
+     "at": 2507,
+     "name": "Swimming Pool"
+    },
+    {
+     "turn": "15",
+     "at": 2641
+    },
+    {
+     "turn": "16",
+     "at": 2662
+    },
+    {
+     "turn": "17",
+     "at": 2736
+    },
+    {
+     "turn": "18",
+     "at": 2853,
+     "name": "Rascasse"
+    },
+    {
+     "turn": "19",
+     "at": 2944,
+     "name": "Anthony Noghes"
+    }
+   ],
+   "notes": [
+    "Qualifying is everything; overtaking is almost impossible.",
+    "Only real chance: the chicane after the tunnel.",
+    "Walls everywhere; a safety car is likely."
+   ]
+  },
+  "6": {
+   "name": "Montreal",
+   "length_m": 4361,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 220,
+     "name": "Senna"
+    },
+    {
+     "turn": "2",
+     "at": 323
+    },
+    {
+     "turn": "3",
+     "at": 704
+    },
+    {
+     "turn": "4",
+     "at": 768
+    },
+    {
+     "turn": "5",
+     "at": 1002
+    },
+    {
+     "turn": "6",
+     "at": 1209
+    },
+    {
+     "turn": "7",
+     "at": 1305
+    },
+    {
+     "turn": "8",
+     "at": 1992
+    },
+    {
+     "turn": "9",
+     "at": 2077
+    },
+    {
+     "turn": "10",
+     "at": 2670,
+     "name": "the hairpin"
+    },
+    {
+     "turn": "11",
+     "at": 2770
+    },
+    {
+     "turn": "12",
+     "at": 3156
+    },
+    {
+     "turn": "13",
+     "at": 3870,
+     "name": "the final chicane"
+    },
+    {
+     "turn": "14",
+     "at": 3908,
+     "name": "the final chicane"
+    }
+   ],
+   "notes": [
+    "Stop-go: hard braking and traction, heavy on brakes.",
+    "Overtaking into the hairpin and the final chicane.",
+    "Watch the Wall of Champions at the last chicane exit."
+   ]
+  },
+  "7": {
+   "name": "Silverstone",
+   "length_m": 5891,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 463,
+     "name": "Abbey"
+    },
+    {
+     "turn": "2",
+     "at": 589
+    },
+    {
+     "turn": "3",
+     "at": 863,
+     "name": "Village"
+    },
+    {
+     "turn": "4",
+     "at": 1035,
+     "name": "the Loop"
+    },
+    {
+     "turn": "5",
+     "at": 1223
+    },
+    {
+     "turn": "6",
+     "at": 1956,
+     "name": "Brooklands"
+    },
+    {
+     "turn": "7",
+     "at": 2176,
+     "name": "Luffield"
+    },
+    {
+     "turn": "8",
+     "at": 2535
+    },
+    {
+     "turn": "9",
+     "at": 3030,
+     "name": "Copse"
+    },
+    {
+     "turn": "10",
+     "at": 3589,
+     "name": "Maggotts"
+    },
+    {
+     "turn": "11",
+     "at": 3692,
+     "name": "Becketts"
+    },
+    {
+     "turn": "12",
+     "at": 3838,
+     "name": "Becketts"
+    },
+    {
+     "turn": "13",
+     "at": 3980
+    },
+    {
+     "turn": "14",
+     "at": 4123,
+     "name": "Chapel"
+    },
+    {
+     "turn": "15",
+     "at": 4992,
+     "name": "Stowe"
+    },
+    {
+     "turn": "16",
+     "at": 5431,
+     "name": "Vale"
+    },
+    {
+     "turn": "17",
+     "at": 5520
+    },
+    {
+     "turn": "18",
+     "at": 5674,
+     "name": "Club"
+    }
+   ],
+   "notes": [
+    "High-speed and hard on the left-front: Copse, Maggotts, Becketts.",
+    "Overtaking into Stowe and into Brooklands after the Wellington straight.",
+    "Wind changes the balance through Becketts."
+   ]
+  },
+  "9": {
+   "name": "Hungaroring",
+   "length_m": 4381,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 626
+    },
+    {
+     "turn": "2",
+     "at": 1130
+    },
+    {
+     "turn": "3",
+     "at": 1313
+    },
+    {
+     "turn": "4",
+     "at": 1800
+    },
+    {
+     "turn": "5",
+     "at": 2029
+    },
+    {
+     "turn": "6",
+     "at": 2365
+    },
+    {
+     "turn": "7",
+     "at": 2412
+    },
+    {
+     "turn": "8",
+     "at": 2580
+    },
+    {
+     "turn": "9",
+     "at": 2718
+    },
+    {
+     "turn": "10",
+     "at": 2924
+    },
+    {
+     "turn": "11",
+     "at": 3119
+    },
+    {
+     "turn": "12",
+     "at": 3641
+    },
+    {
+     "turn": "13",
+     "at": 3775
+    },
+    {
+     "turn": "14",
+     "at": 4067
+    }
+   ],
+   "notes": [
+    "Twisty, low speed, like Monaco without the walls: track position is king.",
+    "Overtaking really only into turn 1.",
+    "Hot, hard on the rears; undercut is powerful."
+   ]
+  },
+  "10": {
+   "name": "Spa",
+   "length_m": 7004,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 366,
+     "name": "La Source"
+    },
+    {
+     "turn": "2",
+     "at": 1044,
+     "name": "Eau Rouge"
+    },
+    {
+     "turn": "3",
+     "at": 1157,
+     "name": "Raidillon"
+    },
+    {
+     "turn": "4",
+     "at": 1246,
+     "name": "Raidillon"
+    },
+    {
+     "turn": "5",
+     "at": 2379,
+     "name": "Les Combes"
+    },
+    {
+     "turn": "6",
+     "at": 2436,
+     "name": "Les Combes"
+    },
+    {
+     "turn": "7",
+     "at": 2617,
+     "name": "Malmedy"
+    },
+    {
+     "turn": "8",
+     "at": 3012,
+     "name": "Rivage"
+    },
+    {
+     "turn": "9",
+     "at": 3241
+    },
+    {
+     "turn": "10",
+     "at": 3763,
+     "name": "Pouhon"
+    },
+    {
+     "turn": "11",
+     "at": 4009
+    },
+    {
+     "turn": "12",
+     "at": 4433,
+     "name": "Fagnes"
+    },
+    {
+     "turn": "13",
+     "at": 4583,
+     "name": "Fagnes"
+    },
+    {
+     "turn": "14",
+     "at": 4872
+    },
+    {
+     "turn": "15",
+     "at": 5128,
+     "name": "Stavelot"
+    },
+    {
+     "turn": "16",
+     "at": 5844
+    },
+    {
+     "turn": "17",
+     "at": 6112,
+     "name": "Blanchimont"
+    },
+    {
+     "turn": "18",
+     "at": 6650,
+     "name": "the Bus Stop"
+    },
+    {
+     "turn": "19",
+     "at": 6716,
+     "name": "the Bus Stop"
+    }
+   ],
+   "notes": [
+    "Long lap, weather can differ around the track.",
+    "Overtaking on the Kemmel straight into Les Combes, and into the Bus Stop.",
+    "Pouhon and Blanchimont are flat-out commitment corners."
+   ]
+  },
+  "11": {
+   "name": "Monza",
+   "length_m": 5793,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 891,
+     "name": "the first chicane"
+    },
+    {
+     "turn": "2",
+     "at": 951,
+     "name": "the first chicane"
+    },
+    {
+     "turn": "3",
+     "at": 1449,
+     "name": "Curva Grande"
+    },
+    {
+     "turn": "4",
+     "at": 2108,
+     "name": "Roggia"
+    },
+    {
+     "turn": "5",
+     "at": 2163,
+     "name": "Roggia"
+    },
+    {
+     "turn": "6",
+     "at": 2524,
+     "name": "Lesmo 1"
+    },
+    {
+     "turn": "7",
+     "at": 2840,
+     "name": "Lesmo 2"
+    },
+    {
+     "turn": "8",
+     "at": 3920,
+     "name": "Ascari"
+    },
+    {
+     "turn": "9",
+     "at": 4001,
+     "name": "Ascari"
+    },
+    {
+     "turn": "10",
+     "at": 4121,
+     "name": "Ascari"
+    },
+    {
+     "turn": "11",
+     "at": 5196,
+     "name": "Parabolica"
+    }
+   ],
+   "notes": [
+    "Temple of speed: low downforce, slipstream matters.",
+    "Overtaking into the first chicane and Roggia.",
+    "Exit of Parabolica sets up the whole straight."
+   ]
+  },
+  "12": {
+   "name": "Singapore",
+   "length_m": 4927,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 404
+    },
+    {
+     "turn": "2",
+     "at": 472
+    },
+    {
+     "turn": "3",
+     "at": 536
+    },
+    {
+     "turn": "4",
+     "at": 693
+    },
+    {
+     "turn": "5",
+     "at": 959
+    },
+    {
+     "turn": "6",
+     "at": 1400
+    },
+    {
+     "turn": "7",
+     "at": 1766
+    },
+    {
+     "turn": "8",
+     "at": 1988
+    },
+    {
+     "turn": "9",
+     "at": 2187
+    },
+    {
+     "turn": "10",
+     "at": 2606
+    },
+    {
+     "turn": "11",
+     "at": 2769
+    },
+    {
+     "turn": "12",
+     "at": 2849
+    },
+    {
+     "turn": "13",
+     "at": 3024
+    },
+    {
+     "turn": "14",
+     "at": 3586
+    },
+    {
+     "turn": "15",
+     "at": 3800
+    },
+    {
+     "turn": "16",
+     "at": 4300
+    },
+    {
+     "turn": "17",
+     "at": 4374
+    },
+    {
+     "turn": "18",
+     "at": 4639
+    },
+    {
+     "turn": "19",
+     "at": 4751
+    }
+   ],
+   "notes": [
+    "Hot, bumpy street circuit, very physical; safety cars are common.",
+    "Overtaking into turn 1 and turn 7.",
+    "Rear tyres overheat in the long traction zones."
+   ]
+  },
+  "13": {
+   "name": "Suzuka",
+   "length_m": 5807,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 709,
+     "name": "turn 1"
+    },
+    {
+     "turn": "2",
+     "at": 825
+    },
+    {
+     "turn": "3",
+     "at": 1069,
+     "name": "the Esses"
+    },
+    {
+     "turn": "4",
+     "at": 1187,
+     "name": "the Esses"
+    },
+    {
+     "turn": "5",
+     "at": 1347,
+     "name": "the Esses"
+    },
+    {
+     "turn": "6",
+     "at": 1512,
+     "name": "the Esses"
+    },
+    {
+     "turn": "7",
+     "at": 1839,
+     "name": "Dunlop"
+    },
+    {
+     "turn": "8",
+     "at": 2256,
+     "name": "Degner 1"
+    },
+    {
+     "turn": "9",
+     "at": 2408,
+     "name": "Degner 2"
+    },
+    {
+     "turn": "10",
+     "at": 2726
+    },
+    {
+     "turn": "11",
+     "at": 2881,
+     "name": "the hairpin"
+    },
+    {
+     "turn": "12",
+     "at": 3134
+    },
+    {
+     "turn": "13",
+     "at": 3764,
+     "name": "Spoon"
+    },
+    {
+     "turn": "14",
+     "at": 3921,
+     "name": "Spoon"
+    },
+    {
+     "turn": "15",
+     "at": 4958,
+     "name": "130R"
+    },
+    {
+     "turn": "16",
+     "at": 5351,
+     "name": "the Casio Triangle"
+    },
+    {
+     "turn": "17",
+     "at": 5427,
+     "name": "the Casio Triangle"
+    },
+    {
+     "turn": "18",
+     "at": 5597
+    }
+   ],
+   "notes": [
+    "Figure of eight, a driver's track: rhythm through the Esses is everything.",
+    "Overtaking into turn 1 and the Casio Triangle chicane.",
+    "High-speed load on the tyres, front-left especially."
+   ]
+  },
+  "14": {
+   "name": "Abu Dhabi",
+   "length_m": 5281,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 385
+    },
+    {
+     "turn": "2",
+     "at": 629
+    },
+    {
+     "turn": "3",
+     "at": 838
+    },
+    {
+     "turn": "4",
+     "at": 1039
+    },
+    {
+     "turn": "5",
+     "at": 1426,
+     "name": "the hairpin"
+    },
+    {
+     "turn": "6",
+     "at": 2615
+    },
+    {
+     "turn": "7",
+     "at": 2678
+    },
+    {
+     "turn": "8",
+     "at": 2888
+    },
+    {
+     "turn": "9",
+     "at": 3699
+    },
+    {
+     "turn": "10",
+     "at": 4026
+    },
+    {
+     "turn": "11",
+     "at": 4182
+    },
+    {
+     "turn": "12",
+     "at": 4307
+    },
+    {
+     "turn": "13",
+     "at": 4415
+    },
+    {
+     "turn": "14",
+     "at": 4535
+    },
+    {
+     "turn": "15",
+     "at": 4814
+    },
+    {
+     "turn": "16",
+     "at": 5040
+    }
+   ],
+   "notes": [
+    "Modern layout; long straights after turn 5 and turn 7.",
+    "Overtaking into turn 6 chicane and turn 9.",
+    "Track cools as the sun goes down: grip comes up."
+   ]
+  },
+  "15": {
+   "name": "Austin",
+   "length_m": 5513,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 637,
+     "name": "turn 1"
+    },
+    {
+     "turn": "2",
+     "at": 890
+    },
+    {
+     "turn": "3",
+     "at": 1150
+    },
+    {
+     "turn": "4",
+     "at": 1229
+    },
+    {
+     "turn": "5",
+     "at": 1337
+    },
+    {
+     "turn": "6",
+     "at": 1466
+    },
+    {
+     "turn": "7",
+     "at": 1706
+    },
+    {
+     "turn": "8",
+     "at": 1850
+    },
+    {
+     "turn": "9",
+     "at": 1945
+    },
+    {
+     "turn": "10",
+     "at": 2141
+    },
+    {
+     "turn": "11",
+     "at": 2527,
+     "name": "the hairpin"
+    },
+    {
+     "turn": "12",
+     "at": 3735,
+     "name": "turn 12"
+    },
+    {
+     "turn": "13",
+     "at": 3977
+    },
+    {
+     "turn": "14",
+     "at": 4043
+    },
+    {
+     "turn": "15",
+     "at": 4240
+    },
+    {
+     "turn": "16",
+     "at": 4435
+    },
+    {
+     "turn": "17",
+     "at": 4556
+    },
+    {
+     "turn": "18",
+     "at": 4700
+    },
+    {
+     "turn": "19",
+     "at": 4980
+    },
+    {
+     "turn": "20",
+     "at": 5292
+    }
+   ],
+   "notes": [
+    "Steep uphill turn 1, then fast esses from turn 3 to 6.",
+    "Overtaking into turn 1 and turn 12 at the end of the back straight.",
+    "Bumpy; multi-apex turns 16 to 18 load the front-left."
+   ]
+  },
+  "16": {
+   "name": "Interlagos",
+   "length_m": 4309,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 364,
+     "name": "the Senna S"
+    },
+    {
+     "turn": "2",
+     "at": 456,
+     "name": "the Senna S"
+    },
+    {
+     "turn": "3",
+     "at": 652
+    },
+    {
+     "turn": "4",
+     "at": 1390,
+     "name": "Descida do Lago"
+    },
+    {
+     "turn": "5",
+     "at": 1572
+    },
+    {
+     "turn": "6",
+     "at": 1999
+    },
+    {
+     "turn": "7",
+     "at": 2141
+    },
+    {
+     "turn": "8",
+     "at": 2298
+    },
+    {
+     "turn": "9",
+     "at": 2428
+    },
+    {
+     "turn": "10",
+     "at": 2712
+    },
+    {
+     "turn": "11",
+     "at": 2924
+    },
+    {
+     "turn": "12",
+     "at": 3214,
+     "name": "Juncao"
+    },
+    {
+     "turn": "13",
+     "at": 3324
+    },
+    {
+     "turn": "14",
+     "at": 3590
+    },
+    {
+     "turn": "15",
+     "at": 3998
+    }
+   ],
+   "notes": [
+    "Short, anticlockwise, often wet.",
+    "Overtaking into the Senna S and into turn 4.",
+    "Exit of Juncao sets up the run to the line."
+   ]
+  },
+  "17": {
+   "name": "Red Bull Ring",
+   "length_m": 4318,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 257,
+     "name": "Niki Lauda"
+    },
+    {
+     "turn": "2",
+     "at": 907
+    },
+    {
+     "turn": "3",
+     "at": 1197,
+     "name": "Remus"
+    },
+    {
+     "turn": "4",
+     "at": 2010,
+     "name": "Schlossgold"
+    },
+    {
+     "turn": "5",
+     "at": 2198
+    },
+    {
+     "turn": "6",
+     "at": 2518
+    },
+    {
+     "turn": "7",
+     "at": 2839
+    },
+    {
+     "turn": "8",
+     "at": 3041
+    },
+    {
+     "turn": "9",
+     "at": 3578
+    },
+    {
+     "turn": "10",
+     "at": 3778
+    }
+   ],
+   "notes": [
+    "Short lap, big traffic, strict track limits at turns 9 and 10.",
+    "Overtaking into turn 3 and turn 4.",
+    "Uphill braking into turn 3 is where moves happen."
+   ]
+  },
+  "19": {
+   "name": "Mexico City",
+   "length_m": 4304,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 1192,
+     "name": "turn 1"
+    },
+    {
+     "turn": "2",
+     "at": 1263
+    },
+    {
+     "turn": "3",
+     "at": 1323
+    },
+    {
+     "turn": "4",
+     "at": 2017
+    },
+    {
+     "turn": "5",
+     "at": 2090
+    },
+    {
+     "turn": "6",
+     "at": 2226
+    },
+    {
+     "turn": "7",
+     "at": 2545
+    },
+    {
+     "turn": "8",
+     "at": 2664
+    },
+    {
+     "turn": "9",
+     "at": 2744
+    },
+    {
+     "turn": "10",
+     "at": 2927
+    },
+    {
+     "turn": "11",
+     "at": 3021
+    },
+    {
+     "turn": "12",
+     "at": 3586,
+     "name": "the stadium"
+    },
+    {
+     "turn": "13",
+     "at": 3757
+    },
+    {
+     "turn": "14",
+     "at": 3818
+    },
+    {
+     "turn": "15",
+     "at": 3869
+    },
+    {
+     "turn": "16",
+     "at": 3938
+    },
+    {
+     "turn": "17",
+     "at": 4046
+    }
+   ],
+   "notes": [
+    "High altitude: thin air, low drag, cooling is critical.",
+    "Very long run to turn 1: main overtaking spot.",
+    "Stadium section is slow and tight."
+   ]
+  },
+  "20": {
+   "name": "Baku",
+   "length_m": 6003,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 287,
+     "name": "turn 1"
+    },
+    {
+     "turn": "2",
+     "at": 630
+    },
+    {
+     "turn": "3",
+     "at": 1493
+    },
+    {
+     "turn": "4",
+     "at": 1721
+    },
+    {
+     "turn": "5",
+     "at": 2058
+    },
+    {
+     "turn": "6",
+     "at": 2118
+    },
+    {
+     "turn": "7",
+     "at": 2508
+    },
+    {
+     "turn": "8",
+     "at": 2701,
+     "name": "the castle"
+    },
+    {
+     "turn": "9",
+     "at": 2730
+    },
+    {
+     "turn": "10",
+     "at": 2764
+    },
+    {
+     "turn": "11",
+     "at": 2802
+    },
+    {
+     "turn": "12",
+     "at": 2865
+    },
+    {
+     "turn": "13",
+     "at": 3258
+    },
+    {
+     "turn": "14",
+     "at": 3490
+    },
+    {
+     "turn": "15",
+     "at": 3714,
+     "name": "turn 15"
+    },
+    {
+     "turn": "16",
+     "at": 4069
+    },
+    {
+     "turn": "17",
+     "at": 4257
+    },
+    {
+     "turn": "18",
+     "at": 4501
+    },
+    {
+     "turn": "19",
+     "at": 4654
+    },
+    {
+     "turn": "20",
+     "at": 4963
+    }
+   ],
+   "notes": [
+    "Street circuit with a 2 km flat-out run: slipstream and overtaking into turn 1.",
+    "The castle section at turn 8 is very narrow.",
+    "Safety cars and restarts are common."
+   ]
+  },
+  "26": {
+   "name": "Zandvoort",
+   "length_m": 4259,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 484,
+     "name": "Tarzan"
+    },
+    {
+     "turn": "2",
+     "at": 790
+    },
+    {
+     "turn": "3",
+     "at": 962,
+     "name": "Hugenholtz"
+    },
+    {
+     "turn": "4",
+     "at": 1185
+    },
+    {
+     "turn": "5",
+     "at": 1364
+    },
+    {
+     "turn": "6",
+     "at": 1521
+    },
+    {
+     "turn": "7",
+     "at": 1833,
+     "name": "Scheivlak"
+    },
+    {
+     "turn": "8",
+     "at": 2139
+    },
+    {
+     "turn": "9",
+     "at": 2362
+    },
+    {
+     "turn": "10",
+     "at": 2623
+    },
+    {
+     "turn": "11",
+     "at": 3201
+    },
+    {
+     "turn": "12",
+     "at": 3289
+    },
+    {
+     "turn": "13",
+     "at": 3602
+    },
+    {
+     "turn": "14",
+     "at": 3851,
+     "name": "Arie Luyendyk"
+    }
+   ],
+   "notes": [
+    "Old-school, narrow, banked corners at turn 3 and the last turn.",
+    "Overtaking mainly into Tarzan.",
+    "Sand blows on the track: grip changes."
+   ]
+  },
+  "27": {
+   "name": "Imola",
+   "length_m": 4909,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 259
+    },
+    {
+     "turn": "2",
+     "at": 875,
+     "name": "Tamburello"
+    },
+    {
+     "turn": "3",
+     "at": 943,
+     "name": "Tamburello"
+    },
+    {
+     "turn": "4",
+     "at": 1079
+    },
+    {
+     "turn": "5",
+     "at": 1501,
+     "name": "Villeneuve"
+    },
+    {
+     "turn": "6",
+     "at": 1613,
+     "name": "Villeneuve"
+    },
+    {
+     "turn": "7",
+     "at": 1895,
+     "name": "Tosa"
+    },
+    {
+     "turn": "8",
+     "at": 2284
+    },
+    {
+     "turn": "9",
+     "at": 2538,
+     "name": "Piratella"
+    },
+    {
+     "turn": "10",
+     "at": 2676
+    },
+    {
+     "turn": "11",
+     "at": 2931,
+     "name": "Acque Minerali"
+    },
+    {
+     "turn": "12",
+     "at": 3024,
+     "name": "Acque Minerali"
+    },
+    {
+     "turn": "13",
+     "at": 3088
+    },
+    {
+     "turn": "14",
+     "at": 3531,
+     "name": "Variante Alta"
+    },
+    {
+     "turn": "15",
+     "at": 3579,
+     "name": "Variante Alta"
+    },
+    {
+     "turn": "16",
+     "at": 4122
+    },
+    {
+     "turn": "17",
+     "at": 4316,
+     "name": "Rivazza"
+    },
+    {
+     "turn": "18",
+     "at": 4456,
+     "name": "Rivazza"
+    },
+    {
+     "turn": "19",
+     "at": 4763
+    }
+   ],
+   "notes": [
+    "Old-school, narrow, kerbs matter.",
+    "Overtaking is hard; best chance into Tamburello.",
+    "Track position and qualifying matter a lot."
+   ]
+  },
+  "29": {
+   "name": "Jeddah",
+   "length_m": 6174,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 473,
+     "name": "turn 1"
+    },
+    {
+     "turn": "2",
+     "at": 538
+    },
+    {
+     "turn": "3",
+     "at": 672
+    },
+    {
+     "turn": "4",
+     "at": 983
+    },
+    {
+     "turn": "5",
+     "at": 1087
+    },
+    {
+     "turn": "6",
+     "at": 1222
+    },
+    {
+     "turn": "7",
+     "at": 1339
+    },
+    {
+     "turn": "8",
+     "at": 1426
+    },
+    {
+     "turn": "9",
+     "at": 1569
+    },
+    {
+     "turn": "10",
+     "at": 1679
+    },
+    {
+     "turn": "11",
+     "at": 1782
+    },
+    {
+     "turn": "12",
+     "at": 1858
+    },
+    {
+     "turn": "13",
+     "at": 2391,
+     "name": "the banked turn 13"
+    },
+    {
+     "turn": "14",
+     "at": 2703
+    },
+    {
+     "turn": "15",
+     "at": 2901
+    },
+    {
+     "turn": "16",
+     "at": 3035
+    },
+    {
+     "turn": "17",
+     "at": 3144
+    },
+    {
+     "turn": "18",
+     "at": 3366
+    },
+    {
+     "turn": "19",
+     "at": 3577
+    },
+    {
+     "turn": "20",
+     "at": 3782
+    },
+    {
+     "turn": "21",
+     "at": 3967
+    },
+    {
+     "turn": "22",
+     "at": 4216
+    },
+    {
+     "turn": "23",
+     "at": 4303
+    },
+    {
+     "turn": "24",
+     "at": 4452
+    },
+    {
+     "turn": "25",
+     "at": 4740
+    },
+    {
+     "turn": "26",
+     "at": 5104
+    },
+    {
+     "turn": "27",
+     "at": 5473,
+     "name": "the last corner"
+    }
+   ],
+   "notes": [
+    "Fastest street circuit, blind high-speed corners.",
+    "Overtaking into turn 1 and the last corner.",
+    "Walls close; safety cars likely."
+   ]
+  },
+  "30": {
+   "name": "Miami",
+   "length_m": 5412,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 369
+    },
+    {
+     "turn": "2",
+     "at": 477
+    },
+    {
+     "turn": "3",
+     "at": 575
+    },
+    {
+     "turn": "4",
+     "at": 1125
+    },
+    {
+     "turn": "5",
+     "at": 1272
+    },
+    {
+     "turn": "6",
+     "at": 1400
+    },
+    {
+     "turn": "7",
+     "at": 1550
+    },
+    {
+     "turn": "8",
+     "at": 1637
+    },
+    {
+     "turn": "9",
+     "at": 2159
+    },
+    {
+     "turn": "10",
+     "at": 2430
+    },
+    {
+     "turn": "11",
+     "at": 3074,
+     "name": "the chicane"
+    },
+    {
+     "turn": "12",
+     "at": 3191
+    },
+    {
+     "turn": "13",
+     "at": 3327
+    },
+    {
+     "turn": "14",
+     "at": 3396
+    },
+    {
+     "turn": "15",
+     "at": 3419
+    },
+    {
+     "turn": "16",
+     "at": 3508
+    },
+    {
+     "turn": "17",
+     "at": 4826,
+     "name": "the hairpin"
+    },
+    {
+     "turn": "18",
+     "at": 4970
+    },
+    {
+     "turn": "19",
+     "at": 5175
+    }
+   ],
+   "notes": [
+    "Fast esses at turns 4 to 8, slow tight section at turns 14 and 15.",
+    "Overtaking into turn 1, turn 11 and turn 17.",
+    "Hot: rear tyres overheat."
+   ]
+  },
+  "31": {
+   "name": "Las Vegas",
+   "length_m": 6201,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 287
+    },
+    {
+     "turn": "2",
+     "at": 386
+    },
+    {
+     "turn": "3",
+     "at": 575
+    },
+    {
+     "turn": "4",
+     "at": 678
+    },
+    {
+     "turn": "5",
+     "at": 1540
+    },
+    {
+     "turn": "6",
+     "at": 1802
+    },
+    {
+     "turn": "7",
+     "at": 2025
+    },
+    {
+     "turn": "8",
+     "at": 2079
+    },
+    {
+     "turn": "9",
+     "at": 2217
+    },
+    {
+     "turn": "10",
+     "at": 2678
+    },
+    {
+     "turn": "11",
+     "at": 2963
+    },
+    {
+     "turn": "12",
+     "at": 3190
+    },
+    {
+     "turn": "13",
+     "at": 3941
+    },
+    {
+     "turn": "14",
+     "at": 5122,
+     "name": "the Strip chicane"
+    },
+    {
+     "turn": "15",
+     "at": 5180
+    },
+    {
+     "turn": "16",
+     "at": 5245
+    },
+    {
+     "turn": "17",
+     "at": 5981
+    }
+   ],
+   "notes": [
+    "Cold night: hard to get tyres in, graining risk.",
+    "Huge straights: overtaking into turn 1 and turn 14.",
+    "Low grip early in the session."
+   ]
+  },
+  "32": {
+   "name": "Qatar",
+   "length_m": 5419,
+   "corners": [
+    {
+     "turn": "1",
+     "at": 789,
+     "name": "turn 1"
+    },
+    {
+     "turn": "2",
+     "at": 1087
+    },
+    {
+     "turn": "3",
+     "at": 1294
+    },
+    {
+     "turn": "4",
+     "at": 1726
+    },
+    {
+     "turn": "5",
+     "at": 1880
+    },
+    {
+     "turn": "6",
+     "at": 2188
+    },
+    {
+     "turn": "7",
+     "at": 2583
+    },
+    {
+     "turn": "8",
+     "at": 2777
+    },
+    {
+     "turn": "9",
+     "at": 2891
+    },
+    {
+     "turn": "10",
+     "at": 3138
+    },
+    {
+     "turn": "11",
+     "at": 3463
+    },
+    {
+     "turn": "12",
+     "at": 3758
+    },
+    {
+     "turn": "13",
+     "at": 3951
+    },
+    {
+     "turn": "14",
+     "at": 4164
+    },
+    {
+     "turn": "15",
+     "at": 4458
+    },
+    {
+     "turn": "16",
+     "at": 4935,
+     "name": "the last corner"
+    }
+   ],
+   "notes": [
+    "Fast and flowing, very hard on tyres: tyre limits often apply.",
+    "Overtaking into turn 1.",
+    "Track limits at the high-speed corners."
+   ]
+  },
+  "42": {
+   "name": "Madrid",
+   "length_m": 5474,
+   "corners": [],
+   "notes": [
+    "New semi-street circuit with a banked corner.",
+    "Overtaking into the heavy braking zones after the straights."
+   ]
+  }
+ }
+}

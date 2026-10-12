@@ -143,11 +143,15 @@ PHRASES: dict[str, dict[str, list[str]]] = {
     },
     # ---- flags ----------------------------------------------------------------------------------
     "yellow_ahead": {
-        "calm": ["Yellow flag, sector {sector}. Careful.", "Yellows in sector {sector}. Don't get caught out."],
-        "fired_up": ["Yellow flag, yellow flag, sector {sector}!"],
+        "calm": [
+            "Yellow flag, {where}. Careful.",
+            "Yellows at {where}. Don't get caught out.",
+            "Yellow flag ahead, {where}.",
+        ],
+        "fired_up": ["Yellow flag, yellow flag, {where}!"],
     },
     "double_yellow": {
-        "calm": ["Double yellow ahead, sector {sector}. Be ready to stop."],
+        "calm": ["Double yellow ahead, {where}. Be ready to stop."],
     },
     "safety_car": {
         "calm": [
@@ -396,6 +400,9 @@ PHRASES: dict[str, dict[str, list[str]]] = {
             "{time}, {delta} down. Lost it in sector {sector}.",
         ],
         "dry": ["{time}. {delta} off. Sector {sector} is where it went."],
+    },
+    "lap_slower_corner": {
+        "calm": ["{time}. {delta} off. {finding}", "{time}, {delta} down. {finding}", "{time}. {finding}"],
     },
     "lap_close": {
         "calm": ["{time}. Just {delta} off your best.", "{time}. Very close, {delta} off."],

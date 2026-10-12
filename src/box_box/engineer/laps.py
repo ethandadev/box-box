@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from box_box.engineer.base import Context, Detector
+from box_box.engineer.corners import CornerCoach, Finding
 from box_box.engineer.radio import Priority, RadioCall, Verbosity, fine_delta, lap_time, tenths
 from box_box.engineer.session import FINAL_QUALI
 from box_box.state.model import CarState, LapCompleted, LapRecord, PitEntered
@@ -15,14 +16,29 @@ class LapFeedbackDetector(Detector):
     def reset(self) -> None:
         self._sector_seen: tuple[int, int] | None = None  # (lap, sector) last seen
         self._stint_laps: list[LapRecord] = []
+        self.coach = CornerCoach()
+        self._finding: Finding | None = None
 
     def on_rewind(self) -> None:
         self._sector_seen = None
+        self.coach.rewind()
 
     def check(self, ctx: Context) -> list[RadioCall]:
         world = ctx.world
         me = world.player
-        if me is None or me.lap is None or world.is_race:
+        if me is None or me.lap is None:
+            return []
+        # Corner analysis runs in every session (the driver can ask "where am I losing time?" in a race
+        # too); spoken lap feedback is for practice, qualifying and time trial.
+        self.coach.sample(world, me)
+        self._finding = None
+        for change in ctx.changes:
+            if isinstance(change, LapCompleted) and change.car_index == me.index:
+                rec = change.record
+                self._finding = self.coach.lap_done(rec.lap_num, rec.lap_ms, rec.valid and not rec.pit_lap)
+                if self._finding:
+                    world.coach_note = self._finding.say(ctx.settings.engineer.units)
+        if world.is_race:
             return []
         calls: list[RadioCall] = []
         for change in ctx.changes:
@@ -63,6 +79,11 @@ class LapFeedbackDetector(Detector):
         delta = (rec.lap_ms - best_before) / 1000.0
         if delta < 0.15:
             text = ctx.say("lap_close", time=t, delta=fine_delta(delta))
+        elif self._finding is not None:
+            # Corner level: where, how much, and why.
+            text = ctx.say(
+                "lap_slower_corner", time=t, delta=tenths(delta), finding=self._finding.say(ctx.settings.engineer.units)
+            )
         else:
             sector = self._worst_sector(me, rec)
             text = ctx.say("lap_slower", time=t, delta=tenths(delta), sector=sector)

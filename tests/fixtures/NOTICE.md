@@ -27,3 +27,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+Track corner data (`src/box_box/data/tracks.json`): corner numbers and distances from TracingInsights
+F1 data (https://github.com/TracingInsights/2026, https://github.com/TracingInsights/2025), Apache-2.0,
+derived from FastF1 circuit information. Corner names and track notes are Box Box's own.

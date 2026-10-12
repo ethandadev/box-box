@@ -202,6 +202,7 @@ class World:
     session_ended: bool = False
     fastest_lap: tuple[int, float] | None = None  # (car index, seconds) from FTLP events
     plan_extended_from: int = 0  # ideal pit lap the strategist told the driver we'd go past
+    coach_note: str | None = None  # latest "lost two tenths at Copse..." from the corner coach
     last_packet_time: float = 0.0  # monotonic, set by the engine
 
     # ---- queries -------------------------------------------------------------------------------
@@ -393,6 +394,7 @@ class World:
         self.session_ended = False
         self.fastest_lap = None
         self.plan_extended_from = 0
+        self.coach_note = None
 
     def _rewind(self) -> None:
         """The clock went backwards: forget laps from the abandoned future."""

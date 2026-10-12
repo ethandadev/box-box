@@ -132,7 +132,7 @@ def test_yellow_ahead_is_called_once_and_not_for_my_own_zone() -> None:
     zones[4] = zones[4].__class__(zones[4].start, 3)  # 0.4: ahead
     sim.set_session(marshal_zones=tuple(zones))
     calls = sim.run(5)
-    assert len(calls) == 1 and "sector 2" in calls[0].text
+    assert len(calls) == 1 and "turn 8" in calls[0].text  # Silverstone: the corner, not just the sector
 
 
 def test_time_penalty_event() -> None:

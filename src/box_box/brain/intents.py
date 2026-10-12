@@ -322,6 +322,12 @@ def _plan(t: str, w: World, a: Actions, me: str) -> Answer | None:
     return Answer(". ".join(b[0].upper() + b[1:] for b in bits) + ".")
 
 
+def _losing_time(t: str, w: World, a: Actions, me: str) -> Answer | None:
+    if w.coach_note:
+        return Answer(w.coach_note)
+    return Answer("Need a couple more clean laps to compare. Keep pushing and I'll tell you.")
+
+
 def _remember(t: str, w: World, a: Actions, me: str) -> Answer | None:
     m = re.search(r"remember (?:that )?(.+)", t)
     if not m:
@@ -334,6 +340,10 @@ RULES: list[Rule] = [
     (r"\bradio check\b|\bcan you hear me\b|\bdo you (?:read|copy)\b", _radio_check),
     (r"^(?:thanks|thank you|cheers|nice one)\b", _thanks),
     (r"\bremember\b", _remember),
+    (
+        r"\bwhere (?:am i|are we) (?:losing|slow)|\bwhere can i (?:find|gain)|\bwhere(?:'s| is) the time\b|\bwhich corner\b",
+        _losing_time,
+    ),
     (
         r"\b(?:say (?:that )?again|repeat(?: that)?|what did you (?:just )?say|come again|didn'?t (?:get|catch) that)\b",
         _say_again,

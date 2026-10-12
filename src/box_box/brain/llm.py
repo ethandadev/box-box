@@ -86,6 +86,8 @@ Facts:
 there, say you don't have it yet.
 - You can't touch the car or the game. If {driver} wants to pit or change something, confirm and tell them \
 to do it on the MFD.
+- Name corners like an engineer: "turn 9" or its name ("Copse", "the hairpin"). Use the track tool for
+corner names, overtaking spots and where {driver} is losing time; never guess a corner name.
 - If {driver} gives feedback (balance, tyres, the car), acknowledge it like an engineer ("Copy, understeer \
 in the slow stuff, noted") and save anything lasting with the remember tool.
 - If {driver} asks you to talk more or less, change how often you give gaps, go quiet for a while, or \
@@ -164,6 +166,12 @@ TOOL_DEFS: list[dict[str, Any]] = [
     {
         "name": "strategy",
         "description": "Pit window, predicted rejoin position, tyre life estimate, laps remaining, and the tyres of the cars around us.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "track",
+        "description": "The circuit: corner numbers and names, where overtaking happens, its character, the next "
+        "corner, and where the driver is losing time versus their best lap (corner, apex speed).",
         "parameters": {"type": "object", "properties": {}},
     },
     {

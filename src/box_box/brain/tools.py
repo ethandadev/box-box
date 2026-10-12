@@ -276,6 +276,30 @@ def strategy(world: World) -> dict[str, Any]:
     return out
 
 
+def track(world: World) -> dict[str, Any]:
+    """The circuit: corners (number, name, metres from the line), its character, and where the driver loses time."""
+    from box_box.state import tracks
+
+    s = world.session
+    t = tracks.get(s.track_id) if s else None
+    if s is None or t is None:
+        return {"error": "No track data for this circuit."}
+    out: dict[str, Any] = {
+        "track": t.name,
+        "length_m": t.length_m,
+        "notes": list(t.notes),
+        "corners": [{"turn": c.turn, "name": c.name, "at_m": round(c.at_m)} for c in t.corners],
+    }
+    me = world.player
+    if me and me.lap and world.track_length:
+        here = t.corner_after(me.lap.lap_distance, world.track_length)
+        if here:
+            out["next_corner"] = here.label
+    if world.coach_note:
+        out["where_time_is_lost"] = world.coach_note
+    return out
+
+
 def snapshot(world: World) -> str:
     """A short pit-wall summary sent with every question, so simple things need no tool call."""
     s = world.session
@@ -324,4 +348,5 @@ TOOLS: dict[str, Any] = {
     "weather": weather,
     "lap_times": lap_times,
     "strategy": strategy,
+    "track": track,
 }

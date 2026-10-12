@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from box_box.engineer.base import Context, Detector
 from box_box.engineer.radio import Priority, RadioCall, Verbosity
+from box_box.state import tracks
 
 # Penalty types (EA spec appendix).
 DRIVE_THROUGH, STOP_GO, TIME_PENALTY, WARNING = 0, 1, 4, 5
@@ -144,14 +145,25 @@ class FlagsDetector(Detector):
                 continue
             self._yellow_called[sector] = ctx.now
             self._yellow_announced.add(i)
+            where = self._where(world, z.start, sector)
             out.append(
                 ctx.call(
-                    f"yellow:{sector}", Priority.SAFETY, ctx.say("yellow_ahead", sector=sector), ttl=6, category="flags"
+                    f"yellow:{sector}", Priority.SAFETY, ctx.say("yellow_ahead", where=where), ttl=6, category="flags"
                 )
             )
         # A zone that went green can be announced again next time it goes yellow.
         self._yellow_announced &= set(self._yellow_since)
         return out
+
+    @staticmethod
+    def _where(world, frac: float, sector: int) -> str:  # type: ignore[no-untyped-def]
+        """'turn 4' or 'Copse' when we know the track, else 'sector 2'."""
+        track = tracks.get(world.session.track_id) if world.session else None
+        if track is not None and track.corners:
+            corner = track.corner_after(frac * world.track_length, world.track_length, within=500)
+            if corner is not None:
+                return corner.label
+        return f"sector {sector}"
 
     @staticmethod
     def _sector_of(world, frac: float) -> int:  # type: ignore[no-untyped-def]
