@@ -428,6 +428,14 @@ class OpenAICompatBackend:
         stream: bool,
     ) -> dict[str, Any]:
         q = self._quirks.get(model, set())
+        if "system_as_user" in q and messages and messages[0].get("role") == "system":
+            # Some bots only take user/assistant turns: fold the instructions into the first user turn.
+            rest = list(messages[1:])
+            for i, m in enumerate(rest):
+                if m.get("role") == "user" and isinstance(m.get("content"), str):
+                    rest[i] = {**m, "content": f"{messages[0]['content']}\n\n---\n\n{m['content']}"}
+                    break
+            messages = rest
         body: dict[str, Any] = {"model": model, "messages": messages}
         if stream:
             body["stream"] = True
@@ -443,13 +451,31 @@ class OpenAICompatBackend:
             body["reasoning_effort"] = "low" if "effort_low" in q else effort
         return body
 
-    def _adapt(self, model: str, e: HTTPError, body: dict[str, Any]) -> bool:
-        """Learn from a 400 about an unsupported parameter. True if a retry is worth it."""
+    def _adapt(self, model: str, e: HTTPError, body: dict[str, Any], attempt: int = 0) -> bool:
+        """Learn from an error what the server can't take. True if a retry is worth it.
+
+        400/422 name the parameter. A 5xx doesn't, but some gateways (Poe) answer an unsupported
+        parameter with a 500: retry once as-is (it may be transient), then shed optional parts one at
+        a time: the token limit, the tools, a separate system message."""
+        q = self._quirks.setdefault(model, set())
+        before = set(q)
+        if e.status >= 500:
+            if attempt == 0:
+                return True  # plain retry
+            for quirk, present in (
+                ("no_max_tokens", "max_tokens" in body or "max_completion_tokens" in body),
+                ("no_effort", "reasoning_effort" in body),
+                ("no_tools", "tools" in body),
+                ("system_as_user", bool(body.get("messages")) and body["messages"][0].get("role") == "system"),
+            ):
+                if present and quirk not in q:
+                    q.add(quirk)
+                    log.info("%s %s: server error %s, retrying without %s", self.provider.id, model, e.status, quirk)
+                    return True
+            return False
         if e.status not in (400, 422):
             return False
         low = e.message.lower()
-        q = self._quirks.setdefault(model, set())
-        before = set(q)
         if "reasoning_effort" in body and ("reasoning" in low or "effort" in low):
             if body["reasoning_effort"] != "low" and "effort_low" not in q:
                 q.add("effort_low")
@@ -508,7 +534,7 @@ class OpenAICompatBackend:
         for _round in range(MAX_TOOL_ROUNDS):
             calls: dict[int, dict[str, str]] = {}
             text_parts: list[str] = []
-            for attempt in range(4):
+            for attempt in range(6):
                 body = self._body(model, messages, tools, 1024, stream=True)
                 got_any = False
                 try:
@@ -541,7 +567,9 @@ class OpenAICompatBackend:
                                     entry["args"] += args if isinstance(args, str) else json.dumps(args)
                     break
                 except HTTPError as e:
-                    if not got_any and attempt < 3 and self._adapt(model, e, body):
+                    if not got_any and attempt < 5 and self._adapt(model, e, body, attempt):
+                        if e.status >= 500 and attempt == 0:
+                            await asyncio.sleep(0.7)
                         continue
                     raise self._fail(e, model) from e
             for sentence in out.flush():
@@ -577,13 +605,15 @@ class OpenAICompatBackend:
         model = await self.resolve_model(model)
         messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
 
-        for attempt in range(4):
+        for attempt in range(6):
             body = self._body(model, messages, None, max_tokens, stream=False)
             try:
                 data = await self._call("POST", "/chat/completions", body)
                 break
             except HTTPError as e:
-                if attempt < 3 and self._adapt(model, e, body):
+                if attempt < 5 and self._adapt(model, e, body, attempt):
+                    if e.status >= 500 and attempt == 0:
+                        await asyncio.sleep(0.7)
                     continue
                 raise self._fail(e, model) from e
         try:

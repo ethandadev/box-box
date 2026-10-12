@@ -382,7 +382,7 @@ class Brain:
             return
         self.status = "checking"
         try:
-            await self.backend().list_models()
+            models = await self.backend().list_models()
         except LLMError as e:
             low = str(e).lower()
             if "rejected" in low or "credit" in low or "can't reach" in low or "too long" in low:
@@ -397,7 +397,25 @@ class Brain:
             return
         self.status = "ready"
         self.last_error = None
-        log.info("AI ready: %s", self.describe())
+        hint = self.unknown_model_hint(models)
+        if hint:
+            self.status = "unverified"
+            self.last_error = hint
+        log.info("AI ready: %s%s", self.describe(), f" ({hint})" if hint else "")
+
+    def unknown_model_hint(self, models: list[str]) -> str | None:
+        """If the configured model isn't one the service lists, say so and suggest the closest ones."""
+        import difflib
+
+        model = self.model
+        if not model or not models or self.provider.kind == "anthropic":
+            return None  # Anthropic aliases aren't always listed; local servers use whatever is loaded
+        lower = {m.lower(): m for m in models}
+        if model.lower() in lower:
+            return None
+        close = difflib.get_close_matches(model.lower(), list(lower), n=3, cutoff=0.4)
+        tip = f" Closest: {', '.join(lower[c] for c in close)}." if close else ""
+        return f"{self.provider.label} doesn't list a model called '{model}'.{tip} Pick one with List models."
 
     def _run_tool(self, name: str, args: dict[str, Any], world: World, actions: Actions) -> tuple[str, bool]:
         try:

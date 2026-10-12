@@ -317,7 +317,14 @@ class UIServer:
         except TimeoutError:
             return _json({"ok": False, "message": f"{s.provider.label} didn't answer within 45 seconds."})
         except Exception as err:  # noqa: BLE001
-            return _json({"ok": False, "message": str(err) or f"Couldn't reach {s.provider.label}."})
+            message = str(err) or f"Couldn't reach {s.provider.label}."
+            try:  # the most common cause: a model name the service doesn't have
+                hint = e.brain.unknown_model_hint(await asyncio.wait_for(e.brain.list_models(), 15))
+                if hint:
+                    message = f"{message} {hint}"
+            except Exception:  # noqa: BLE001
+                pass
+            return _json({"ok": False, "message": message})
         took = time.perf_counter() - started
         if not text:
             return _json({"ok": False, "message": f"{e.brain.describe()} answered with nothing. Try another model."})

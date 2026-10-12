@@ -309,3 +309,29 @@ def test_anthropic_retries_without_effort_for_older_models() -> None:
 
     assert asyncio.run(run()) == ["Loud and clear."]
     assert "output_config" in requests[0] and "output_config" not in requests[1]
+
+
+def test_server_errors_are_retried_then_optional_parts_dropped() -> None:
+    boom = (500, {"error": {"message": "Internal Server Error"}})
+    fake = FakeOpenAI(
+        [boom, boom, boom, {"choices": [{"message": {"role": "assistant", "content": "Loud and clear."}}]}]
+    )
+
+    async def run(brain: Brain, _s: Settings) -> str:
+        return await brain.complete("Radio check.")
+
+    assert asyncio.run(with_server(fake, "custom", "Bot-1", run)) == "Loud and clear."
+    first, _, third, fourth = fake.requests
+    assert "max_tokens" in first and "max_tokens" not in third
+    assert fourth["messages"][0]["role"] == "user" and "Radio check." in fourth["messages"][0]["content"]
+
+
+def test_unknown_model_is_explained() -> None:
+    settings = Settings()
+    settings.ai.provider = "poe"
+    settings.ai.poe_key = "k"
+    settings.ai.model = "Gemini-2.5-Flash"
+    brain = Brain(lambda: settings, lambda: "")
+    hint = brain.unknown_model_hint(["Gemini-2.5-Flash-Lite", "Claude-Haiku-4.5", "GPT-5-mini"])
+    assert hint and "Gemini-2.5-Flash-Lite" in hint
+    assert brain.unknown_model_hint(["gemini-2.5-flash"]) is None
