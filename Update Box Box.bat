@@ -2,7 +2,6 @@
 setlocal
 title Update Box Box
 cd /d "%~dp0"
-where uv >nul 2>nul || set "PATH=%USERPROFILE%\.local\bin;%PATH%"
 
 echo Getting the latest version...
 git pull --ff-only
@@ -12,7 +11,12 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-uv sync --frozen
+call "%~dp0uvfind.cmd"
+if errorlevel 1 (
+    pause
+    exit /b 1
+)
+"%UV%" sync --frozen
 if errorlevel 1 (
     echo.
     echo Couldn't install the update's dependencies. Check your internet connection and try again.

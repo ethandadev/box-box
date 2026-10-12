@@ -29,6 +29,15 @@ jobs:
         run: uv run box-box doctor
         continue-on-error: true  # CI runners have no audio devices
 
+  launcher-windows:
+    name: windows launcher finds or installs uv
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find or install uv like Box Box.bat does
+        shell: cmd
+        run: scripts\check_launcher.cmd
+
   smoke-windows:
     name: windows smoke test (real voice, speech, engine, UI)
     needs: test
