@@ -81,3 +81,42 @@ def test_diagnostics_and_report(tmp_path: Path) -> None:
         assert r.status == 400
 
     run_with_client(tmp_path, scenario)
+
+
+def test_feedback_bundle_has_recording_radio_and_report(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    import asyncio
+    import io
+    import shutil
+    import zipfile
+    from pathlib import Path
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from box_box import config
+    from box_box.app import Engine
+    from box_box.ui.server import UIServer
+
+    store = config.SettingsStore(tmp_path / "settings.json")
+    store.update({"telemetry": {"recordings_dir": str(tmp_path / "rec")}, "voice": {"engine": "off"}})
+    fixture = Path(__file__).parent / "fixtures" / "race-2026-monza-finish.f1raw"
+    (tmp_path / "rec").mkdir(exist_ok=True)
+    shutil.copy(fixture, tmp_path / "rec" / fixture.name)
+    from box_box.memory.store import Memory
+
+    engine = Engine(store, enable_udp=False, enable_ptt=False, memory=Memory(tmp_path / "memory.sqlite3"))
+    engine.memory.log_radio(None, "engineer", "Box this lap, box this lap.")
+
+    async def run() -> bytes:
+        server = UIServer(engine)
+        async with TestClient(TestServer(server.app)) as client:
+            bad = await client.get("/api/feedback", params={"name": "../settings.json"})
+            assert bad.status == 404
+            resp = await client.get("/api/feedback", params={"name": fixture.name})
+            assert resp.status == 200 and "attachment" in resp.headers["Content-Disposition"]
+            return await resp.read()
+
+    data = asyncio.run(run())
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        names = z.namelist()
+        assert fixture.name in names and "radio.txt" in names and "support-report.txt" in names
+        assert "Box this lap" in z.read("radio.txt").decode()

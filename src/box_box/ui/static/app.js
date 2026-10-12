@@ -764,7 +764,7 @@ async function loadRecordings() {
       const tr = document.createElement("tr");
       tr.innerHTML = `<td>${escapeHtml(f.name.replace(/\.f1raw(\.gz)?$/, ""))}</td><td>${f.size_mb} MB</td>
         <td>${new Date(f.modified * 1000).toLocaleString()}</td>
-        <td><button class="btn small" data-replay="${escapeHtml(f.name)}" data-speed="1">▶ Play</button><button class="btn small" data-replay="${escapeHtml(f.name)}" data-speed="4">4×</button></td>`;
+        <td><button class="btn small" data-replay="${escapeHtml(f.name)}" data-speed="1">▶ Play</button><button class="btn small" data-replay="${escapeHtml(f.name)}" data-speed="4">4×</button><a class="btn small" href="/api/feedback?name=${encodeURIComponent(f.name)}" download title="The recording, everything said on the radio, and the log, in one zip">Download for feedback</a></td>`;
       return tr;
     }));
     $("#rec-empty").hidden = data.files.length > 0;

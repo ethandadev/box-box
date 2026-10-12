@@ -178,6 +178,12 @@ class Memory:
         )
         return [{"at": r[0], "kind": r[1], "text": r[2]} for r in rows]  # type: ignore[union-attr]
 
+    def radio_between(self, start: float, end: float) -> list[dict[str, Any]]:
+        rows = self._exec(
+            "SELECT at, who, text FROM radio WHERE at BETWEEN ? AND ? ORDER BY at", (start, end), fetch=True
+        )
+        return [{"at": r[0], "who": r[1], "text": r[2]} for r in rows or []]
+
     def log_radio(self, session_id: int | None, who: str, text: str) -> None:
         self._exec(
             "INSERT INTO radio (session_id, at, who, text) VALUES (?, ?, ?, ?)",

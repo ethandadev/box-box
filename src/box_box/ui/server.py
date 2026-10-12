@@ -78,6 +78,7 @@ class UIServer:
         r.add_get("/api/report", self.report)
         r.add_post("/api/fix", self.fix)
         r.add_get("/api/recordings", self.recordings)
+        r.add_get("/api/feedback", self.feedback)
         r.add_post("/api/replay", self.replay)
         r.add_post("/api/replay/stop", self.replay_stop)
         r.add_post("/api/ai/test", self.ai_test)
@@ -343,6 +344,38 @@ class UIServer:
         return _json({"ok": True, "models": sorted(set(models)), "message": f"{len(models)} models available."})
 
     # ---- recordings -------------------------------------------------------------------------------
+
+    async def feedback(self, request: web.Request) -> web.StreamResponse:
+        """One zip to send to whoever is improving the engineer: the session recording, everything said on
+        the radio during it (engineer and driver), and the support report with the recent log."""
+        name = request.query.get("name", "")
+        folder = self.engine.settings.recordings_dir()
+        path = (folder / name).resolve()
+        if not name or path.parent != folder.resolve() or not path.is_file():
+            return _json({"ok": False, "error": "recording not found"}, 404)
+
+        def build() -> bytes:
+            import io
+            import zipfile
+
+            st = path.stat()
+            start = st.st_ctime if sys.platform == "win32" else st.st_mtime - 4 * 3600
+            radio = self.engine.memory.radio_between(start - 60, st.st_mtime + 300)
+            lines = [f"{time.strftime('%H:%M:%S', time.localtime(r['at']))}  {r['who']:8}  {r['text']}" for r in radio]
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+                z.write(path, path.name, compress_type=zipfile.ZIP_STORED)  # already gzip-compressed
+                z.writestr("radio.txt", "\n".join(lines) + "\n" if lines else "(nothing was said)\n")
+                z.writestr("support-report.txt", diagnostics.report(self.engine))
+            return buf.getvalue()
+
+        data = await asyncio.to_thread(build)
+        stem = path.name.split(".f1raw")[0]
+        return web.Response(
+            body=data,
+            content_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="Box Box feedback - {stem}.zip"'},
+        )
 
     async def recordings(self, request: web.Request) -> web.Response:
         folder = self.engine.settings.recordings_dir()
