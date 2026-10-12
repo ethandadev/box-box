@@ -213,3 +213,18 @@ def test_status_snapshot_is_json_safe(tmp_path: Path) -> None:
     st = asyncio.run(scenario())
     json.dumps(st)
     assert st["session"]["track"] == "Monza" and st["player"]["position"] >= 1
+
+
+def test_stuck_push_to_talk_is_released_with_a_warning(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+
+    async def scenario() -> None:
+        await engine.start()
+        engine.on_ptt(True)
+        engine._ptt_pressed_at -= 31  # held for over 30 s
+        engine._ptt_watchdog()
+        await engine.stop()
+
+    asyncio.run(scenario())
+    assert not engine.director.ptt_down
+    assert any("stuck" in e.get("message", "") for e in engine.bus.history if e["type"] == "warning")

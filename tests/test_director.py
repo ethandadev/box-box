@@ -165,3 +165,14 @@ def test_quali_lap_time_gets_through_just_after_the_line() -> None:
     d.offer([call("lap", category="lap_feedback")])
     got = d.poll(sim.world, None)
     assert got and got.call.key == "lap"
+
+
+def test_why_quiet_explains_the_hold() -> None:
+    d, clock, sim, _ = setup(callouts={"straights_only": False})
+    assert d.why_quiet(sim.world) is None
+    d.on_ptt(True)
+    d.offer([call("gaps")])
+    assert "Push-to-talk is pressed" in (d.why_quiet(sim.world) or "")
+    d.on_ptt(False)
+    d.mute(120)
+    assert "Radio silence" in (d.why_quiet(sim.world) or "")

@@ -201,6 +201,7 @@ class PushToTalk:
         self._udp_at = 0.0
         self._raw = False
         self.active = False
+        self._stuck = False  # ignore the input until it reads released (see force_release)
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -251,6 +252,12 @@ class PushToTalk:
         while not self._stop.is_set():
             try:
                 raw = self._raw_pressed()
+                if self._stuck:
+                    if raw:
+                        time.sleep(0.05)
+                        continue
+                    self._stuck = False
+                    self._raw = False
                 if raw != self._raw:
                     self._raw = raw
                     if self.mode == "toggle" and self.binding.kind != "none" and not self._ui_down:
@@ -262,6 +269,11 @@ class PushToTalk:
                 log.exception("push-to-talk polling failed")
                 time.sleep(0.5)
             time.sleep(0.005)
+
+    def force_release(self) -> None:
+        """The engine decided the button is stuck: release, and ignore it until it actually lets go."""
+        self._stuck = self._raw
+        self.active = False
 
     def _set(self, active: bool) -> None:
         if active == self.active:

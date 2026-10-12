@@ -42,6 +42,7 @@ from box_box.voice.tts import TTS
 log = logging.getLogger(__name__)
 
 RADIO_POLL_S = 0.05
+PTT_STUCK_S = 30.0  # held longer than this: the button is stuck, not the driver talking
 MIN_PTT_HOLD_S = 0.3
 STATUS_EVERY_S = 0.5
 CONNECTED_WITHIN_S = 3.0
@@ -381,6 +382,25 @@ class Engine:
                 return
             self._spawn(self._handle_utterance(audio))
 
+    def _ptt_watchdog(self) -> None:
+        """A button that reads as held for ages is stuck (wrong binding, a toggle left on, a bad axis).
+        Holding the radio forever would make the engineer go silent, so let go and say why."""
+        if not self.director.ptt_down or time.monotonic() - self._ptt_pressed_at < PTT_STUCK_S:
+            return
+        log.warning(
+            "push-to-talk has been held for %.0f s; treating it as stuck", time.monotonic() - self._ptt_pressed_at
+        )
+        self.bus.publish(
+            "warning",
+            message="Push-to-talk seems stuck on (held for over 30 seconds), so the engineer couldn't talk. "
+            "Check the button in Setup > Button, or switch the button mode to 'Hold to talk'.",
+        )
+        self.mic.stop_recording()
+        self.director.on_ptt(False)
+        self.director.release_hold()
+        if self.ptt:
+            self.ptt.force_release()
+
     async def _handle_utterance(self, audio) -> None:  # type: ignore[no-untyped-def]
         reply_id = next(_reply_ids)
         if not self.mic.ok:
@@ -556,6 +576,7 @@ class Engine:
                     self._choose_voice("kokoro")
                 if self.player.error and "disconnected" in self.player.error:
                     self.player.open(self.settings.voice.output_device)
+                self._ptt_watchdog()
             except Exception:
                 log.exception("housekeeping failed")
 
@@ -685,6 +706,7 @@ class Engine:
             },
             "radio": {
                 "pending": [c.text for c in self.director.pending()][:5],
+                "why_quiet": self.director.why_quiet(self.world),
                 "muted_for": max(0, round(self.director.muted_until - time.monotonic())),
                 "verbosity": self.settings.engineer.verbosity,
             },

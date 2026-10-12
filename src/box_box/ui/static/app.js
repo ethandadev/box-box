@@ -164,9 +164,25 @@ function refreshAiFields() {
     const section = el.dataset.section;
     el.hidden = !Object.entries(cond).every(([k, vals]) => vals.includes(getSetting(`${section}.${k}`)));
   }
-  const suggestions = [...new Set([...(prov.models || []), ...(state.models[prov.id] || [])])];
-  for (const list of $$("datalist[data-models]")) {
-    list.replaceChildren(...suggestions.map((m) => new Option(m === prov.default_model ? `${m} (recommended)` : "", m)));
+  const fetched = state.models[prov.id] || [];
+  const suggestions = [...new Set([...(prov.models || []), ...fetched])];
+  for (const pick of $$("select[data-model-pick]")) {
+    const current = getSetting("ai.model") || "";
+    const opts = [new Option(fetched.length ? `Pick from ${fetched.length} models…` : "Suggested models…", "")];
+    for (const m of suggestions) opts.push(new Option(m === prov.default_model ? `${m} (recommended)` : m, m));
+    pick.replaceChildren(...opts);
+    pick.value = suggestions.includes(current) ? current : "";
+    pick.hidden = suggestions.length === 0;
+    if (!pick.dataset.bound) {
+      pick.dataset.bound = "1";
+      pick.addEventListener("change", () => {
+        if (!pick.value) return;
+        const input = pick.closest(".setting, .field")?.querySelector('input[name="ai.model"]') || $('input[name="ai.model"]');
+        for (const i of $$('input[name="ai.model"]')) i.value = pick.value;
+        queueSave("ai.model", pick.value, true);
+        if (input) input.focus();
+      });
+    }
   }
   for (const input of $$('input[name="ai.model"]')) {
     input.placeholder = prov.default_model ? `${prov.default_model} (recommended)` : "Leave empty to use the loaded model";
@@ -192,7 +208,7 @@ async function listModels(button) {
     if (res.ok) state.models[prov.id] = res.models;
     if (status) {
       status.hidden = false;
-      status.textContent = res.ok ? `${res.models.length} models available. Click the box to pick one.` : res.message;
+      status.textContent = res.ok ? `${res.models.length} models available. Pick one from the list below the box.` : res.message;
       status.dataset.state = res.ok ? "ok" : "error";
     }
     refreshAiFields();
@@ -269,7 +285,7 @@ function settingField(f, prefix = "set") {
   } else if (f.type === "int") {
     wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><input type="number" id="${id}" name="${name}" min="${f.min ?? ""}" max="${f.max ?? ""}" ${describedBy}>${help}`;
   } else if (f.suggest === "models") {
-    wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><div class="row"><input type="text" id="${id}" name="${name}" list="${id}-list" autocomplete="off" spellcheck="false" ${describedBy}><button class="btn" type="button" data-list-models>List models</button></div><datalist id="${id}-list" data-models></datalist>${help}<small data-models-status hidden></small>`;
+    wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><div class="row"><input type="text" id="${id}" name="${name}" autocomplete="off" spellcheck="false" ${describedBy}><button class="btn" type="button" data-list-models>List models</button></div><select data-model-pick aria-label="Pick a model" hidden></select>${help}<small data-models-status hidden></small>`;
   } else if (f.secret) {
     wrap.innerHTML = `<label for="${id}">${escapeHtml(f.label)}</label><div class="row"><input type="password" id="${id}" name="${name}" autocomplete="off" spellcheck="false" ${describedBy}><button class="btn" type="button" data-toggle-secret="${id}">Show</button></div>${help}`;
   } else {
@@ -391,6 +407,12 @@ function renderStatus(st) {
       setText(`#t-${i} .t`, temp != null ? `${temp}°` : "");
       el.dataset.temp = temp == null ? "" : temp < 75 ? "cold" : temp > 112 ? "hot" : "ok";
     }
+  }
+  // why he's quiet (calls waiting and what's holding them)
+  const why = $("#why-quiet");
+  if (why) {
+    why.hidden = !st.radio.why_quiet;
+    setText("#why-quiet", st.radio.why_quiet ? `Holding ${st.radio.pending.length} message(s): ${st.radio.why_quiet}` : "");
   }
   // verbosity
   const verbosity = st.radio.verbosity;

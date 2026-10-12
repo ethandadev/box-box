@@ -109,6 +109,10 @@ class RadioDirector:
         else:
             self._hold_until = now + 1.0  # give the reply a moment to start
 
+    @property
+    def ptt_down(self) -> bool:
+        return self._ptt_down
+
     def release_hold(self) -> None:
         """The reply to the driver is ready: stop holding the queue."""
         if not self._ptt_down:
@@ -124,6 +128,25 @@ class RadioDirector:
 
     def pending(self) -> list[RadioCall]:
         return [q.call for q in self._queue]
+
+    def why_quiet(self, world: World | None) -> str | None:
+        """Why queued calls aren't being said right now, in plain English (None if nothing's waiting)."""
+        if not self._queue:
+            return None
+        now = self._clock()
+        s = self._settings()
+        if self._ptt_down:
+            return "Push-to-talk is pressed, so he's waiting for you to finish."
+        if now < self.muted_until:
+            return f"Radio silence for {round((self.muted_until - now) / 60, 1)} more minutes."
+        if now < self._hold_until:
+            return "Waiting for your question to be answered."
+        verbosity = Verbosity.parse(s.engineer.verbosity)
+        if self._spoken_this_lap >= BUDGET_PER_LAP[verbosity]:
+            return "Already said enough this lap (verbosity setting)."
+        if not self._driver_free(world, s, now):
+            return "Waiting for a straight (Settings: only talk on straights)."
+        return None
 
     def poll(self, world: World | None, speaking: RadioCall | None) -> Decision | None:
         """Return the next call to say now, or None. `speaking` is what's playing, if anything."""
