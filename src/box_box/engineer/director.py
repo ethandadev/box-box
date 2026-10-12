@@ -31,6 +31,7 @@ MIN_SPACING_S = {Verbosity.QUIET: 8.0, Verbosity.NORMAL: 4.0, Verbosity.CHATTY: 
 STRAIGHT_HOLD_S = 0.35  # how long the car must have been "on a straight" before we start talking
 PUSH_LAP_ALLOWED = {"traffic", "flags"}
 LINE_WINDOW_MS = 6000  # just after the line on back-to-back push laps: time for the lap time and position
+REPLY_HOLD_MAX_S = 15.0  # after the driver speaks, other calls wait this long at most for the answer
 REWIND_MEMORY_S = 180.0  # after a flashback, calls made this recently stay said for this long
 SAME_TEXT_S = 120.0  # never the identical sentence twice inside this
 REWIND_FRESH = {"gaps", "positions", "lap_feedback"}  # always new information, even after a flashback
@@ -137,7 +138,9 @@ class RadioDirector:
         if pressed:
             self._hold_until = now + 60.0  # until released
         else:
-            self._hold_until = now + 1.0  # give the reply a moment to start
+            # Hold until the answer is ready (the app releases it then); the cap only guards a lost release.
+            # A 1 s hold let a queued call (the radio check) jump in between the question and the answer.
+            self._hold_until = now + REPLY_HOLD_MAX_S
 
     @property
     def ptt_down(self) -> bool:

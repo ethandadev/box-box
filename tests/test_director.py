@@ -130,7 +130,9 @@ def test_push_to_talk_holds_the_engineer_but_not_replies() -> None:
     clock.t += 5
     assert d.poll(sim.world, None) is None  # still holding while the button is down
     d.on_ptt(False)
-    clock.t += 1.5
+    clock.t += 3
+    assert d.poll(sim.world, None) is None  # the driver asked something: nothing cuts in before the answer
+    d.release_hold()  # the answer is out
     got = d.poll(sim.world, None)
     assert got and got.call.key == "gaps"
 

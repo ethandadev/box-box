@@ -253,3 +253,14 @@ def test_corrupt_memory_is_set_aside(tmp_path: Path) -> None:
     mem.add_note("x", "still works")
     assert mem.notes()[0]["text"] == "still works"
     assert list(tmp_path.glob("m.broken-*.sqlite3"))
+
+
+def test_only_short_direct_questions_get_the_instant_telemetry_answer() -> None:
+    """From a real session: 'my tyres are overheating' got 'temperatures look good', twice."""
+    from box_box.brain.conversation import quick_question
+
+    assert quick_question("What's the gap?") and quick_question("How are the tyres?")
+    assert not quick_question("My tyres are over-heating, man.")  # a complaint: the AI deals with it
+    assert not quick_question("What's the optimal temperature for the inters?")
+    assert not quick_question("Shall we go for softs or mediums?")
+    assert not quick_question("What's the forecast for the race?")

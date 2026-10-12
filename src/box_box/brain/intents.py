@@ -30,6 +30,7 @@ class Actions(Protocol):
 class Answer:
     text: str
     command: bool = False  # changed a setting (so it's handled even when the AI is available)
+    instant: bool = False  # radio etiquette ("radio check", "thanks", "say again"): never worth the AI
 
 
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "every": 1, "each": 1}
@@ -47,11 +48,11 @@ Rule = tuple[str, Callable[[str, World, Actions, str], Answer | None]]
 
 
 def _radio_check(t: str, w: World, a: Actions, me: str) -> Answer:
-    return Answer(f"Loud and clear, {me}.")
+    return Answer(f"Loud and clear, {me}.", instant=True)
 
 
 def _thanks(t: str, w: World, a: Actions, me: str) -> Answer:
-    return Answer("No worries.")
+    return Answer("No worries.", instant=True)
 
 
 def _quiet(t: str, w: World, a: Actions, me: str) -> Answer:
@@ -293,7 +294,7 @@ def _whos_around(t: str, w: World, a: Actions, me: str) -> Answer | None:
 def _say_again(t: str, w: World, a: Actions, me: str) -> Answer | None:
     last_radio = getattr(a, "last_radio", None)
     said = last_radio() if callable(last_radio) else None
-    return Answer(said or "Nothing from me. All good.")
+    return Answer(said or "Nothing from me. All good.", instant=True)
 
 
 def _plan(t: str, w: World, a: Actions, me: str) -> Answer | None:

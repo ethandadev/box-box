@@ -26,11 +26,25 @@ QUESTION_START = re.compile(
     r"any|have|has|will|would|tell me|give me)\b",
     re.I,
 )
+# Questions that need judgement, not a number off the screen: these always go to the AI.
+NEEDS_THOUGHT = re.compile(
+    r"\b(?:should|why|would|could|optimal|ideal|best way|advice|advise|think|reckon|opinion|or|versus|vs|"
+    r"better|worse|compare|feel|feels|feeling|wrong|happening|what if|if we|if i|race|tomorrow|help)\b",
+    re.I,
+)
+MAX_REPLY_SENTENCES = 3  # an engineer on the radio, not an essay
 
 
 def is_question(text: str) -> bool:
     t = text.strip()
     return t.endswith("?") or bool(QUESTION_START.match(t))
+
+
+def quick_question(text: str) -> bool:
+    """A short, direct ask for a number ("What's the gap?", "How are the tyres?"), fine to answer from
+    telemetry. A complaint ("my tyres are overheating") or a judgement call ("softs or mediums?") isn't."""
+    t = text.strip()
+    return is_question(t) and len(t.split()) <= 9 and not NEEDS_THOUGHT.search(t)
 
 
 class Conversation:
@@ -85,9 +99,17 @@ class Conversation:
                 return
             local = None  # it's feedback, not a question about tyres or whatever it mentioned
             llm_text = f"(answering your question about the {topic}) {text}"
-        use_llm = self.brain.available and not (local and (local.command or s.ai.fast_answers))
+        quick = local is not None and (local.command or local.instant or (s.ai.fast_answers and quick_question(text)))
+        use_llm = self.brain.available and not quick
         if not use_llm:
-            if local:
+            if local and not quick and not is_question(text):
+                # A statement ("the tyres are overheating"), not a question: acknowledge it like an engineer
+                # rather than reading out telemetry that may well contradict what the driver can feel.
+                self.actions.remember(f"Driver said: {text}")
+                yield self.say.human.apply(
+                    self.say("feedback_ack", me=s.driver.name), s.engineer.natural_speech, reply=True
+                )
+            elif local:
                 text = self.say.human.apply(local.text, s.engineer.natural_speech, reply=True)
                 yield text[:1].upper() + text[1:]
             elif self.brain.disabled_reason:
@@ -110,6 +132,7 @@ class Conversation:
 
         task = asyncio.create_task(pump())
         said_anything = False
+        sentences = 0
         try:
             first = True
             while True:
@@ -131,6 +154,9 @@ class Conversation:
                     break
                 said_anything = True
                 yield item
+                sentences += 1
+                if sentences >= MAX_REPLY_SENTENCES:
+                    break
         finally:
             if not task.done():
                 task.cancel()

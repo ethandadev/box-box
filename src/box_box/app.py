@@ -418,6 +418,7 @@ class Engine:
             self._offer_reply(
                 "I can't hear you, your microphone isn't working. Check the Diagnostics page.", reply_id, 0
             )
+            self.director.release_hold()
             return
         if not self.stt.ready:
             msg = (
@@ -449,8 +450,7 @@ class Engine:
         try:
             async for sentence in self.conversation.handle(text, self.world):
                 self._offer_reply(sentence, reply_id, index)
-                index += 1
-                self.director.release_hold()
+                index += 1  # the hold stays on until the whole answer is out, so nothing cuts in mid-reply
         except Exception:
             log.exception("conversation failed")
             self._offer_reply("Radio's playing up. Say again?", reply_id, index)
