@@ -73,11 +73,12 @@ def test_each_cloud_voice_returns_audio(server) -> None:  # type: ignore[no-unty
     for name in ("openai", "elevenlabs", "gemini"):
         engines[name].load()
         audio, sr = engines[name].synthesize("Box this lap.", "am_michael", 1.15)
-        assert sr == 24_000 and len(audio) == 2400 and float(np.max(np.abs(audio))) > 0.3, name
+        # At the driver's speed: no longer than the 0.1 s the service sent (ElevenLabs does 1.15 itself).
+        assert sr == 24_000 and 1500 < len(audio) <= 2400 and float(np.max(np.abs(audio))) > 0.3, name
     (p1, h1, b1), (p2, h2, b2), (p3, h3, b3) = Fake.requests
     assert (
         b1["model"] == "gpt-4o-mini-tts"
-        and b1["instructions"] == "calm and dry"
+        and b1["instructions"].startswith("calm and dry Talk fast")
         and h1["Authorization"] == "Bearer sk-oa"
     )
     assert "/pNInz6obpgDQGcFmaJgB" in p2 and h2["Xi-Api-Key"] == "el-key" and b2["text"] == "Box this lap."
@@ -126,7 +127,7 @@ def test_out_of_credits_switches_to_the_local_voice_for_good(server) -> None:  #
         assert len(audio) == 100
     assert len(Fake.requests) == 1  # asked once, then straight to the local voice
     assert tts.degraded and "out of credits" in (tts.error or "")
-    assert max(speeds) <= 1.2  # the stand-in voice doesn't suddenly rush
+    assert speeds == [1.4, 1.4, 1.4]  # the stand-in voice keeps the driver's speed
     tts.shutdown()
 
 
@@ -139,3 +140,11 @@ def test_voice_keys_work_without_the_ai_provider_and_stay_secret() -> None:
     engines = cloud.cloud_engines(lambda: s)
     assert engines["gemini"].key() == "AIza-voice" and engines["openai"].key() == "sk-voice"
     assert ("voice", "gemini_key") in SECRETS and ("voice", "openai_key") in SECRETS
+
+
+def test_elevenlabs_faster_than_its_limit_is_made_up_by_stretching(server) -> None:  # type: ignore[no-untyped-def]
+    s = settings()
+    engine = cloud.cloud_engines(lambda: s)["elevenlabs"]
+    audio, _ = engine.synthesize("Box this lap.", "am_michael", 1.5)
+    assert Fake.requests[-1][2]["voice_settings"]["speed"] == 1.2  # the API's maximum
+    assert len(audio) < 2400 * 0.85  # and the rest done here, pitch unchanged

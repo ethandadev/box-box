@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 
 from box_box.config import Settings
-from box_box.voice.tts import Audio, Engine, TTSUnavailable
+from box_box.voice.tts import Audio, Engine, TTSUnavailable, stretch, tighten
 
 log = logging.getLogger(__name__)
 
@@ -35,10 +35,25 @@ STYLE_DEFAULT = (
 OPENAI_VOICES = ["ash", "onyx", "echo", "ballad", "sage", "verse", "alloy", "coral", "fable", "nova", "shimmer"]
 GEMINI_VOICES = ["Charon", "Orus", "Fenrir", "Puck", "Iapetus", "Algenib", "Rasalgethi", "Alnilam", "Kore", "Aoede"]
 ELEVENLABS_DEFAULT_VOICE = "pNInz6obpgDQGcFmaJgB"  # "Adam", a stock voice every account has
+ELEVENLABS_MAX_SPEED = 1.2  # the API's limit; anything faster is made up by time-stretching
 
 
 def _pcm16(raw: bytes) -> np.ndarray:
     return np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
+
+
+def _paced(samples: np.ndarray, speed: float, native: float = 1.0) -> Audio:
+    """At the driver's speed: whatever the service couldn't do itself (`native`) is made up by
+    time-stretching (pitch unchanged), and long pauses are tightened like the local voice's."""
+    sr = 24_000
+    return tighten(stretch(samples, sr, speed / native), sr), sr
+
+
+def _style(v_style: str, speed: float) -> str:
+    style = v_style.strip() or STYLE_DEFAULT
+    if speed >= 1.1:
+        style += " Talk fast, like a busy engineer mid-race: no lingering on words, no gaps between phrases."
+    return style
 
 
 def _post(url: str, body: dict[str, Any], headers: dict[str, str], what: str) -> bytes:
@@ -91,11 +106,11 @@ class OpenAIVoice(CloudEngine):
             "model": "gpt-4o-mini-tts",
             "voice": v.cloud_voice.strip() or "ash",
             "input": text,
-            "instructions": v.style.strip() or STYLE_DEFAULT,
+            "instructions": _style(v.style, speed),
             "response_format": "pcm",  # 24 kHz, 16-bit, mono
         }
         raw = _post(self.URL, body, {"Authorization": f"Bearer {self.key()}"}, "OpenAI")
-        return _pcm16(raw), 24_000
+        return _paced(_pcm16(raw), speed)  # gpt-4o-mini-tts takes no speed: directed fast, then stretched
 
 
 class ElevenLabsVoice(CloudEngine):
@@ -116,7 +131,7 @@ class ElevenLabsVoice(CloudEngine):
                 "stability": 0.45,
                 "similarity_boost": 0.8,
                 "style": 0.15,
-                "speed": max(0.7, min(1.2, speed)),
+                "speed": max(0.7, min(ELEVENLABS_MAX_SPEED, speed)),
             },
         }
         raw = _post(
@@ -125,7 +140,7 @@ class ElevenLabsVoice(CloudEngine):
             {"xi-api-key": self.key()},
             "ElevenLabs",
         )
-        return _pcm16(raw), 24_000
+        return _paced(_pcm16(raw), speed, native=max(0.7, min(ELEVENLABS_MAX_SPEED, speed)))
 
 
 class GeminiVoice(CloudEngine):
@@ -147,9 +162,7 @@ class GeminiVoice(CloudEngine):
     def synthesize(self, text: str, voice: str, speed: float) -> Audio:
         v = self._settings().voice
         body = {
-            "contents": [
-                {"parts": [{"text": f"{v.style.strip() or STYLE_DEFAULT}\nSay exactly this, nothing else: {text}"}]}
-            ],
+            "contents": [{"parts": [{"text": f"{_style(v.style, speed)}\nSay exactly this, nothing else: {text}"}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
@@ -173,7 +186,7 @@ class GeminiVoice(CloudEngine):
             b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
         except (ValueError, KeyError, IndexError, TypeError) as e:
             raise RuntimeError(f"Gemini sent no audio: {raw[:160]!r}") from e
-        return _pcm16(base64.b64decode(b64)), 24_000
+        return _paced(_pcm16(base64.b64decode(b64)), speed)
 
 
 def cloud_engines(settings: Callable[[], Settings]) -> dict[str, Engine]:

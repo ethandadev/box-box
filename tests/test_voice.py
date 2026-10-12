@@ -305,3 +305,15 @@ def test_an_abandoned_synthesis_never_poisons_that_line() -> None:
     again = tts.submit("Box, box.", "am_michael", 1.0)
     assert not again.cancelled() and len(again.result(5)[0]) == 10
     tts.shutdown()
+
+
+def test_stretch_changes_speed_not_pitch() -> None:
+    from box_box.voice.tts import stretch
+
+    sr = 24_000
+    t = np.arange(sr * 2) / sr
+    voice = (0.5 * np.sin(2 * np.pi * 300 * t)).astype(np.float32)
+    fast = stretch(voice, sr, 1.4)
+    assert abs(len(voice) / len(fast) - 1.4) < 0.03
+    f = np.fft.rfftfreq(len(fast), 1 / sr)
+    assert abs(f[np.argmax(np.abs(np.fft.rfft(fast)))] - 300) < 3

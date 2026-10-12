@@ -97,6 +97,47 @@ class KokoroEngine(Engine):
         return tighten(np.asarray(samples, dtype=np.float32), int(sr)), int(sr)
 
 
+def stretch(audio: np.ndarray, sr: int, rate: float) -> np.ndarray:
+    """Speed speech up (rate > 1) or slow it down without changing its pitch (WSOLA).
+
+    For voices that can't go as fast as the driver wants on their own: cut into short overlapping
+    slices, each nudged to where it lines up best with the last one, and laid down closer together."""
+    x = np.asarray(audio, dtype=np.float32)
+    if abs(rate - 1.0) < 0.02 or len(x) < sr // 10:
+        return x
+    frame = int(sr * 0.03)
+    hop_out = frame // 2
+    hop_in = hop_out * rate
+    tol = int(sr * 0.008)
+    window = np.hanning(frame).astype(np.float32)
+    n_frames = int((len(x) - frame - tol) / hop_in)
+    if n_frames < 2:
+        return x
+    out = np.zeros(n_frames * hop_out + frame, dtype=np.float32)
+    norm = np.zeros_like(out)
+    prev = 0
+    for k in range(n_frames):
+        target = int(k * hop_in)
+        start = target
+        if k:
+            # Where the previous slice would naturally have carried on; pick the nearby start that matches it.
+            natural = x[prev + hop_out : prev + hop_out + frame]
+            lo, hi = max(0, target - tol), min(len(x) - frame, target + tol)
+            if hi > lo and len(natural) == frame:
+                region = x[lo : hi + frame]
+                score = np.correlate(region, natural, mode="valid")
+                start = lo + int(np.argmax(score))
+        seg = x[start : start + frame]
+        if len(seg) < frame:
+            break
+        at = k * hop_out
+        out[at : at + frame] += seg * window
+        norm[at : at + frame] += window
+        prev = start
+    norm[norm < 1e-3] = 1.0
+    return (out / norm)[: int(len(x) / rate)].astype(np.float32)
+
+
 def tighten(audio: np.ndarray, sr: int, max_pause_s: float = 0.16, floor: float = 0.008) -> np.ndarray:
     """Radio delivery is clipped: shorten long pauses the voice model leaves between phrases, and trim the
     ends. Pauses keep a short fade so nothing clicks."""
@@ -215,7 +256,6 @@ URGENT, PREFETCH = 0, 1
 PREFETCH_MAX_AGE_S = 20.0  # a prefetch still queued after this long is for a call that's gone stale
 DEAD_RETRY_S = 600.0  # a cloud voice that rejected us (key, credits) is retried this rarely
 FLAKY_RETRY_S = 60.0  # after repeated network failures, give the cloud voice a minute off
-FALLBACK_MAX_SPEED = 1.2  # cloud voices cap speed; the local stand-in shouldn't suddenly rush
 
 
 class TTS:
@@ -371,7 +411,6 @@ class TTS:
             return self._fallback(text, voice, speed, e, skip_kokoro=engine.name == "kokoro")
 
     def _fallback(self, text: str, voice: str, speed: float, err: Exception | None, skip_kokoro: bool = False) -> Audio:
-        speed = min(speed, FALLBACK_MAX_SPEED)
         self._used_fallback = True
         if not skip_kokoro and "kokoro" in self.engines:
             try:  # a cloud voice failed (network, quota): say it with the local voice instead

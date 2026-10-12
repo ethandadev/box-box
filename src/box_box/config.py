@@ -132,7 +132,14 @@ class VoiceSettings:
         "Leave empty for a classic F1 engineer.",
         when={"engine": ["openai", "gemini"]},
     )
-    speed: float = opt(1.15, "Speaking speed", "", min=0.8, max=1.4, step=0.02)
+    speed: float = opt(
+        1.25,
+        "Speaking speed",
+        "Real engineers talk fast. Applies to every voice; the cloud voices are sped up without changing pitch.",
+        min=0.8,
+        max=1.6,
+        step=0.02,
+    )
     volume: float = opt(0.9, "Volume", "", min=0.0, max=1.0, step=0.05)
     radio_effect: float = opt(
         0.5, "Radio effect", "0 is studio-clean, 1 is a crackly team radio.", min=0.0, max=1.0, step=0.05
