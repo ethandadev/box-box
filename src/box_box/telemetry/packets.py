@@ -375,6 +375,7 @@ class Session:
     # 2026 only (empty in 2025). Zones are (start, end) lap fractions and may wrap the line.
     active_aero_zones: tuple[tuple[float, float], ...] = ()
     drs_zones: tuple[tuple[float, float], ...] = ()
+    weekend: tuple[int, ...] = ()  # session types this weekend, in order (sprint weekends list SQ1-3 and two races)
 
 
 @dataclass(frozen=True, slots=True)
@@ -622,6 +623,7 @@ _SESSION_AFTER_FORECAST = _SESSION_FORECAST_OFFSET + 64 * _FORECAST.size  # 668
 _SESSION_TAIL = struct.Struct("<BBIIIBBB")  # forecastAccuracy, aiDifficulty, 3 link ids, pit window x3
 _SESSION_SECTORS = struct.Struct("<ff")
 _SESSION_SECTORS_OFFSET = 753 - _SESSION_SECTORS.size  # last field of the 2025 packet
+_SESSION_WEEKEND_OFFSET = _SESSION_SECTORS_OFFSET - 13  # numSessionsInWeekend, then weekendStructure[12]
 _ZONE = struct.Struct("<ff")
 
 
@@ -646,6 +648,8 @@ def _session(data: bytes, fmt: int) -> Session:
         forecast.append(WeatherSample(f[0], f[1], f[2], f[3], f[5], f[7]))
     tail = _SESSION_TAIL.unpack_from(data, _SESSION_AFTER_FORECAST)
     s2, s3 = _SESSION_SECTORS.unpack_from(data, _SESSION_SECTORS_OFFSET)
+    n_sessions = min(data[_SESSION_WEEKEND_OFFSET], 12)
+    weekend = tuple(data[_SESSION_WEEKEND_OFFSET + 1 : _SESSION_WEEKEND_OFFSET + 1 + n_sessions])
 
     aero: tuple[tuple[float, float], ...] = ()
     drs: tuple[tuple[float, float], ...] = ()
@@ -684,6 +688,7 @@ def _session(data: bytes, fmt: int) -> Session:
         sector3_start=s3,
         active_aero_zones=aero,
         drs_zones=drs,
+        weekend=weekend,
     )
 
 

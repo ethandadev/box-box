@@ -86,11 +86,7 @@ class Conversation:
         llm_text = text
         topic = self._feedback_topic(text, local)
         if topic:
-            where = (
-                f"{names.track_name(world.session.track_id)} {names.session_name(world.session_type)}"
-                if world.session
-                else "a session"
-            )
+            where = f"{names.track_name(world.session.track_id)} {world.session_name}" if world.session else "a session"
             self.actions.remember(f"{topic.capitalize()} feedback at {where}: {text}")
             if not self.brain.available:
                 yield self.say.human.apply(
@@ -172,7 +168,7 @@ class Conversation:
         valid = me.valid_laps()
         best = me.session_best_ms
         facts = [
-            f"Session: {names.track_name(world.session.track_id)} {names.session_name(world.session_type)}.",
+            f"Session: {names.track_name(world.session.track_id)} {world.session_name}.",
             f"Finished P{me.lap.position}" + (f" from P{me.lap.grid_position} on the grid." if world.is_race else "."),
             f"Laps completed: {len(me.laps)}, clean push laps: {len(valid)}.",
         ]
@@ -200,9 +196,7 @@ class Conversation:
         if me.damage and max(me.damage.front_left_wing, me.damage.front_right_wing, me.damage.floor) >= 20:
             facts.append("Car came back with damage.")
         summary = " ".join(facts)
-        self.actions.remember(
-            f"{names.track_name(world.session.track_id)} {names.session_name(world.session_type)}: {summary}"
-        )
+        self.actions.remember(f"{names.track_name(world.session.track_id)} {world.session_name}: {summary}")
         if not (self.brain.available and s.ai.debrief):
             return None
         prompt = (

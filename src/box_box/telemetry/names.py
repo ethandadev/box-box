@@ -44,11 +44,11 @@ SESSION_TYPES: dict[int, str] = {
     7: "Q3",
     8: "Short Qualifying",
     9: "One-Shot Qualifying",
-    10: "Sprint Shootout 1",
-    11: "Sprint Shootout 2",
-    12: "Sprint Shootout 3",
-    13: "Short Sprint Shootout",
-    14: "One-Shot Sprint Shootout",
+    10: "SQ1",
+    11: "SQ2",
+    12: "SQ3",
+    13: "Short Sprint Qualifying",
+    14: "One-Shot Sprint Qualifying",
     15: "Race",
     16: "Race 2",
     17: "Race 3",
@@ -112,7 +112,24 @@ def track_name(track_id: int) -> str:
     return TRACKS.get(track_id, f"track {track_id}")
 
 
-def session_name(session_type: int) -> str:
+SPRINT_QUALI_SESSIONS = frozenset({10, 11, 12, 13, 14})
+
+
+def is_sprint_weekend(weekend: tuple[int, ...]) -> bool:
+    return any(t in SPRINT_QUALI_SESSIONS for t in weekend)
+
+
+def is_sprint(session_type: int, weekend: tuple[int, ...]) -> bool:
+    """On a sprint weekend the game calls the sprint "Race" and the Grand Prix "Race 2"."""
+    return session_type == 15 and is_sprint_weekend(weekend) and 16 in weekend
+
+
+def session_name(session_type: int, weekend: tuple[int, ...] = ()) -> str:
+    if is_sprint_weekend(weekend) and 16 in weekend:
+        if session_type == 15:
+            return "Sprint"
+        if session_type == 16:
+            return "Race"
     return SESSION_TYPES.get(session_type, f"session {session_type}")
 
 

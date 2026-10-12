@@ -206,7 +206,9 @@ class Engine:
                 # This packet isn't applied yet: the world may still hold the previous session (that's how a
                 # race recording ended up named after the FP1 before it).
                 s = self.world.session if self.world.session_uid == uid else None
-                self.recorder.feed(data, uid, s.track_id if s else None, s.session_type if s else None)
+                self.recorder.feed(
+                    data, uid, s.track_id if s else None, s.session_type if s else None, s.weekend if s else ()
+                )
             packet = self.decoder.decode(data)
             if packet is None:
                 return
@@ -249,12 +251,10 @@ class Engine:
                 s = world.session
                 if s is not None:
                     self._session_db_id = self.memory.start_session(
-                        world.session_uid, names.track_name(s.track_id), names.session_name(s.session_type)
+                        world.session_uid, names.track_name(s.track_id), world.session_name
                     )
                     self._update_vocab()
-                    self.bus.publish(
-                        "session", track=names.track_name(s.track_id), session=names.session_name(s.session_type)
-                    )
+                    self.bus.publish("session", track=names.track_name(s.track_id), session=world.session_name)
             elif isinstance(change, LapCompleted) and change.car_index == world.player_index and self._session_db_id:
                 self.memory.record_lap(self._session_db_id, change.record)
         if any(e.code == "SEND" for e in events) and world.session_uid not in self._ended_sessions:
@@ -651,7 +651,7 @@ class Engine:
         if s is not None:
             session = {
                 "track": names.track_name(s.track_id),
-                "session": names.session_name(s.session_type),
+                "session": w.session_name,
                 "weather": names.WEATHER.get(s.weather, ""),
                 "track_temp": s.track_temp,
                 "air_temp": s.air_temp,

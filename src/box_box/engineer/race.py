@@ -12,6 +12,7 @@ from box_box.telemetry import names
 from box_box.telemetry.packets import ResultStatus
 
 POINTS_POSITIONS = 10
+SPRINT_POINTS_POSITIONS = 8
 PIT_EXIT_QUIET_S = 8.0  # after rejoining, places still settle (cars passing on cold tyres) before we commentate
 
 
@@ -394,7 +395,7 @@ class RaceDetector(Detector):
         s = ctx.world.session
         assert me.lap and s
         ideal, latest = s.pit_window_ideal_lap, s.pit_window_latest_lap
-        if not ideal or me.in_pit_lane:
+        if not ideal or me.in_pit_lane or ctx.world.is_sprint:
             return []
         lap = me.lap.lap_num
         out: list[RadioCall] = []
@@ -539,7 +540,7 @@ class RaceDetector(Detector):
             else "finish_podium"
             if pos <= 3
             else "finish_points"
-            if pos <= POINTS_POSITIONS
+            if pos <= (SPRINT_POINTS_POSITIONS if ctx.world.is_sprint else POINTS_POSITIONS)
             else "finish_no_points"
         )
         text = ctx.say(key, pos=pos, me=ctx.me)

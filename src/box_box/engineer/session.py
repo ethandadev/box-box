@@ -60,7 +60,7 @@ class SessionDetector(Detector):
         common = {
             "me": ctx.me,
             "track": names.track_name(s.track_id),
-            "session": names.session_name(s.session_type),
+            "session": world.session_name,
             "weather": WEATHER_WORDS.get(s.weather, "dry"),
             "track_temp": self._temp(ctx, s.track_temp),
         }
@@ -71,7 +71,8 @@ class SessionDetector(Detector):
             if not world.cars or me.lap.grid_position == 0:
                 return []
             self._greeted = True
-            text = ctx.say("greet_race", laps=world.total_laps, grid=me.lap.grid_position, **common)
+            key = "greet_sprint" if world.is_sprint else "greet_race"
+            text = ctx.say(key, laps=world.total_laps, grid=me.lap.grid_position, **common)
         else:
             # Practice/quali: say hello as the driver leaves the garage (that's when engineers do it).
             if status == DriverStatus.IN_GARAGE:

@@ -39,7 +39,7 @@ def session_info(world: World) -> dict[str, Any]:
         return {"error": "No session data yet. Is the game running with UDP telemetry on?"}
     info: dict[str, Any] = {
         "track": names.track_name(s.track_id),
-        "session": names.session_name(s.session_type),
+        "session": world.session_name,
         "weather": names.WEATHER.get(s.weather, "unknown"),
         "track_temp_c": s.track_temp,
         "air_temp_c": s.air_temp,
@@ -310,7 +310,7 @@ def snapshot(world: World) -> str:
     if s is None or me is None or me.lap is None:
         return "No live telemetry right now (game not running, in the menus, or UDP telemetry off)."
     parts = [
-        f"{names.track_name(s.track_id)} {names.session_name(s.session_type)}",
+        f"{names.track_name(s.track_id)} {world.session_name}",
         f"P{me.lap.position}",
         f"lap {me.lap.lap_num}",
     ]

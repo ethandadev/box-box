@@ -24,6 +24,13 @@ PHRASES: dict[str, dict[str, list[str]]] = {
             "{me}, radio check. {track}, {weather}. Try to bring the car back looking like this.",
         ],
     },
+    "greet_sprint": {
+        "calm": [
+            "Radio check, {me}. Sprint, {laps} laps from P{grid}. No stop, so it's flat out from lights out.",
+            "Okay {me}, {laps} laps, P{grid}. Sprint rules: no stop, every lap counts. Clean into turn one.",
+        ],
+        "fired_up": ["Sprint time, {me}! P{grid}, {laps} laps, no stop. Flat out!"],
+    },
     "greet_quali": {
         "calm": [
             "Radio check, {me}. {session}, {minutes} minutes on the clock. Let's get a banker in early.",

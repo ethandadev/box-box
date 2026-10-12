@@ -200,6 +200,28 @@ TOOL_DEFS: list[dict[str, Any]] = [
 LOCAL_TOOLS = {"radio_preferences", "remember"}
 
 
+def session_mode(world: World) -> str | None:
+    """What kind of session this is, so the AI talks practice in practice and race in a race."""
+    if world.session is None:
+        return None
+    if world.is_practice:
+        return (
+            "This is PRACTICE: no race is happening. Talk run plans, the car, balance, tyres, setup and lap "
+            "times; the timesheet barely matters. Never talk track position, defending, overtaking or race strategy."
+        )
+    if world.is_qualifying:
+        return (
+            "This is QUALIFYING: one fast lap at a time. Out lap, push lap, the cutoff and track position on the road."
+        )
+    if world.is_time_trial:
+        return "This is TIME TRIAL: just the driver and the clock. No other cars, no strategy; lap times and corners."
+    if world.is_sprint:
+        return "This is the SPRINT: a short race with no pit stop planned. Flat out, positions and gaps, no strategy."
+    if world.is_race:
+        return "This is the RACE."
+    return None
+
+
 class Brain:
     """Conversation with whichever AI service is configured. Safe to use when it isn't: check `available`."""
 
@@ -298,6 +320,9 @@ class Brain:
 
     def _context(self, world: World) -> str:
         parts = [f"[Live pit wall: {tools.snapshot(world)}]"]
+        mode = session_mode(world)
+        if mode:
+            parts.append(f"[{mode}]")
         recent = self._recent_radio()
         if recent:
             parts.append("[Your own recent calls to the driver, oldest first: " + " | ".join(recent[-5:]) + "]")

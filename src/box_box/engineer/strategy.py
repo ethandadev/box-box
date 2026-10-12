@@ -95,15 +95,18 @@ class StrategyDetector(Detector):
         if world.is_race:
             out += self._grid_tyres(ctx, me)
             completed = any(isinstance(c, LapCompleted) and c.car_index == me.index for c in ctx.changes)
+            sprint = world.is_sprint  # short and flat out: no stop planned, so no pit strategy talk
             if completed and world.lights_out and not me.in_pit_lane:
-                out += self._tyre_plan(ctx, me)
-                out += self._sc_window(ctx, me)
-                out += self._rivals_yet_to_stop(ctx, me)
+                if not sprint:
+                    out += self._tyre_plan(ctx, me)
+                    out += self._sc_window(ctx, me)
+                    out += self._rivals_yet_to_stop(ctx, me)
                 out += self._tyre_offset_attack(ctx, me)
                 out += self._rhythm(ctx, me)
                 out += self._nothing_to_prove_call(ctx, me)
                 out += self._ask_tyre_feedback(ctx, me)
-            out += self._safety_car_box(ctx, me)
+            if not sprint:
+                out += self._safety_car_box(ctx, me)
             out += self._safety_car_tyre_temps(ctx, me)
             if completed and world.lights_out:
                 out += self._ask_conditions(ctx, me)

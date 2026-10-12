@@ -119,6 +119,31 @@ def test_pit_window_box_call() -> None:
     assert any(c.key == "box" and c.priority == Priority.STRATEGY for c in calls)
 
 
+SPRINT_WEEKEND = (1, 10, 11, 12, 15, 5, 6, 7, 16)  # as the game sends it for Shanghai
+
+
+def test_sprint_has_no_pit_window_calls_and_its_own_name() -> None:
+    sim = Sim([RaceDetector()])
+    sim.set_session(pit_window_ideal_lap=10, pit_window_latest_lap=12, weekend=SPRINT_WEEKEND)
+    sim.lap(0, lap_num=9)
+    sim.tick()
+    assert sim.world.is_sprint and sim.world.session_name == "Sprint"
+    sim.complete_lap(0, 90_000)
+    assert not [c for c in sim.run(0.3) if c.key in ("pit_window", "box")]
+    sim.set_session(session_type=16)
+    sim.tick()
+    assert not sim.world.is_sprint and sim.world.session_name == "Race"
+
+
+def test_weekend_survives_packets_that_send_it_empty() -> None:
+    sim = Sim([])
+    sim.set_session(weekend=SPRINT_WEEKEND)
+    sim.tick()
+    sim.set_session(weekend=())
+    sim.tick()
+    assert sim.world.is_sprint
+
+
 # ---- flags --------------------------------------------------------------------------------------
 
 

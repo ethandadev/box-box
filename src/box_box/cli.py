@@ -172,7 +172,7 @@ async def _watch(source: AsyncIterator[bytes], quiet: bool) -> None:
             me = world.player
             if world.session and me and me.lap:
                 print(
-                    f"   {names.track_name(world.session.track_id)} {names.session_name(world.session_type)} | "
+                    f"   {names.track_name(world.session.track_id)} {world.session_name} | "
                     f"P{me.lap.position} lap {me.lap.lap_num} | {me.speed_kph:3.0f} km/h",
                     file=sys.stderr,
                 )

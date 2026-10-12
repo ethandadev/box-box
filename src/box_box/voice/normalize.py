@@ -79,6 +79,7 @@ def for_speech(text: str) -> str:
     t = re.sub(r"\b(\d{1,2}):(\d{2}(?:\.\d+)?)\b", _lap_time, t)
     t = re.sub(r"\bFP(\d)\b", lambda m: "F P " + ONES[int(m.group(1))], t)
     t = re.sub(r"\bP(\d{1,2})\b", lambda m: "P " + number_words(int(m.group(1))), t)
+    t = re.sub(r"\bSQ(\d)\b", lambda m: "S Q " + ONES[int(m.group(1))], t)
     t = re.sub(r"\bQ(\d)\b", lambda m: "Q " + ONES[int(m.group(1))], t)
     t = re.sub(r"(?<![\w.])([+-])?(\d+)\.(\d+)\b", _decimal, t)
     t = re.sub(r"\b(\d+)\b", lambda m: number_words(int(m.group(1))) if len(m.group(1)) <= 6 else m.group(1), t)

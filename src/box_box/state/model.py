@@ -8,7 +8,7 @@ and a list of `changes` (lap completed, pitted, retired...) that detectors consu
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from box_box.telemetry import names
 from box_box.telemetry.packets import (
@@ -235,6 +235,19 @@ class World:
         return self.session_type in names.RACE_SESSIONS
 
     @property
+    def weekend(self) -> tuple[int, ...]:
+        return self.session.weekend if self.session else ()
+
+    @property
+    def is_sprint(self) -> bool:
+        """The sprint race on a sprint weekend: short, flat out, normally no stop."""
+        return names.is_sprint(self.session_type, self.weekend)
+
+    @property
+    def session_name(self) -> str:
+        return names.session_name(self.session_type, self.weekend)
+
+    @property
     def is_time_trial(self) -> bool:
         return self.session_type == names.TIME_TRIAL
 
@@ -349,7 +362,10 @@ class World:
 
         match packet.id:
             case PacketId.SESSION:
-                self.session = packet.data  # type: ignore[assignment]
+                new: Session = packet.data  # type: ignore[assignment]
+                if not new.weekend and self.session is not None and self.session.weekend:
+                    new = replace(new, weekend=self.session.weekend)  # some packets send it empty: keep it
+                self.session = new
             case PacketId.LAP_DATA:
                 for car, lap in zip(self.cars, packet.data, strict=False):  # type: ignore[call-overload]
                     self._update_lap(car, lap)

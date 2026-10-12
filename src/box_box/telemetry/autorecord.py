@@ -46,7 +46,14 @@ class AutoRecorder:
     def current(self) -> Path | None:
         return self._path
 
-    def feed(self, data: bytes, session_uid: int, track_id: int | None, session_type: int | None) -> None:
+    def feed(
+        self,
+        data: bytes,
+        session_uid: int,
+        track_id: int | None,
+        session_type: int | None,
+        weekend: tuple[int, ...] = (),
+    ) -> None:
         now = time.monotonic()
         if session_uid == 0:
             return
@@ -57,7 +64,7 @@ class AutoRecorder:
         if self._writer is None:
             return
         if self._label is None and track_id is not None and session_type is not None:
-            self._label = f"{names.track_name(track_id)} {names.session_name(session_type)}"
+            self._label = f"{names.track_name(track_id)} {names.session_name(session_type, weekend)}"
         try:
             self._writer.write(time.monotonic_ns() - self._started_ns, data)
             if now - self._last_flush > 2.0:
