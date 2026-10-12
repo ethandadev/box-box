@@ -112,6 +112,7 @@ class CarState:
     _lap_start_fuel: float | None = None
     _lap_had_pit: bool = False
     _pit_stationary_ms: int = 0
+    _rewound: bool = False  # a flashback happened; the next lap packet re-baselines instead of completing a lap
 
     @property
     def name(self) -> str:
@@ -403,6 +404,7 @@ class World:
         for car in self.cars:
             if car.lap is not None:
                 car.laps = [r for r in car.laps if r.lap_num < car.lap.lap_num]
+                car._rewound = True
 
     def _ensure_cars(self, packet: Packet) -> None:
         data = packet.data
@@ -414,6 +416,15 @@ class World:
         car.lap = lap
         if prev is None:
             car._lap_start_fuel = car.status.fuel_in_tank if car.status else None
+            return
+        if car._rewound:
+            # Straight after a flashback the lap number can step back and "last lap" changes to an older
+            # lap's time. That isn't a lap being completed: drop the abandoned laps and carry on from here.
+            car._rewound = False
+            car.laps = [r for r in car.laps if r.lap_num < lap.lap_num]
+            valid = [r.lap_ms for r in car.laps if r.valid and r.lap_ms > 0]
+            car.best_lap_ms = min(valid) if valid else None
+            car._lap_had_pit = lap.pit_status != 0
             return
 
         # Pit lane transitions.

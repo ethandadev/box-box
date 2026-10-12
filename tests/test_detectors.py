@@ -235,6 +235,22 @@ def test_practice_pb_then_slower_lap_names_the_sector() -> None:
     assert len(calls) == 1 and "sector 2" in calls[0].text and "six tenths" in calls[0].text
 
 
+def test_flashback_across_the_line_is_not_a_new_lap() -> None:
+    """Rewinding over the line steps the lap number back and 'last lap' to an older time: no lap call,
+    and the abandoned lap stops counting as the best."""
+    sim = Sim([LapFeedbackDetector()], session=PRACTICE)
+    sim.lap(0, driver_status=1, lap_num=2)
+    sim.tick()
+    sim.complete_lap(0, 91_000)
+    sim.run(0.3)
+    sim.complete_lap(0, 90_000)  # a PB on lap 3...
+    sim.run(0.3)
+    sim.event("FLBK", value=5.0, detail={"frame": 10})
+    sim.lap(0, lap_num=3, last_lap_ms=91_000)  # ...that a flashback takes away
+    assert sim.run(0.5) == []
+    assert sim.world.player.best_lap_ms == 91_000
+
+
 def test_out_and_in_laps_get_no_feedback() -> None:
     sim = Sim([LapFeedbackDetector()], session=PRACTICE)
     sim.lap(0, driver_status=3)

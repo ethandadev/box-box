@@ -20,7 +20,7 @@ CONVERSATIONAL_KEYS = {"gaps", "pit_window", "rival", "tyre_plan", "sc_window", 
 
 # Calls that must sound exactly as written, whatever the natural-speech setting.
 CRISP_KEYS = {
-    "box", "last_chance", "quali_pos", "wing", "puncture", "sc", "red", "finish", "last_lap",
+    "box", "last_chance", "quali_pos", "wing", "puncture", "sc", "red", "finish", "last_lap", "greet",
     "traffic", "blue", "penalty", "lap_deleted", "yellow", "warning",
 }  # fmt: skip
 

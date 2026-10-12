@@ -77,6 +77,8 @@ class SessionDetector(Detector):
             if status == DriverStatus.IN_GARAGE:
                 return []
             self._greeted = True
+            if status == DriverStatus.FLYING_LAP:
+                return []  # straight onto a hot lap (or we joined mid-run): no radio check mid-lap
             if world.is_time_trial:
                 text = ctx.say("greet_time_trial", **common)
             elif world.is_qualifying:
