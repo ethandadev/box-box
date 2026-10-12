@@ -47,7 +47,6 @@ class RaceDetector(Detector):
         # Keep the one-off calls (start, finish); drop pending moves and gap trends from the rewound future.
         self._pending.clear()
         self._gap_history.clear()
-        self._last_gap_lap = 0  # the abandoned future's lap count would hold the next gap update back
 
     def check(self, ctx: Context) -> list[RadioCall]:
         world = ctx.world
@@ -139,6 +138,9 @@ class RaceDetector(Detector):
         every = max(1, ctx.settings.callouts.gap_every_laps)
         prev_hist = {k: list(v) for k, v in self._gap_history.items()}
         ahead, g_ahead, behind, g_behind = self._record_gaps(ctx, me, lap)
+        # A flashback can put us before the last update's lap: count from here rather than from the
+        # abandoned future (which would stall the updates) or from zero (a fresh call after every rewind).
+        self._last_gap_lap = min(self._last_gap_lap, lap)
         if lap - self._last_gap_lap < every:
             return []
         self._last_gap_lap = lap
