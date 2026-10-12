@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from box_box.voice.models import ModelDownloader, kokoro_files
+from box_box.voice.pronounce import to_phonemes
 
 log = logging.getLogger(__name__)
 
@@ -42,30 +43,97 @@ class Engine:
 
 class KokoroEngine(Engine):
     name = "kokoro"
+    MODELS = ("kokoro-v1.0.onnx", "kokoro-v1.0.int8.onnx")  # best first; int8 is the old, rougher download
 
     def __init__(self, files: ModelDownloader = kokoro_files) -> None:
         self.files = files
         self._kokoro = None
+        self.model: str | None = None
+
+    def available_model(self) -> str | None:
+        voices = self.files.path("voices-v1.0.bin")
+        if not voices.exists():
+            return None
+        for name in self.MODELS:
+            p = self.files.path(name)
+            if p.exists() and p.stat().st_size > 50_000_000:
+                return name
+        return None
+
+    @property
+    def upgradable(self) -> bool:
+        """Running on the rougher int8 model while the full one is now on disk."""
+        return self.model is not None and self.model != self.MODELS[0] and self.available_model() == self.MODELS[0]
+
+    def reload(self) -> None:
+        self._kokoro, self.model = None, None
 
     def load(self) -> None:
         if self._kokoro is not None:
             return
-        if not self.files.installed():
+        model = self.available_model()
+        if model is None:
             raise TTSUnavailable("Kokoro voice files aren't downloaded yet")
         try:
             from kokoro_onnx import Kokoro
         except Exception as e:  # noqa: BLE001
             raise TTSUnavailable(f"kokoro-onnx isn't installed: {e}") from e
-        kokoro = Kokoro(str(self.files.path("kokoro-v1.0.int8.onnx")), str(self.files.path("voices-v1.0.bin")))
+        kokoro = Kokoro(str(self.files.path(model)), str(self.files.path("voices-v1.0.bin")))
         kokoro.create("Radio check.", voice="am_michael", speed=1.0, lang="en-us")  # warm up: the first call is slow
-        self._kokoro = kokoro
+        self._kokoro, self.model = kokoro, model
+        log.info("Kokoro voice loaded (%s)", model)
 
     def synthesize(self, text: str, voice: str, speed: float) -> Audio:
         self.load()
         assert self._kokoro is not None
         lang = "en-gb" if voice.startswith("b") else "en-us"
-        samples, sr = self._kokoro.create(text, voice=voice, speed=speed, lang=lang)
-        return np.asarray(samples, dtype=np.float32), int(sr)
+        kokoro = self._kokoro
+        # Names in IPA (the dictionary mangles Leclerc, Ocon, Sainz...), everything else phonemized normally.
+        phonemes = to_phonemes(text, lambda chunk: kokoro.tokenizer.phonemize(chunk, lang))
+        samples, sr = kokoro.create(
+            phonemes, voice=voice, speed=speed, lang=lang, is_phonemes=True, sentence_pause=0.08, clause_pause=0.02
+        )
+        return tighten(np.asarray(samples, dtype=np.float32), int(sr)), int(sr)
+
+
+def tighten(audio: np.ndarray, sr: int, max_pause_s: float = 0.16, floor: float = 0.008) -> np.ndarray:
+    """Radio delivery is clipped: shorten long pauses the voice model leaves between phrases, and trim the
+    ends. Pauses keep a short fade so nothing clicks."""
+    if len(audio) < sr // 10:
+        return audio
+    frame = max(1, int(sr * 0.01))
+    n = len(audio) // frame
+    if n < 3:
+        return audio
+    energy = np.sqrt(np.mean(audio[: n * frame].reshape(n, frame) ** 2, axis=1))
+    loud = energy >= floor
+    if not loud.any():
+        return audio
+    first, last = int(np.argmax(loud)), int(n - 1 - np.argmax(loud[::-1]))
+    keep_frames = int(max_pause_s / 0.01)
+    pieces: list[np.ndarray] = []
+    i = first
+    while i <= last:
+        if loud[i]:
+            j = i
+            while j <= last and loud[j]:
+                j += 1
+            pieces.append(audio[i * frame : j * frame])
+            i = j
+        else:
+            j = i
+            while j <= last and not loud[j]:
+                j += 1
+            run = j - i
+            gap = audio[i * frame : (i + min(run, keep_frames)) * frame].copy()
+            if run > keep_frames and len(gap) > 4:
+                fade = min(len(gap) // 2, frame * 3)
+                gap[-fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
+            pieces.append(gap)
+            i = j
+    lead = audio[max(0, (first - 2) * frame) : first * frame]
+    tail = audio[(last + 1) * frame : min(len(audio), (last + 4) * frame)]
+    return np.concatenate([lead, *pieces, tail]).astype(np.float32)
 
 
 class WindowsEngine(Engine):
@@ -188,6 +256,10 @@ class TTS:
         self.active, self.status = "off", "no voice engine available"
         return "off"
 
+    def clear_cache(self) -> None:
+        with self._lock:
+            self._cache.clear()
+
     def submit(self, text: str, voice: str, speed: float, urgent: bool = True) -> Future[Audio]:
         key = (self.active, voice, round(speed, 2), text)
         with self._lock:
@@ -244,6 +316,11 @@ class TTS:
         except Exception as e:
             log.exception("speech synthesis failed with %s", engine.name)
             self.error = f"{engine.name}: {e}"
+            if engine.name not in ("kokoro", "windows", "off") and "kokoro" in self.engines:
+                try:  # a cloud voice failed (network, quota): say it with the local voice instead
+                    return self.engines["kokoro"].synthesize(text, voice, speed)
+                except Exception:  # noqa: BLE001
+                    log.warning("Kokoro fallback failed too")
             if engine.name != "windows" and "windows" in self.engines:
                 try:
                     return self.engines["windows"].synthesize(text, voice, speed)

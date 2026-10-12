@@ -19,7 +19,7 @@ from box_box.telemetry import names
 
 log = logging.getLogger(__name__)
 
-STAND_BY_AFTER_S = 1.5
+STAND_BY_AFTER_S = 4.0  # real engineers just answer after a beat; only a long wait gets "Stand by"
 FEEDBACK_WINDOW_S = 75.0  # how long after "How's the balance?" an answer counts as feedback
 QUESTION_START = re.compile(
     r"^(?:what|what's|whats|how|how's|hows|where|where's|who|who's|when|why|is|are|can|could|should|do|does|did|"

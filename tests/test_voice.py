@@ -26,7 +26,7 @@ from box_box.voice.tts import TTS, Engine, SilentEngine, TTSUnavailable
         ("FP1 at Monza", "F P one at Monza"),
         ("VSC, VSC", "V S C, V S C"),
         ("Tyres at 52 percent", "Tyres at fifty-two percent"),
-        ("+0.3", "plus zero point three"),
+        ("+0.3", "plus point three"),
     ],
 )
 def test_normalizer(text: str, spoken: str) -> None:
@@ -200,3 +200,25 @@ def test_tts_queue_prioritises_and_dedupes() -> None:
     assert order.index("say this now") < order.index("prefetch one")
     assert order.count("prefetch two") == 1
     tts.shutdown()
+
+
+def test_names_are_said_the_paddock_way() -> None:
+    from box_box.voice.pronounce import to_phonemes
+
+    fake = lambda chunk: f"[{chunk.strip()}]"  # noqa: E731 - stands in for the voice's dictionary
+    out = to_phonemes("Gap to Leclerc, 1.2. Ocon's closing at Eau Rouge.", fake)
+    assert "ləklˈɛɹ," in out and "oʊkˈɔnz" in out and "ˌoʊ ɹˈuːʒ" in out
+    assert out.startswith("[Gap to]") and "Leclerc" not in out
+
+
+def test_long_pauses_are_tightened() -> None:
+    import numpy as np
+
+    from box_box.voice.tts import tighten
+
+    sr = 24_000
+    tone = 0.3 * np.sin(np.linspace(0, 400 * np.pi, sr // 2)).astype(np.float32)
+    silence = np.zeros(sr // 2, dtype=np.float32)  # half a second of dead air between phrases
+    out = tighten(np.concatenate([silence, tone, silence, tone, silence]), sr)
+    assert len(out) < 1.4 * sr  # 2.5 s in, the dead air mostly gone
+    assert len(out) > 0.95 * sr  # both phrases kept

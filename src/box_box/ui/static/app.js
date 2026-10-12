@@ -143,7 +143,7 @@ function bindAutosaveForm(form) {
       if (input.type === "password" && input.value.startsWith("••••")) return;
       if (input.required && !input.value.trim()) return;
       queueSave(input.name, coerce(input));
-      if (input.name.startsWith("ai.")) refreshAiFields();
+      refreshAiFields();  // shows/hides fields that depend on this one (AI service, voice engine)
     });
   }
   refreshAiFields();
@@ -570,7 +570,7 @@ function updateWizardLive(st) {
       $("#voice-progress").value = m.percent;
       setText("#voice-download-text", m.state === "error"
         ? `Voice download failed: ${m.error}. Using the Windows voice for now.`
-        : `Downloading the voice (about 120 MB, first time only)… ${m.percent}%`);
+        : `Downloading the voice (about 350 MB, first time only)… ${m.percent}%`);
     }
   }
   if (state.step === "game") {
@@ -682,7 +682,7 @@ function bindWizard() {
     }
   });
   $("#clear-btn").addEventListener("click", () => api("/api/ptt/clear", {}).then(() => toast("Push-to-talk cleared")));
-  $("#udp-btn").addEventListener("click", () => api("/api/ptt/udp", { action: 1 }).then(() => toast("Using the game's UDP Action 1 (toggle mode)")));
+  $("#udp-btn").addEventListener("click", () => api("/api/ptt/udp", { action: 1 }).then(() => toast("Using the game's UDP Action 1 (hold to talk)")));
   $("#ai-test").addEventListener("click", async () => {
     await flushSave();
     const el = $("#ai-status");

@@ -49,11 +49,14 @@ def _lap_time(m: re.Match[str]) -> str:
 def _decimal(m: re.Match[str]) -> str:
     sign, whole, frac = m.group(1) or "", m.group(2), m.group(3)
     prefix = "plus " if sign == "+" else "minus " if sign == "-" else ""
-    return prefix + number_words(int(whole)) + " point " + " ".join(ONES[int(d)] for d in frac)
+    digits = " ".join(ONES[int(d)] for d in frac)
+    if int(whole) == 0:
+        return prefix + "point " + digits  # engineers say "point eight", never "zero point eight"
+    return prefix + number_words(int(whole)) + " point " + digits
 
 
 def for_speech(text: str) -> str:
-    t = text
+    t = text.replace("...", ",")  # long pauses sound like the voice is stuck on a word
     t = re.sub(r"\b(\d{1,2}):(\d{2}(?:\.\d+)?)\b", _lap_time, t)
     t = re.sub(r"\bFP(\d)\b", lambda m: "F P " + ONES[int(m.group(1))], t)
     t = re.sub(r"\bP(\d{1,2})\b", lambda m: "P " + number_words(int(m.group(1))), t)

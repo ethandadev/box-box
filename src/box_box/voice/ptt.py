@@ -199,6 +199,7 @@ class PushToTalk:
         self._ui_down = False
         self._udp_buttons = 0
         self._udp_at = 0.0
+        self._udp_repeats = False  # does the game resend BUTN while a button is held?
         self._raw = False
         self.active = False
         self._stuck = False  # ignore the input until it reads released (see force_release)
@@ -230,9 +231,13 @@ class PushToTalk:
         self._ui_down = down
 
     def game_buttons(self, mask: int) -> None:
-        """From the game's BUTN event (sent repeatedly while any button is held)."""
+        """From the game's BUTN event. Some game versions resend it while a button is held, others only
+        when the buttons change; learn which, so hold-to-talk works either way."""
+        now = time.monotonic()
+        if mask and mask == self._udp_buttons and now - self._udp_at < 1.0:
+            self._udp_repeats = True
         self._udp_buttons = mask
-        self._udp_at = time.monotonic()
+        self._udp_at = now
 
     def _raw_pressed(self) -> bool:
         b = self.binding
@@ -244,8 +249,11 @@ class PushToTalk:
             return bool(b.key) and self.keyboard.pressed(b.key)
         if b.kind == "udp_action":
             bit = UDP_ACTION_BASE << (b.udp_action - 1)
-            # BUTN repeats every ~0.4 s while held; treat silence as released.
-            return bool(self._udp_buttons & bit) and time.monotonic() - self._udp_at < 0.7
+            if not self._udp_buttons & bit:
+                return False
+            # If the game repeats BUTN while held, silence means released (a lost release packet can't
+            # leave the radio keyed). If it only reports changes, the bit stays set until the release.
+            return not self._udp_repeats or time.monotonic() - self._udp_at < 0.7
         return False
 
     def _run(self) -> None:

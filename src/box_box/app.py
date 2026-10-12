@@ -31,6 +31,7 @@ from box_box.telemetry import names
 from box_box.telemetry.autorecord import AutoRecorder
 from box_box.telemetry.packets import Decoder, PacketId
 from box_box.telemetry.sources import PortUnavailable, bind_udp, file_source, udp_source
+from box_box.voice.cloud import cloud_engines
 from box_box.voice.mic import Microphone
 from box_box.voice.models import kokoro_files
 from box_box.voice.player import AudioPlayer
@@ -93,8 +94,11 @@ class Engine:
         self.say = Phrasebook(self.settings.engineer.personality)
         self.director = RadioDirector(lambda: self.settings)
         self.tts = tts or TTS()
+        if tts is None:
+            self.tts.engines.update(cloud_engines(lambda: self.settings))
         self.player = player or AudioPlayer()
         self.speaker = Speaker(self.tts, self.player, lambda: self.settings, self.bus)
+        self.speaker.has_followup = self._reply_continues
         self.mic = mic or Microphone()
         self.stt = stt or SpeechToText()
         self.memory = memory or Memory()
@@ -347,6 +351,11 @@ class Engine:
             self._ai_check.cancel()
         self._ai_check = self._loop.create_task(self.brain.check(), name="ai-check")
 
+    def _reply_continues(self, call: RadioCall) -> bool:
+        """Is the next sentence of this reply already queued (so the radio stays keyed between them)?"""
+        prefix = call.key.rsplit(":", 1)[0] + ":"
+        return any(c.key.startswith(prefix) and c.key != call.key for c in self.director.pending())
+
     def _recent_radio(self) -> list[str]:
         """What the engineer said on his own in the last few minutes, for the AI's context."""
         cutoff = time.time() - 240
@@ -490,7 +499,11 @@ class Engine:
         self._tts_wanted = engine
         if engine == "kokoro" and not self.downloader.installed():
             self.downloader.start()  # housekeeping picks it up when it's done
-            self._choose_voice("windows", status="downloading the voice (first run only)")
+            kokoro = self.tts.engines.get("kokoro")
+            if kokoro is not None and getattr(kokoro, "available_model", lambda: None)():
+                self._choose_voice("kokoro")  # the older voice model works meanwhile; upgraded when the download ends
+            else:
+                self._choose_voice("windows", status="downloading the voice (first run only)")
             return
         self._choose_voice(engine)
 
@@ -533,7 +546,24 @@ class Engine:
         try:
             if old.voice.output_device != new.voice.output_device:
                 self.player.open(new.voice.output_device)
-            if old.voice.engine != new.voice.engine:
+            cloud_changed = (
+                old.voice.cloud_voice,
+                old.voice.style,
+                old.voice.elevenlabs_key,
+                old.ai.openai_key,
+                old.ai.gemini_key,
+            ) != (
+                new.voice.cloud_voice,
+                new.voice.style,
+                new.voice.elevenlabs_key,
+                new.ai.openai_key,
+                new.ai.gemini_key,
+            )
+            if cloud_changed:
+                self.tts.clear_cache()  # cached lines were spoken with the old voice or style
+            if old.voice.engine != new.voice.engine or (
+                cloud_changed and new.voice.engine in ("openai", "elevenlabs", "gemini")
+            ):
                 self._setup_voice()
             if old.mic.input_device != new.mic.input_device:
                 self.mic.open(new.mic.input_device)
@@ -573,6 +603,12 @@ class Engine:
                     and self.downloader.installed()
                     and not self.tts.status.startswith("loading")
                 ):
+                    self._choose_voice("kokoro")
+                kokoro = self.tts.engines.get("kokoro")
+                if self.tts.active == "kokoro" and getattr(kokoro, "upgradable", False):
+                    log.info("switching to the full-quality voice model")
+                    kokoro.reload()  # type: ignore[union-attr]
+                    self.tts.clear_cache()
                     self._choose_voice("kokoro")
                 if self.player.error and "disconnected" in self.player.error:
                     self.player.open(self.settings.voice.output_device)

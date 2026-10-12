@@ -45,9 +45,11 @@ class Humanizer:
         self._calls += 1
         if self._since_slip <= COOLDOWN.get(level, 3) or self._rng.random() >= rate:
             return text
-        options = [self._filler, self._restart, self._mate]
+        # "uh"/"er" and trailing-off restarts read well but a synthetic voice can't say them convincingly,
+        # so the slips are the ones that survive text-to-speech: openers, "copy, copy", "mate", corrections.
+        options = [self._okay_so, self._mate]
         if reply:
-            options = [self._filler, self._yeah, self._copy_copy, self._mate]
+            options = [self._yeah, self._copy_copy, self._mate]
         else:
             if key.split(":")[0] in NUMBER_SLIP_KEYS and self._calls - self._last_number_slip >= NUMBER_SLIP_EVERY:
                 options.append(self._number_slip)
@@ -75,6 +77,19 @@ class Humanizer:
         if 4 <= i <= 40:
             return text[: i + 2] + f"{filler}, " + text[i + 2 :]
         return None
+
+    def _okay_so(self, text: str) -> str | None:
+        """'Okay, so gap to Leclerc...': a spoken lead-in, without a stumble the voice can't pull off."""
+        if text.startswith(("Okay", "So", "And", "Just for info", "Yeah")):
+            return None
+        first, _, rest = text.partition(" ")
+        if not rest or not first[:1].isalpha():
+            return None
+        from box_box.engineer.radio import LOWERCASE_OK
+
+        if first.lower().strip(",.") in LOWERCASE_OK:
+            first = first.lower()
+        return self._rng.choice(["Okay, so ", "So, "]) + first + " " + rest
 
     def _restart(self, text: str) -> str | None:
         """'So, uh... gap to Leclerc...' — a false start before the real message."""
@@ -117,7 +132,7 @@ class Humanizer:
         if m:
             wrong_tenth = (int(m.group(3)) + self._rng.choice([1, -1])) % 10
             wrong = f"{m.group(1)}:{m.group(2)}.{wrong_tenth}"
-            return text[: m.start()] + f"{wrong}... sorry, {m.group(0)}" + text[m.end() :]
+            return text[: m.start()] + f"{wrong}, sorry, {m.group(0)}" + text[m.end() :]
         m = _DECIMAL.search(text)
         if m:
             whole, tenth = int(m.group(1)), int(m.group(2))
@@ -125,7 +140,7 @@ class Humanizer:
             if not 0 <= wrong_tenth <= 9:
                 wrong_tenth = tenth - 1 if tenth > 0 else tenth + 1
             wrong = f"{whole}.{wrong_tenth}"
-            return text[: m.start()] + f"{wrong}... sorry, {m.group(0)}" + text[m.end() :]
+            return text[: m.start()] + f"{wrong}, sorry, {m.group(0)}" + text[m.end() :]
         return None
 
     def _compound_slip(self, text: str) -> str | None:
@@ -135,7 +150,7 @@ class Humanizer:
             if m:
                 wrong = self._rng.choice([w for w in COMPOUND_WORDS if w != word])
                 said = m.group(0)
-                return text[: m.start()] + f"{said[:3]} {wrong}... sorry, new {word}" + text[m.end() :]
+                return text[: m.start()] + f"{said[:3]} {wrong}, sorry, new {word}" + text[m.end() :]
         return None
 
 

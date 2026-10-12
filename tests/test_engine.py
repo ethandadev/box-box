@@ -123,7 +123,7 @@ def test_practice_session_end_to_end_over_udp(tmp_path: Path) -> None:
 
     asyncio.run(scenario())
     lines = radio_lines(engine)
-    assert any("Radio check, Ethan" in line or "Ethan" in line and "Melbourne" in line for line in lines), lines
+    assert any("radio check" in line.lower() and ("Melbourne" in line or "Ethan" in line) for line in lines), lines
     assert any("Albon" in line and "pits" in line for line in lines), lines
     queued = [e["text"] for e in engine.bus.history if e["type"] == "queued"]
     assert any("1:26.8" in q and "best" in q.lower() for q in queued), queued

@@ -27,11 +27,12 @@ class ModelFile:
 
 
 KOKORO_FILES = [
+    # The full-precision model: the int8 one is smaller but audibly rougher (metallic, smeared vowels).
     ModelFile(
-        "kokoro-v1.0.int8.onnx",
-        KOKORO_BASE + "kokoro-v1.0.int8.onnx",
-        "6e742170d309016e5891a994e1ce1559c702a2ccd0075e67ef7157974f6406cb",
-        92_361_271,
+        "kokoro-v1.0.onnx",
+        KOKORO_BASE + "kokoro-v1.0.onnx",
+        "7d5df8ecf7d4b1878015a32686053fd0eebe2bc377234608764cc0ef3636a6c5",
+        325_532_387,
     ),
     ModelFile(
         "voices-v1.0.bin",

@@ -88,16 +88,40 @@ class VoiceSettings:
         "Voice engine",
         "Kokoro is a natural neural voice that runs on your PC. Windows uses the built-in voice as a backup.",
         choices=[
-            ("kokoro", "Kokoro (natural, recommended)"),
+            ("kokoro", "Kokoro (on your PC, free)"),
+            ("openai", "OpenAI voice (most natural, uses your OpenAI key)"),
+            ("elevenlabs", "ElevenLabs (very natural, needs an ElevenLabs key)"),
+            ("gemini", "Google Gemini voice (natural, free tier, uses your Gemini key)"),
             ("windows", "Windows built-in"),
             ("off", "Off (text only)"),
         ],
     )
-    voice: str = opt("am_michael", "Voice", "", choices=VOICES)
-    speed: float = opt(1.08, "Speaking speed", "", min=0.8, max=1.4, step=0.02)
+    voice: str = opt("am_michael", "Voice", "", choices=VOICES, when={"engine": ["kokoro"]})
+    cloud_voice: str = opt(
+        "",
+        "Cloud voice",
+        "Leave empty for a good default. OpenAI: ash, onyx, echo, ballad, sage, verse. Gemini: Charon, Orus, "
+        "Fenrir, Puck. ElevenLabs: a voice ID from your voice library.",
+        when={"engine": ["openai", "elevenlabs", "gemini"]},
+    )
+    style: str = opt(
+        "",
+        "How he should sound",
+        "Directions for the OpenAI and Gemini voices, e.g. 'calm British race engineer, quick and dry'. "
+        "Leave empty for a classic F1 engineer.",
+        when={"engine": ["openai", "gemini"]},
+    )
+    elevenlabs_key: str = opt(
+        "",
+        "ElevenLabs API key",
+        "From elevenlabs.io (free tier works). Stored only on this PC.",
+        secret=True,
+        when={"engine": ["elevenlabs"]},
+    )
+    speed: float = opt(1.15, "Speaking speed", "", min=0.8, max=1.4, step=0.02)
     volume: float = opt(0.9, "Volume", "", min=0.0, max=1.0, step=0.05)
     radio_effect: float = opt(
-        0.7, "Radio effect", "0 is studio-clean, 1 is a crackly team radio.", min=0.0, max=1.0, step=0.05
+        0.5, "Radio effect", "0 is studio-clean, 1 is a crackly team radio.", min=0.0, max=1.0, step=0.05
     )
     beeps: bool = opt(True, "Radio beeps", "Play the click and beep when he keys the radio.")
     output_device: str = opt(
@@ -241,9 +265,9 @@ class Settings:
     def to_dict(self, redact: bool = False) -> dict[str, Any]:
         data = dataclasses.asdict(self)
         if redact:
-            for key in SECRET_FIELDS:
-                if data["ai"][key]:
-                    data["ai"][key] = REDACTED + data["ai"][key][-4:]
+            for section, key in SECRETS:
+                if data[section][key]:
+                    data[section][key] = REDACTED + data[section][key][-4:]
         return data
 
     @property
@@ -273,6 +297,12 @@ class Settings:
 
 SECTIONS = [f.name for f in fields(Settings) if f.name not in ("version", "onboarded")]
 SECRET_FIELDS = [f.name for f in fields(AISettings) if f.metadata.get("secret")]
+SECRETS = [
+    (section, f.name)
+    for section in SECTIONS
+    for f in fields(type(getattr(Settings(), section)))
+    if f.metadata.get("secret")
+]
 REDACTED = "••••"
 
 
@@ -309,6 +339,15 @@ def from_dict(data: dict[str, Any]) -> Settings:
     if not isinstance(data, dict):
         return s
     s.onboarded = bool(data.get("onboarded", False))
+    voice = data.get("voice")
+    if isinstance(voice, dict) and (voice.get("speed") == 1.08 or voice.get("radio_effect") == 0.7):
+        # Old defaults: too slow and drawn-out, and too much distortion. Untouched ones move to the new defaults.
+        voice = {**voice}
+        if voice.get("speed") == 1.08:
+            voice["speed"] = 1.15
+        if voice.get("radio_effect") == 0.7:
+            voice["radio_effect"] = 0.5
+        data = {**data, "voice": voice}
     for section in SECTIONS:
         target = getattr(s, section)
         incoming = data.get(section)
@@ -325,6 +364,7 @@ def merge(settings: Settings, patch: dict[str, Any]) -> Settings:
     data = settings.to_dict()
     for key, value in patch.items():
         if key in SECTIONS and isinstance(value, dict):
+            value = {k: v for k, v in value.items() if not str(v).startswith(REDACTED)}
             if key == "ai":
                 # Keep stored keys when the UI sends back the redacted placeholder.
                 value = {k: v for k, v in value.items() if not str(v).startswith(REDACTED)}

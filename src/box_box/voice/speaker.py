@@ -19,6 +19,14 @@ log = logging.getLogger(__name__)
 SYNTH_TIMEOUT_S = 12.0
 
 
+def reply_part(call: RadioCall) -> int | None:
+    """Which sentence of a spoken reply this is ("reply:<id>:<n>"), or None for a standalone call."""
+    parts = call.key.split(":")
+    if len(parts) == 3 and parts[0] == "reply" and parts[2].isdigit():
+        return int(parts[2])
+    return None
+
+
 class Speaker:
     def __init__(self, tts: TTS, player: AudioPlayer, settings: Callable[[], Settings], bus: Bus | None = None) -> None:
         self.tts = tts
@@ -26,6 +34,7 @@ class Speaker:
         self._settings = settings
         self.bus = bus or Bus()
         self.speaking: RadioCall | None = None
+        self.has_followup: Callable[[RadioCall], bool] = lambda call: False  # more of the same reply queued?
         self._generation = 0  # bumped by stop(); a call whose generation is stale must not play
         self.spoken = 0
 
@@ -76,7 +85,15 @@ class Speaker:
             if generation != self._generation or len(samples) == 0:
                 return False
             try:
-                audio = fx.radio(samples, sr, s.voice.radio_effect, beeps=s.voice.beeps)
+                part = reply_part(call)
+                audio = fx.radio(
+                    samples,
+                    sr,
+                    s.voice.radio_effect,
+                    beeps=s.voice.beeps,
+                    open_beep=part is None or part == 0,
+                    close_beep=part is None or not self.has_followup(call),
+                )
             except Exception:  # noqa: BLE001 - a broken effect must never silence the engineer
                 log.exception("radio effect failed; playing the dry voice")
                 audio = samples

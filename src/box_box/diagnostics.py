@@ -93,7 +93,7 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
                 "Engineer's voice",
                 "warn",
                 f"Downloading the voice model, {model['percent']}%.",
-                "Wait a minute (about 120 MB, first run only).",
+                "Wait a minute (about 350 MB, first run only).",
             )
         )
     elif s.voice.engine == "kokoro" and model["state"] == "error":

@@ -186,16 +186,24 @@ def test_conversation_routes_and_falls_back() -> None:
     conv = Conversation(brain, acts, lambda: settings)
     assert asyncio.run(collect(conv, "what's the gap")) == ["Leclerc is 1.3 ahead."] and not client.requests
 
-    # Open question: Claude, with "Stand by" if it's slow.
+    # Open question: the AI answers after a beat, no filler...
     brain, client, settings = make_brain(
         [{"delay": 1.8, "text": ["Two stop could work. ", "Tyres are holding though."]}]
     )
     conv = Conversation(brain, acts, lambda: settings)
     out = asyncio.run(collect(conv, "should we try a two stop"))
-    assert out[0] in ("Stand by.", "Stand by, checking.", "Let me check.") and out[1:] == [
-        "Two stop could work.",
-        "Tyres are holding though.",
-    ]
+    assert out == ["Two stop could work.", "Tyres are holding though."]
+
+    # ...and only a really slow answer gets "Stand by" first.
+    from box_box.brain import conversation as conv_mod
+
+    conv_mod.STAND_BY_AFTER_S, saved = 0.3, conv_mod.STAND_BY_AFTER_S
+    try:
+        brain, client, settings = make_brain([{"delay": 0.8, "text": ["Two stop could work."]}])
+        out = asyncio.run(collect(Conversation(brain, acts, lambda: settings), "should we try a two stop"))
+        assert out[0].startswith("Stand by") and out[1:] == ["Two stop could work."]
+    finally:
+        conv_mod.STAND_BY_AFTER_S = saved
 
     # Claude fails: fall back to the local answer.
     brain, client, settings = make_brain([])

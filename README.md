@@ -103,6 +103,12 @@ checks it end to end. Cloud models cost cents per race.
 | **Qualifying** | As practice, plus: each new run with the clock and out-lap job · the drop-zone warning and "you're safe" · "last chance" on your final lap · lap deleted for track limits · **only traffic and safety calls on your push lap** |
 | **Race** | Grid tyre brief and lap-one summary · plan A / plan B / "plan A plus three" from your tyre deg · "happy to push on these tyres" · the safety-car window, and box under the safety car · rivals yet to stop and tyre offsets · gaps and whether you're closing · within a second of the car ahead · overtakes made and lost · cars around you pitting (undercut threat) · pit window and "box box" · your stop time and position · tyre wear, overheating, punctures, damage · fuel saving · rain on the radar, rain starting, wrong tyres · 2026 overtake mode and low battery · safety car / VSC / red flag / green · penalties and track-limit warnings · laps to go · last lap · the result |
 
+**Voices.** Kokoro runs on your PC for free, with a pronunciation dictionary for the grid and the
+corners (luh-CLAIR, oh-CON, Eau Rouge) and clipped, radio-paced delivery. For a properly human voice pick
+**OpenAI**, **ElevenLabs** or **Google Gemini** in Settings → Voice: OpenAI and Gemini take plain-English
+directions ("calm British race engineer, quick and dry") and reuse your AI keys; Gemini has a free tier.
+If a cloud voice fails mid-session, that line is spoken with Kokoro instead.
+
 He sounds like a person, not a script: now and then an "uh", a restart ("Okay, so..."), a "mate", or a
 quick self-correction like *"P9 2.1... sorry, 2.2 ahead"* (the correction is always the real number).
 Never on urgent calls. **Settings → Engineer → Natural speech** sets it to Off, Subtle (default) or Very human.
@@ -124,7 +130,7 @@ something to paste when asking for help.
 | He doesn't hear me | Pick your mic in Setup → Microphone and watch the level meter. Windows Settings → Privacy → Microphone must allow desktop apps. |
 | Wheel button not detected | Make sure the wheel base is on (it can be plugged in any time), then Setup → **Learn button**. Or bind a wheel button to *UDP Action 1* in F1 25's controls and use that. |
 | Speech recognition is slow | Diagnostics → **Fix** on Speech recognition installs NVIDIA GPU support (about 1 GB, one time). |
-| The voice sounds robotic | That's the Windows backup voice while the natural voice downloads (about 120 MB). It switches automatically when ready. |
+| The voice sounds robotic | That's the Windows backup voice while the natural voice downloads (about 350 MB). It switches automatically when ready. |
 | Game on another PC or a console | Settings → Telemetry → "Accept telemetry from other devices", and send to this PC's IP address. |
 
 Logs live in `%LOCALAPPDATA%\BoxBox\logs` (Diagnostics → **Open logs folder**).

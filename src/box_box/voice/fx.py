@@ -63,28 +63,41 @@ def squelch_close(sr: int, rng: np.random.Generator) -> np.ndarray:
     return np.concatenate([np.zeros(int(sr * 0.04), dtype=np.float32), tone(sr, 1200, 70), tail])
 
 
-def radio(samples: np.ndarray, sr: int, intensity: float, beeps: bool = True, seed: int | None = None) -> np.ndarray:
-    """Process a mono float32 voice clip into a team-radio transmission."""
+def radio(
+    samples: np.ndarray,
+    sr: int,
+    intensity: float,
+    beeps: bool = True,
+    seed: int | None = None,
+    open_beep: bool = True,
+    close_beep: bool = True,
+) -> np.ndarray:
+    """Process a mono float32 voice clip into a team-radio transmission.
+
+    A reply spoken in several pieces is one transmission: only the first piece opens with the beep and
+    only the last closes with it."""
     rng = np.random.default_rng(seed)
     x = _normalize(np.asarray(samples, dtype=np.float32))
     i = float(np.clip(intensity, 0.0, 1.0))
     if i > 0 and len(x) >= 16:
-        low, high = 200 + 250 * i, 6500 - 3300 * i
+        # Real F1 radio is mostly band-limited and heavily compressed, with only a little grit. Strong
+        # overdrive and crackle make a synthetic voice sound broken rather than "radio".
+        low, high = 220 + 180 * i, 7000 - 3500 * i
         wet = _bandpass(x, sr, low, high)
         wet = _compress(wet, sr)
-        drive = 1.0 + 4.0 * i
+        drive = 1.0 + 1.6 * i
         wet = np.tanh(wet * drive) / np.tanh(drive)
-        noise = _bandpass(rng.standard_normal(len(x)).astype(np.float32), sr, 800, 4000) * 0.02 * i
+        noise = _bandpass(rng.standard_normal(len(x)).astype(np.float32), sr, 800, 4000) * 0.01 * i
         wet = wet + noise
-        if i > 0.5:  # occasional crackle, like a weak signal
-            crackles = rng.random(len(x)) < (i - 0.5) * 0.0004
-            wet = wet + crackles * rng.standard_normal(len(x)) * 0.3
+        if i > 0.85:  # a weak-signal crackle only at the very top of the range
+            crackles = rng.random(len(x)) < (i - 0.85) * 0.0004
+            wet = wet + crackles * rng.standard_normal(len(x)) * 0.2
         x = (1 - i) * x + i * _normalize(wet, 0.8)
     parts = [np.zeros(int(sr * 0.03), dtype=np.float32)]
-    if beeps:
+    if beeps and open_beep:
         parts.append(squelch_open(sr, rng) * (0.4 + 0.6 * i))
     parts.append(x.astype(np.float32))
-    if beeps:
+    if beeps and close_beep:
         parts.append(squelch_close(sr, rng) * (0.4 + 0.6 * i))
     out = np.concatenate(parts)
     return np.clip(out, -1.0, 1.0).astype(np.float32)

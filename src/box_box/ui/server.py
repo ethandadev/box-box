@@ -226,7 +226,7 @@ class UIServer:
     async def ptt_udp(self, request: web.Request) -> web.Response:
         body = await request.json()
         action = max(1, min(12, int(body.get("action", 1))))
-        self.engine.store.update({"ptt": {"kind": "udp_action", "udp_action": action, "mode": "toggle"}})
+        self.engine.store.update({"ptt": {"kind": "udp_action", "udp_action": action, "mode": "hold"}})
         return _json({"ok": True})
 
     async def ptt_clear(self, request: web.Request) -> web.Response:
