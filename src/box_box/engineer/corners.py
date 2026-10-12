@@ -52,12 +52,14 @@ class Finding:
         unit = "km/h"
         if units == "imperial":
             speed, unit = speed * 0.621, "mph"
-        detail = {
-            "apex": f", apex speed {round(speed)} {unit} down",
-            "entry": ", you're braking early",
-            "exit": ", late on the power on the exit",
-        }.get(self.reason, "")
-        return f"Lost {tenths(self.loss_s)} at {where}{detail}."
+        t = tenths(self.loss_s)
+        if self.reason == "apex":
+            return f"Lost {t} at {where}. Apex speed's {round(speed)} {unit} down, that's the main one."
+        if self.reason == "entry":
+            return f"Lost {t} at {where}, braking a touch early."
+        if self.reason == "exit":
+            return f"Lost {t} on the exit of {where}. Mid to exit, you're late on the throttle."
+        return f"Lost {t} at {where}."
 
 
 class CornerCoach:

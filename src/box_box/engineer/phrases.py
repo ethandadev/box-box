@@ -178,7 +178,7 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "fired_up": ["Safety car in this lap! Get ready!"],
     },
     "vsc_ending": {
-        "calm": ["VSC ending. Get ready to go.", "VSC ending, be ready."],
+        "calm": ["VSC ending. Get ready to go.", "VSC ending, VSC ending. Just watch your dash."],
     },
     "green_flag": {
         "calm": ["Green, green, green. Racing.", "And we're green. Go."],
@@ -375,11 +375,16 @@ PHRASES: dict[str, dict[str, list[str]]] = {
             "Overtake available.",
             "You've got overtake mode, {name} is within range.",
             "Overtake is on. Press and hold.",
+            "Overtake available. Press and hold when you're ready.",
         ],
         "fired_up": ["Overtake is on! Use it!"],
     },
     "battery_low": {
-        "calm": ["Battery's low. Harvest where you can.", "Battery low, recharge mode on the straights."],
+        "calm": [
+            "Battery's low. Harvest where you can.",
+            "Battery low, recharge mode on the straights.",
+            "Recharge on, please. Battery's low.",
+        ],
     },
     # ---- laps & sectors -------------------------------------------------------------------------
     "lap_pb": {
@@ -501,10 +506,15 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": [
             "Rain expected in about {minutes} minutes, {pct} percent chance.",
             "Radar shows rain in {minutes} minutes. {pct} percent.",
+            "Possible rain in {minutes} minutes, {pct} percent. We'll keep you updated.",
         ],
     },
     "rain_started": {
-        "calm": ["It's starting to rain. {intensity}.", "Rain now, {intensity}. Careful on the painted lines."],
+        "calm": [
+            "It's starting to rain. {intensity}.",
+            "Rain now, {intensity}. Careful on the painted lines.",
+            "Rain's arrived, {intensity}. Kerbs and white lines will be slippery.",
+        ],
     },
     "rain_stopping": {
         "calm": ["Rain is stopping. Track will dry from here.", "Rain's easing off. Watch for a drying line."],
@@ -582,6 +592,7 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": [
             "Just for info, we're in the window for a safety car. If it comes out, we box.",
             "We're in the safety car window now. Safety car or VSC, we're coming in.",
+            "Safety car window is open. If it comes out, we box.",
         ],
     },
     "box_under_sc": {

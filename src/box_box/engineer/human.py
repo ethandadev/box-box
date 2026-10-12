@@ -22,7 +22,7 @@ COOLDOWN = {"off": 99, "subtle": 4, "human": 2}
 NUMBER_SLIP_EVERY = 12  # a misspoken number at most once in this many transmissions
 
 # Calls where a misspoken number is harmless and immediately corrected.
-NUMBER_SLIP_KEYS = {"gaps", "lap", "pit_done", "rival", "time_left", "laps_to_go", "tyre_plan"}
+NUMBER_SLIP_KEYS = {"gaps", "pit_done", "rival", "time_left", "laps_to_go", "tyre_plan"}  # never a lap time
 COMPOUND_WORDS = ["softs", "mediums", "hards"]
 
 _DECIMAL = re.compile(r"(?<![\d:.])(\d+)\.(\d)(?!\d)")

@@ -9,6 +9,8 @@ from box_box.engineer.session import FINAL_QUALI
 from box_box.state.model import CarState, LapCompleted, LapRecord, PitEntered
 from box_box.telemetry.packets import DriverStatus
 
+COACH_MAX_DELTA_S = 1.5  # slower than this, the lap had traffic or a moment: corner detail would mislead
+
 
 class LapFeedbackDetector(Detector):
     name = "laps"
@@ -79,7 +81,7 @@ class LapFeedbackDetector(Detector):
         delta = (rec.lap_ms - best_before) / 1000.0
         if delta < 0.15:
             text = ctx.say("lap_close", time=t, delta=fine_delta(delta))
-        elif self._finding is not None:
+        elif self._finding is not None and delta < COACH_MAX_DELTA_S:
             # Corner level: where, how much, and why.
             text = ctx.say(
                 "lap_slower_corner", time=t, delta=tenths(delta), finding=self._finding.say(ctx.settings.engineer.units)
