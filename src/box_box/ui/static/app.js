@@ -140,7 +140,13 @@ function bindAutosaveForm(form) {
     if (input.type === "password") {
       // A saved key shows as ••••abcd; clicking in clears it so a pasted key replaces it cleanly.
       input.addEventListener("focus", () => { if (input.value.startsWith("••••")) input.value = ""; });
-      input.addEventListener("blur", () => { if (!input.value) input.value = getSetting(input.name) || ""; });
+      input.addEventListener("blur", () => {
+        if (input.value) return;
+        const saved = getSetting(input.name) || "";
+        // Left empty on purpose: offer to remove the key (the only way to clear one).
+        if (saved && confirm("Remove this saved key?")) queueSave(input.name, "");
+        else input.value = saved;
+      });
     }
     const evt = input.type === "range" ? "input" : "change";
     input.addEventListener(evt, () => {

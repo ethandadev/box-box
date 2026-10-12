@@ -260,6 +260,7 @@ def test_only_short_direct_questions_get_the_instant_telemetry_answer() -> None:
     from box_box.brain.conversation import quick_question
 
     assert quick_question("What's the gap?") and quick_question("How are the tyres?")
+    assert quick_question("gap to Leclerc") and quick_question("Fuel.")  # speech-to-text drops the "?"
     assert not quick_question("My tyres are over-heating, man.")  # a complaint: the AI deals with it
     assert not quick_question("What's the optimal temperature for the inters?")
     assert not quick_question("Shall we go for softs or mediums?")
@@ -269,6 +270,12 @@ def test_only_short_direct_questions_get_the_instant_telemetry_answer() -> None:
 def test_a_lone_closing_think_tag_drops_the_reasoning_before_it() -> None:
     from box_box.brain.backends import SentenceStream
 
-    out = SentenceStream(hold=600)
-    said = out.feed("The user asks about the gap. I'll answer briefly.</think>Gap is 1.2.") + out.flush()
+    out = SentenceStream(hold=True)  # a model known to do this: nothing said until the reasoning closes
+    reasoning = "The user asks about the gap. " * 40
+    said = out.feed(reasoning + "I'll answer briefly.</think>Gap is 1.2.") + out.flush()
     assert said == ["Gap is 1.2."]
+    first = SentenceStream()  # not known yet: the unsaid part is dropped and the model gets remembered
+    said = first.feed("Thinking it over, gap") + first.feed("</think>Gap is 1.2.") + first.flush()
+    assert said == ["Gap is 1.2."] and first.saw_lone_think
+    plain = SentenceStream()  # an ordinary answer still streams sentence by sentence
+    assert plain.feed("Gap is 1.2. He's on") == ["Gap is 1.2."]

@@ -37,7 +37,10 @@ SAME_TEXT_S = 120.0  # never the identical sentence twice inside this
 REWIND_FRESH = {"gaps", "positions", "lap_feedback"}  # always new information, even after a flashback
 # Keys whose next call usually says something new (50% wear, then 70%; drop zone, then safe; box now,
 # then box under the safety car): never muted by a flashback.
-ESCALATING_KEYS = {"penalty", "wear", "box", "sc", "quali_pos", "rain", "pit_window", "greet", "warning", "last_chance"}
+ESCALATING_KEYS = {
+    "penalty", "wear", "box", "sc", "quali_pos", "rain", "pit_window", "greet", "warning", "last_chance",
+    "lap_deleted", "engine",
+}  # fmt: skip
 
 _seq = itertools.count()
 

@@ -26,6 +26,12 @@ QUESTION_START = re.compile(
     r"any|have|has|will|would|tell me|give me)\b",
     re.I,
 )
+# The driver describing the car: feedback to acknowledge (or think about), not a request for numbers.
+DESCRIBING = re.compile(
+    r"\b(?:i'?m|i am|i'?ve|my|it'?s|feels?|feeling|the car|they'?re|we'?re|getting|no grip|understeer\w*|"
+    r"oversteer\w*|sliding|overheating|locking|bouncing|snappy|dead|gone|struggling)\b",
+    re.I,
+)
 # Questions that need judgement, not a number off the screen: these always go to the AI.
 NEEDS_THOUGHT = re.compile(
     r"\b(?:should|why|would|could|optimal|ideal|best way|advice|advise|think|reckon|opinion|or|versus|vs|"
@@ -39,11 +45,17 @@ def is_question(text: str) -> bool:
     return t.endswith("?") or bool(QUESTION_START.match(t))
 
 
+def describes_car(text: str) -> bool:
+    """The driver telling us how it feels ("my tyres are overheating", "no grip at the rear"), not asking."""
+    return bool(DESCRIBING.search(text)) and not is_question(text)
+
+
 def quick_question(text: str) -> bool:
-    """A short, direct ask for a number ("What's the gap?", "How are the tyres?"), fine to answer from
-    telemetry. A complaint ("my tyres are overheating") or a judgement call ("softs or mediums?") isn't."""
+    """A short, direct ask for a number ("What's the gap?", "gap to Leclerc", "fuel"), fine to answer from
+    telemetry. A complaint ("my tyres are overheating") or a judgement call ("softs or mediums?") isn't.
+    Speech recognition rarely writes the question mark, so a short request counts too."""
     t = text.strip()
-    return is_question(t) and len(t.split()) <= 9 and not NEEDS_THOUGHT.search(t)
+    return len(t.split()) <= 9 and not NEEDS_THOUGHT.search(t) and not describes_car(t)
 
 
 class Conversation:
@@ -97,7 +109,7 @@ class Conversation:
         quick = local is not None and (local.command or local.instant or (s.ai.fast_answers and quick_question(text)))
         use_llm = self.brain.available and not quick
         if not use_llm:
-            if local and not quick and not is_question(text):
+            if local and not quick and describes_car(text):
                 # A statement ("the tyres are overheating"), not a question: acknowledge it like an engineer
                 # rather than reading out telemetry that may well contradict what the driver can feel.
                 self.actions.remember(f"Driver said: {text}")

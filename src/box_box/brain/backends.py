@@ -48,16 +48,18 @@ def clean_for_radio(text: str) -> str:
 class SentenceStream:
     """Turns streamed text deltas into clean sentences, dropping <think>…</think> reasoning blocks.
 
-    Some local reasoning models put the opening <think> in the prompt template, so the output starts
-    with the reasoning and only the closing tag appears. With `hold`, the first `hold` characters are
-    kept back: if a lone </think> turns up in them, everything before it is dropped."""
+    Some local reasoning models put the opening <think> in the prompt template, so the output starts with
+    bare reasoning and only the closing tag appears. A lone </think> drops whatever hadn't been said yet
+    and sets `saw_lone_think`; with `hold`, nothing is said until the reasoning has closed (or the stream
+    ends), for models known to do this."""
 
-    def __init__(self, hold: int = 0) -> None:
+    def __init__(self, hold: bool = False) -> None:
         self.buffer = ""
         self._raw = ""
         self._thinking = False
         self._hold = hold
         self._held = ""
+        self.saw_lone_think = False
         self.spoken: list[str] = []
 
     def feed(self, delta: str) -> list[str]:
@@ -65,9 +67,10 @@ class SentenceStream:
             self._held += delta
             end = self._held.find("</think>")
             if end >= 0 and "<think>" not in self._held[:end]:
-                delta, self._hold = self._held[end + len("</think>") :], 0
-            elif len(self._held) >= self._hold or "<think>" in self._held:
-                delta, self._hold = self._held, 0
+                self.saw_lone_think = True
+                delta, self._hold = self._held[end + len("</think>") :], False
+            elif "<think>" in self._held:
+                delta, self._hold = self._held, False
             else:
                 return []
             self._held = ""
@@ -82,15 +85,20 @@ class SentenceStream:
                 self._raw = self._raw[end + len("</think>") :]
                 self._thinking = False
                 continue
-            start = self._raw.find("<think>")
+            start, lone = self._raw.find("<think>"), self._raw.find("</think>")
+            if lone >= 0 and (start < 0 or lone < start):
+                # Reasoning that never opened: drop it, and whatever of it hasn't been spoken yet.
+                self.saw_lone_think = True
+                self._raw, self.buffer, visible = self._raw[lone + len("</think>") :], "", ""
+                continue
             if start >= 0:
                 visible += self._raw[:start]
                 self._raw = self._raw[start + len("<think>") :]
                 self._thinking = True
                 continue
-            # Hold back anything that might be the start of a "<think>" tag.
+            # Hold back anything that might be the start of a "<think>" or "</think>" tag.
             cut = self._raw.rfind("<")
-            if cut >= 0 and "<think>".startswith(self._raw[cut:]):
+            if cut >= 0 and ("<think>".startswith(self._raw[cut:]) or "</think>".startswith(self._raw[cut:])):
                 visible += self._raw[:cut]
                 self._raw = self._raw[cut:]
             else:
@@ -103,7 +111,7 @@ class SentenceStream:
 
     def flush(self) -> list[str]:
         if self._hold:
-            self._hold, held, self._held = 0, self._held, ""
+            self._hold, held, self._held = False, self._held, ""
             sentences = self.feed(held)
             return sentences + self.flush()
         tail = "" if self._thinking else self._raw

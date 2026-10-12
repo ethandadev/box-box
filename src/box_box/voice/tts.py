@@ -336,13 +336,16 @@ class TTS:
         cloud = engine.name not in ("kokoro", "windows", "off")
         dead_since = self._dead.get(engine.name)
         if cloud and dead_since is not None and time.monotonic() - dead_since < self._dead_for.get(engine.name, 0):
-            return self._fallback(text, voice, speed, None)  # don't wait on a voice we know will refuse
+            audio = self._fallback(text, voice, speed, None)  # don't wait on a voice we know will refuse
+            self._used_fallback = False  # benched for a while: caching the stand-in saves synthesizing twice
+            return audio
         try:
             audio = engine.synthesize(text, voice, speed)
             self._failures.pop(engine.name, None)
             if dead_since is not None:
                 self._dead.pop(engine.name, None)
                 self.error, self.status = None, "ready"
+                self.clear_cache()  # lines cached in the stand-in voice: say them in the real one again
             return audio
         except TTSUnavailable as e:
             # Rejected key or no credits left: it won't fix itself mid-session. Say every line with the

@@ -39,7 +39,7 @@ def _seconds_part(sec: str) -> str:
     whole, _, frac = sec.partition(".")
     w = int(whole)
     if w == 0 and not frac:
-        return "flat"  # "10:00" is "ten flat", not "ten oh zero"
+        return "minutes"  # "10:00" (time left) is "ten minutes", not "ten oh zero"
     words = ("oh " + (ONES[w] if w else "oh")) if whole.startswith("0") and len(whole) == 2 else number_words(w)
     if frac:
         words += " " + " ".join(ONES[int(d)] for d in frac)
@@ -63,12 +63,14 @@ def _decimal(m: re.Match[str]) -> str:
 def _symbols(t: str) -> str:
     """Units, slashes and dashes, written the way they're said (the voices read "/" as "slash")."""
     t = re.sub(r"\b50\s*/\s*50\b", "fifty-fifty", t)
+    t = re.sub(r"\band\s*/\s*or\b", "and or", t)
+    t = re.sub(r"\b(bias|balance) (\d{2})\s*[-/]\s*(\d{2})\b", r"\1 \2 \3", t)  # "brake bias 56-44"
     t = re.sub(r"(?<![\w.])(P?\d{1,3})\s*[-\u2013]\s*(P?\d{1,3})(?!\w|\.\d)", r"\1 to \2", t)  # "turns 1-3"
     t = re.sub(r"(\d:\d{2}(?:\.\d+)?)s\b", r"\1", t)  # "1:30.2s" is just a lap time
     t = re.sub(r"\s*km\s*/\s*h\b|\bkph\b", " k p h", t, flags=re.IGNORECASE)
     t = re.sub(r"\bmph\b", "m p h", t, flags=re.IGNORECASE)
     t = re.sub(r"(\d)\s?kg\b", r"\1 kilos", t)
-    t = re.sub(r"(?<![\d:.])(\d{1,3}(?:\.\d+)?)s\b", r"\1 seconds", t)  # "2.6s"; never "1990s"
+    t = re.sub(r"(?<![\d:.])(?<!the )(\d{1,3}(?:\.\d+)?)s\b", r"\1 seconds", t)  # "2.6s"; not "the 90s"
     t = re.sub(r"\bT(\d{1,2})\b", r"turn \1", t)
     t = re.sub(r"\b(\d+)\s*/\s*(\d+)\b", r"\1 of \2", t)  # "lap 3/5" -> "lap 3 of 5"
     t = re.sub(r"(?<=[A-Za-z])\s*/\s*(?=[A-Za-z])", " or ", t)  # "softs/mediums"

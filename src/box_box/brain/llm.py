@@ -243,6 +243,7 @@ class Brain:
         self._backend: Any = None
         self._backend_key: tuple[str, str, str] | None = None
         self.history: list[dict[str, Any]] = []
+        self._lone_think: set[str] = set()  # models seen opening with bare reasoning and a lone </think>
         self.status = "not configured"
         self.last_error: str | None = None
         self.disabled_reason: str | None = None
@@ -349,8 +350,8 @@ class Brain:
     async def reply(self, transcript: str, world: World, actions: Actions) -> AsyncIterator[str]:
         """Stream the engineer's answer, sentence by sentence. Raises LLMError."""
         s = self._settings()
-        # Local reasoning models may open with bare reasoning and a lone </think>: hold the start back.
-        out = SentenceStream(hold=600 if providers.get(s.ai.provider).local else 0)
+        # A model that's been seen opening with bare reasoning and a lone </think> is held until it closes.
+        out = SentenceStream(hold=self.model in self._lone_think)
         started = time.perf_counter()
         said = f"{s.driver.name}: {transcript}"
 
@@ -385,6 +386,8 @@ class Brain:
             self._fail(err)
             raise err from e
         finally:
+            if out.saw_lone_think:
+                self._lone_think.add(self.model)
             if out.spoken:
                 # Only what the driver heard: the conversation stops after MAX_REPLY_SENTENCES.
                 self.history += [
