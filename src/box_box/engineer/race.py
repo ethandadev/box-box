@@ -47,6 +47,7 @@ class RaceDetector(Detector):
         # Keep the one-off calls (start, finish); drop pending moves and gap trends from the rewound future.
         self._pending.clear()
         self._gap_history.clear()
+        self._last_gap_lap = 0  # the abandoned future's lap count would hold the next gap update back
 
     def check(self, ctx: Context) -> list[RadioCall]:
         world = ctx.world
@@ -395,8 +396,8 @@ class RaceDetector(Detector):
         s = ctx.world.session
         assert me.lap and s
         ideal, latest = s.pit_window_ideal_lap, s.pit_window_latest_lap
-        if not ideal or me.in_pit_lane or ctx.world.is_sprint:
-            return []
+        if not ideal or me.in_pit_lane or ctx.world.is_sprint or me.pit_stops > 0:
+            return []  # already stopped (an early stop under the safety car): the window is done
         lap = me.lap.lap_num
         out: list[RadioCall] = []
         n = ideal - lap

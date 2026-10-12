@@ -365,3 +365,20 @@ def test_worn_tyre_creeping_past_60_percent_is_not_a_puncture() -> None:
     sim.run(0.3)
     sim.car_damage(0, tyre_damage=(45, 37, 60, 37), tyre_wear=(44.5, 36.0, 59.0, 36.0))
     assert not [c for c in sim.run(0.3) if c.key == "puncture"]
+
+
+def test_flashback_to_before_a_stop_undoes_it() -> None:
+    sim = Sim([RaceDetector()])
+    sim.lap(0, lap_num=10)
+    sim.tick()
+    sim.lap(0, pit_status=1)
+    sim.tick()
+    sim.lap(0, pit_status=2, pit_stop_timer_ms=2400)
+    sim.tick()
+    sim.lap(0, pit_status=0, num_pit_stops=1)
+    sim.run(0.3)
+    assert sim.world.player.pit_stops == 1
+    sim.event("FLBK", value=5.0, detail={"frame": 10})
+    sim.lap(0, num_pit_stops=0)
+    sim.run(0.3)
+    assert sim.world.player.pit_stops == 0

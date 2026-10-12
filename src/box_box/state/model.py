@@ -197,6 +197,7 @@ class World:
     changes: list[Change] = field(default_factory=list)  # derived changes since the last drain
     # Bumped whenever time jumps backwards (flashback, save reload), so detectors can drop their memory.
     timeline: int = 0
+    _rewound_at: float = -1e9  # session time of the last flashback we handled
     session_started: bool = False
     lights_out: bool = False
     chequered_flag: bool = False
@@ -273,7 +274,13 @@ class World:
         return [c for c in self.cars if c.index != self.player_index and c.lap is not None]
 
     def running(self) -> list[CarState]:
-        return [c for c in self.cars if c.lap is not None and c.lap.position > 0 and c.lap.result_status >= 2]
+        return [
+            c
+            for c in self.cars
+            if c.lap is not None
+            and c.lap.position > 0
+            and c.lap.result_status in (ResultStatus.ACTIVE, ResultStatus.FINISHED)  # not retired or DSQ
+        ]
 
     def by_position(self) -> list[CarState]:
         return sorted(self.running(), key=lambda c: c.lap.position)  # type: ignore[union-attr]
@@ -358,6 +365,7 @@ class World:
             self._reset(h.session_uid, h.packet_format)
         if h.session_time + 0.5 < self.session_time:
             self._rewind()
+            self._rewound_at = h.session_time
         self.session_time = h.session_time
         self.player_index = h.player_car_index
         self._ensure_cars(packet)
@@ -443,6 +451,9 @@ class World:
             valid = [r.lap_ms for r in car.laps if r.valid and r.lap_ms > 0]
             car.best_lap_ms = min(valid) if valid else None
             car._lap_had_pit = lap.pit_status != 0
+            car.pit_stops = lap.num_pit_stops  # a flashback to before a stop undoes it
+            car._pit_stationary_ms = 0
+            car._lap_start_fuel = None  # mid-lap now: this lap's fuel use can't be measured
             return
 
         # Pit lane transitions.
@@ -519,5 +530,8 @@ class World:
                 if event.vehicle_idx is not None and event.value:
                     self.fastest_lap = (event.vehicle_idx, float(event.value))
             case "FLBK":
-                self._rewind()
+                # The clock jumping back usually caught it already; don't rewind the same flashback twice.
+                if abs(self.session_time - self._rewound_at) > 1.0:
+                    self._rewind()
+                    self._rewound_at = self.session_time
         self.events.append(event)

@@ -56,7 +56,8 @@ class LapFeedbackDetector(Detector):
             return []  # out/in laps aren't representative
         if not rec.valid:
             return []  # the deletion was already called live
-        self._stint_laps.append(rec)
+        # A lap driven again after a flashback replaces the abandoned one.
+        self._stint_laps = [r for r in self._stint_laps if r.lap_num < rec.lap_num] + [rec]
         earlier = [r for r in me.valid_laps() if r is not rec and r.lap_num != rec.lap_num]
         best_before = min((r.lap_ms for r in earlier), default=None)
         if me.history and me.history.best_lap_ms and me.history.best_lap_ms != rec.lap_ms:

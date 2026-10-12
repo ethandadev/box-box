@@ -35,6 +35,9 @@ REPLY_HOLD_MAX_S = 15.0  # after the driver speaks, other calls wait this long a
 REWIND_MEMORY_S = 180.0  # after a flashback, calls made this recently stay said for this long
 SAME_TEXT_S = 120.0  # never the identical sentence twice inside this
 REWIND_FRESH = {"gaps", "positions", "lap_feedback"}  # always new information, even after a flashback
+# Keys whose next call usually says something new (50% wear, then 70%; drop zone, then safe; box now,
+# then box under the safety car): never muted by a flashback.
+ESCALATING_KEYS = {"penalty", "wear", "box", "sc", "quali_pos", "rain", "pit_window", "greet", "warning", "last_chance"}
 
 _seq = itertools.count()
 
@@ -109,7 +112,7 @@ class RadioDirector:
         """A flashback: forget queued calls about the abandoned future, and don't repeat what was said."""
         self._queue = [q for q in self._queue if q.call.source != "engineer" or q.call.priority == Priority.SAFETY]
         for key, (t, _, category) in self._said.items():
-            if now - t < REWIND_MEMORY_S and category not in REWIND_FRESH:
+            if now - t < REWIND_MEMORY_S and category not in REWIND_FRESH and key not in ESCALATING_KEYS:
                 self._said_again_after[key] = max(self._said_again_after.get(key, 0.0), now + REWIND_MEMORY_S)
 
     def on_telemetry(self, world: World) -> None:
