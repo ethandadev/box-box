@@ -165,7 +165,7 @@ def test_voice_commands_change_settings_and_typed_questions_work(tmp_path: Path)
             engine.ingest(data)
         await engine.respond("less radio please")
         await engine.respond("what's the gap")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(3.0)  # transmissions include key-up and the hiss tail
         await engine.stop()
 
     asyncio.run(scenario())

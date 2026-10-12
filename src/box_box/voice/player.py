@@ -84,6 +84,7 @@ class AudioPlayer:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._clips: deque[_Clip] = deque()
+        self._overlay: deque[_Clip] = deque()  # short sounds mixed on top right away (the driver's key clicks)
         self._stream = None
         self.samplerate = 48_000
         self.volume = 0.9
@@ -149,6 +150,14 @@ class AudioPlayer:
             self._clips.append(_Clip(data, fut))
         return fut
 
+    def blip(self, samples: np.ndarray, samplerate: int) -> None:
+        """Play a short sound now, over whatever is playing, without queueing or being cut by `stop`."""
+        if self._stream is None:
+            return
+        data = resample(np.asarray(samples, dtype=np.float32), samplerate, self.samplerate)
+        with self._lock:
+            self._overlay.append(_Clip(data, Future()))
+
     def stop(self) -> None:
         """Cut off everything playing or queued (barge-in)."""
         with self._lock:
@@ -175,6 +184,12 @@ class AudioPlayer:
                 filled += take
                 if clip.pos >= len(clip.data):
                     finished.append(self._clips.popleft())
+            for clip in list(self._overlay):
+                take = min(frames, len(clip.data) - clip.pos)
+                out[:take] += clip.data[clip.pos : clip.pos + take]
+                clip.pos += take
+                if clip.pos >= len(clip.data):
+                    self._overlay.remove(clip)
         out *= self.volume
         self.level = float(np.sqrt(np.mean(out**2))) if frames else 0.0
         outdata[:] = out[:, None] if outdata.shape[1] == 1 else np.repeat(out[:, None], outdata.shape[1], axis=1)

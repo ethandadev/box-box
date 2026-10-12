@@ -231,3 +231,37 @@ def test_symbols_are_said_the_way_engineers_say_them() -> None:
     assert for_speech("Turns 1 to 3 - front left will grain.") == "Turns one to three, front left will grain."
     assert for_speech("2.6s back at T14.") == "two point six seconds back at turn fourteen."
     assert "/" not in for_speech("50/50 call") and "1990s" in for_speech("like the 1990s")
+
+
+def test_a_transmission_keys_up_talks_over_a_carrier_and_lets_go() -> None:
+    sr = 24_000
+    t = np.arange(int(sr * 0.5)) / sr
+    voice = (0.6 * np.sin(2 * np.pi * 900 * t)).astype(np.float32)
+    first = fx.radio(voice, sr, 0.8, seed=3, open_beep=True, close_beep=False)
+    middle = fx.radio(voice, sr, 0.8, seed=3, open_beep=False, close_beep=False)
+    assert len(first) > len(middle)  # key-up: click, beep and a moment of open channel before the voice
+    # The open channel before the voice isn't dead silence: the carrier hiss is there.
+    pre = first[int(sr * 0.12) : int(sr * 0.17)]
+    assert 1e-4 < float(np.sqrt(np.mean(pre**2))) < 0.05
+    clean = fx.radio(voice, sr, 0.0, beeps=False, seed=3)
+    assert float(np.max(np.abs(clean[: int(sr * 0.02)]))) == 0.0  # no effect: no hiss either
+
+
+def test_held_key_gaps_are_decided_per_call_and_never_on_urgent_calls() -> None:
+    from box_box.voice.speaker import hold_split
+
+    calls = [RadioCall("gaps", Priority.INFO, "Gap to Leclerc is 1.2. He's on older tyres.", 0, 10) for _ in range(40)]
+    splits = [hold_split(c, "human") for c in calls]
+    assert all(hold_split(c, "human") == s for c, s in zip(calls, splits, strict=True))  # prefetch == playback
+    held = [s for s in splits if len(s[0]) == 2]
+    assert held and len(held) < len(splits)
+    assert held[0][0] == ["Gap to Leclerc is 1.2.", "He's on older tyres."] and 0.35 <= held[0][1] <= 0.8
+    urgent = RadioCall("box", Priority.SAFETY, "Box, box. Box this lap.", 0, 10)
+    assert hold_split(urgent, "human") == (["Box, box. Box this lap."], 0.0)
+    assert hold_split(calls[0], "off") == ([calls[0].text], 0.0)
+
+
+def test_driver_key_sounds() -> None:
+    down, up = fx.driver_key(24_000, True, 0.5, seed=1), fx.driver_key(24_000, False, 0.5, seed=1)
+    assert 0.05 < len(down) / 24_000 < 0.2 and 0.1 < len(up) / 24_000 < 0.3
+    assert 0.02 < float(np.max(np.abs(down))) < 0.3

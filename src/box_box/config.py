@@ -124,6 +124,7 @@ class VoiceSettings:
         0.5, "Radio effect", "0 is studio-clean, 1 is a crackly team radio.", min=0.0, max=1.0, step=0.05
     )
     beeps: bool = opt(True, "Radio beeps", "Play the click and beep when he keys the radio.")
+    ptt_beeps: bool = opt(True, "Push-to-talk beeps", "A click and chirp when you press and release your radio button.")
     output_device: str = opt(
         "", "Speakers / headset", "Leave on default to use the Windows default output.", device="output"
     )

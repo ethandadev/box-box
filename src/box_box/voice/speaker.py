@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
+import re
 from collections.abc import Callable
+
+import numpy as np
 
 from box_box.bus import Bus
 from box_box.config import Settings
-from box_box.engineer.radio import RadioCall
+from box_box.engineer.radio import Priority, RadioCall
 from box_box.voice import fx
 from box_box.voice.normalize import for_speech
 from box_box.voice.player import AudioPlayer
@@ -17,6 +21,31 @@ from box_box.voice.tts import TTS
 log = logging.getLogger(__name__)
 
 SYNTH_TIMEOUT_S = 12.0
+# How often a two-sentence call is said with the key held between the sentences (he glances at the
+# screen, then carries on): dead air with the carrier still open. Never on urgent calls.
+HOLD_CHANCE = {"off": 0.0, "subtle": 0.2, "human": 0.35}
+HOLD_GAP_S = (0.35, 0.8)
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
+
+
+def hold_split(call: RadioCall, natural_speech: str) -> tuple[list[str], float]:
+    """The pieces to synthesize and the held-key gap between them. Decided from the call itself, so the
+    prefetch and the playback agree without sharing state."""
+    chance = HOLD_CHANCE.get(natural_speech, 0.0)
+    pieces = _SENTENCE_BREAK.split(call.text.strip(), maxsplit=1)
+    if (
+        not chance
+        or call.priority == Priority.SAFETY
+        or call.source != "engineer"
+        or len(pieces) < 2
+        or len(pieces[0]) < 8
+        or len(pieces[1]) < 8
+    ):
+        return [call.text], 0.0
+    rng = random.Random(f"{call.id}:{call.text}")
+    if rng.random() >= chance:
+        return [call.text], 0.0
+    return pieces, rng.uniform(*HOLD_GAP_S)
 
 
 def reply_part(call: RadioCall) -> int | None:
@@ -47,8 +76,10 @@ class Speaker:
         if self.tts.active == "off":
             return
         voice, speed = self._voice()
+        natural = self._settings().engineer.natural_speech
         for c in calls:
-            self.tts.submit(for_speech(c.text), voice, speed, urgent=False)
+            for piece in hold_split(c, natural)[0]:
+                self.tts.submit(for_speech(piece), voice, speed, urgent=False)
 
     def stop(self) -> None:
         """Barge-in: cut the engineer off mid-sentence."""
@@ -68,9 +99,17 @@ class Speaker:
                 await asyncio.sleep(min(4.0, 0.06 * len(call.text)))  # pace text-only mode like speech
                 return True
             voice, speed = self._voice()
-            future = self.tts.submit(for_speech(call.text), voice, speed)
+            pieces, gap_s = hold_split(call, s.engineer.natural_speech)
+            futures = [self.tts.submit(for_speech(p), voice, speed) for p in pieces]
             try:
-                samples, sr = await asyncio.wait_for(asyncio.wrap_future(future), SYNTH_TIMEOUT_S)
+                clips = [await asyncio.wait_for(asyncio.wrap_future(f), SYNTH_TIMEOUT_S) for f in futures]
+                sr = clips[0][1]
+                joined: list[np.ndarray] = []
+                for n, (clip, clip_sr) in enumerate(clips):
+                    if n:
+                        joined.append(fx.hold_gap(sr, gap_s))
+                    joined.append(fx.resample(clip, clip_sr, sr))
+                samples = np.concatenate(joined) if len(joined) > 1 else clips[0][0]
             except TimeoutError:
                 log.error("voice took over %ss for %r", SYNTH_TIMEOUT_S, call.text)
                 self.bus.publish(

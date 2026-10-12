@@ -31,6 +31,7 @@ from box_box.telemetry import names
 from box_box.telemetry.autorecord import AutoRecorder
 from box_box.telemetry.packets import Decoder, PacketId
 from box_box.telemetry.sources import PortUnavailable, bind_udp, file_source, udp_source
+from box_box.voice import fx
 from box_box.voice.cloud import cloud_engines
 from box_box.voice.mic import Microphone
 from box_box.voice.models import kokoro_files
@@ -382,6 +383,9 @@ class Engine:
     def on_ptt(self, pressed: bool) -> None:
         self.bus.publish("ptt", active=pressed)
         self.director.on_ptt(pressed)
+        v = self.settings.voice
+        if v.ptt_beeps and v.engine != "off":
+            self.player.blip(fx.driver_key(fx.SR_DEFAULT, pressed, v.radio_effect), fx.SR_DEFAULT)
         if pressed:
             self._ptt_pressed_at = time.monotonic()
             self.speaker.stop()
