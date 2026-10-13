@@ -140,3 +140,25 @@ def test_no_data_said_like_a_pit_wall() -> None:
     assert len(said) > 8
     assert any("sensor" in s for s in said) and any(s.startswith("We are checking") for s in said)
     assert all("{" not in s for s in said)
+
+
+def test_off_track_spin_and_changed_diff_dont_count() -> None:
+    sim = sim_with_setup([HandlingDetector()])
+    w = sim.world
+    _, at = tracks.get(7).corners_on(5000)[4]  # type: ignore[union-attr]
+    sim.lap(0, lap_distance=at + 60)
+    sim.car_telemetry(0, speed_kph=120, throttle=1.0, brake=0.0, surface_types=(7, 7, 0, 0))
+    w.wheel_slip = WheelSlip((0.4, 0.4, 0.0, 0.0), (40.0,) * 4)
+    sim.tick()
+    assert w.slides == []  # rears on the grass
+    sim.car_telemetry(0, surface_types=(0, 0, 0, 0))
+    sim.tick()
+    assert [s.kind for s in w.slides] == ["wheelspin"]
+    w.player.setup = CarSetup(46, 33, 65, 35, 100, 56, 50, 10.0)  # type: ignore[union-attr]
+    w.wheel_slip = WheelSlip((0.0,) * 4, (40.0,) * 4)
+    sim.tick()
+    assert w.slides == []  # he took diff off: start counting again
+
+
+def test_traction_control_isnt_a_diff_question() -> None:
+    assert advice.answer("should i turn traction control off", sim_with_setup().world, random.Random(5)) is None

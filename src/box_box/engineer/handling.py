@@ -24,6 +24,9 @@ ENTRY_M = 250.0  # a lock-up this far before a corner marker belongs to that cor
 KEEP_LAPS = 5
 REPEATS = 3  # the same thing at the same corner this many times in RECENT_LAPS before we say anything
 COOLDOWN_S = 240.0
+TRACK_SURFACES = {0, 1, 2, 9, 10, 11}  # tarmac, kerbs, concrete, cobbles, metal, ridged: anything else is off track
+WET_TYRES = {7, 8}  # inters and wets spin up everywhere: not a diff problem
+FIXED_BY = {"wheelspin": "diff", "front_lock": "bias", "rear_lock": "bias"}
 
 
 def corner_near(world: World, distance: float, after: bool) -> str | None:
@@ -47,6 +50,7 @@ class HandlingDetector(Detector):
     def reset(self) -> None:
         self._active: dict[str, float] = {}  # kind -> session time last seen, while a slide is going on
         self._last_call: dict[str, float] = {}
+        self._settings: dict[str, int] = {}  # diff and bias as last seen
 
     def on_rewind(self) -> None:
         self._active = {}  # what happened before the flashback still happened to the car; keep the calls' cooldowns
@@ -58,6 +62,9 @@ class HandlingDetector(Detector):
             return []
         if not me.active or me.in_pit_lane:
             return []
+        self._forget_fixed(me, world)
+        if any(s not in TRACK_SURFACES for s in me.telemetry.surface_types):
+            return []  # spinning up on the grass isn't a setup problem
         kind = self._slide(me, world)
         if kind is None:
             return []
@@ -65,6 +72,19 @@ class HandlingDetector(Detector):
         world.slides.append(Slide(me.lap.lap_num, kind, corner, world.session_time))
         world.slides[:] = [s for s in world.slides if s.lap > me.lap.lap_num - KEEP_LAPS][-60:]
         return self._advise(ctx, me, kind, corner)
+
+    def _forget_fixed(self, me: CarState, world: World) -> None:
+        """He's changed the diff or the bias: what happened before is history, start counting again."""
+        now = {
+            "diff": me.setup.on_throttle_diff if me.setup else None,
+            "bias": me.status.front_brake_bias if me.status else None,
+        }
+        for knob, value in now.items():
+            if value is None:
+                continue
+            if knob in self._settings and self._settings[knob] != value:
+                world.slides[:] = [s for s in world.slides if FIXED_BY[s.kind] != knob]
+            self._settings[knob] = value
 
     def _slide(self, me: CarState, world: World) -> str | None:
         """A new wheelspin or lock-up starting this tick, or None."""
@@ -90,6 +110,8 @@ class HandlingDetector(Detector):
     def _advise(self, ctx: Context, me: CarState, kind: str, corner: str | None) -> list[RadioCall]:
         world = ctx.world
         if corner is None or (world.is_race and me.lap is not None and me.lap.lap_num <= 2):
+            return []
+        if kind == "wheelspin" and me.status is not None and me.status.visual_compound in WET_TYRES:
             return []
         same = [s for s in advice.recent(world, kind) if s.corner == corner]
         laps = Counter(s.lap for s in same)

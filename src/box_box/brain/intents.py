@@ -414,7 +414,7 @@ RULES: list[Rule] = [
         _box_rejoin,
     ),
     (
-        r"\bdiff(?:erential)?s?\b|\bwheel ?spin|\btraction\b|\bbias\b|\block(?:ing|s|ed)?(?: up)?\b|\block-?ups?\b|"
+        r"\bdiff(?:erential)?s?\b|\bwheel ?spin|\btraction\b(?! control)|\bbias\b|\block(?:ing|s|ed)?(?: up)?\b|\block-?ups?\b|"
         r"\b(?:ers|energy|deploy\w*|battery) (?:mode|map|advice|setting|tips?)\b|\bhot ?lap mode\b|\b(?:which|what) mode\b|"
         r"\bfuel (?:map|mode|mix|advice|setting)\b|\b(?:lean|rich) (?:mix|map|mode)\b|\benough fuel\b|"
         r"\b(?:will|does|can|do) (?:we|i) (?:make|last) (?:it )?(?:to )?the end\b|\b(?:will|does) the fuel (?:make|last)\b|\bunstable (?:on|under|into) (?:the )?brak|"

@@ -66,7 +66,7 @@ NUMBERS = {1: "one", 2: "two", 3: "three"}
 # ---- what the driver said ------------------------------------------------------------------------------
 
 WHEELSPIN = re.compile(
-    r"wheel ?spin|spinning (?:up )?(?:the )?(?:rears|wheels|tyres)|traction|"
+    r"wheel ?spin|spinning (?:up )?(?:the )?(?:rears|wheels|tyres)|traction(?! control)|"
     r"rears? (?:go|goes|going|step|steps|stepping|kick|kicks|kicking|let go|snap|snaps)|snap(?:py|s|ping)? (?:on|out of|on the) exit|"
     r"oversteer (?:on|out of) (?:the )?exits?|exit oversteer|power oversteer|on the power"
 )

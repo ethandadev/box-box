@@ -25,7 +25,8 @@
   "Bias back two, 54". Flat battery in hotlap mode: "Energy mode medium". Short on fuel on standard:
   "Fuel map lean, and lift and coast". Once fuel's recovered: "back to standard".
 - He watches the wheels: wheelspin or lock-ups at the same corner lap after lap get a diff or bias
-  suggestion without being asked (Settings → Callouts → Diff & brake bias tips).
+  suggestion without being asked (Settings → Callouts → Diff & brake bias tips). Spinning up on the
+  grass doesn't count, wet tyres don't get diff tips, and once you change the diff or bias he starts counting again.
 - No data yet? Sometimes "Stand by", sometimes "we're having trouble with the sensors", sometimes just
   "We are checking." A garbled transmission gets "bit of static on the radio, say again?".
 - Answers worked out live sometimes take a short thinking beat at a comma, like a person, not a script.
