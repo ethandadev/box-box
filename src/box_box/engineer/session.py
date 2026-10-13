@@ -44,7 +44,12 @@ class SessionDetector(Detector):
         out += self._new_run(ctx)
         out += self._time_left(ctx)
         for change in ctx.changes:
-            if isinstance(change, LapCompleted) and change.car_index == me.index and world.is_qualifying:
+            if (
+                isinstance(change, LapCompleted)
+                and change.car_index == me.index
+                and world.is_qualifying
+                and not change.record.pit_lap  # out and in laps don't change where we stand
+            ):
                 out += self._drop_zone(ctx)
         out += self._last_chance(ctx)
         out += self._end(ctx)
@@ -108,7 +113,7 @@ class SessionDetector(Detector):
     @staticmethod
     def _temp(ctx: Context, celsius: int) -> str:
         if ctx.settings.engineer.units == "imperial":
-            return f"{round(celsius * 9 / 5 + 32)} Fahrenheit"
+            return f"{round(celsius * 9 / 5 + 32)}"  # the templates say "degrees" after it
         return f"{celsius}"
 
     def _time_left(self, ctx: Context) -> list[RadioCall]:

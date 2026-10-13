@@ -22,14 +22,18 @@ class _PendingMove:
     kind: str  # "gained" | "lost"
     other: int
     at: float
+    old_pos: int  # where we were when it happened: only call it if the position really changed
 
 
 class RaceDetector(Detector):
     name = "race"
 
     def reset(self) -> None:
+        self._prev_pos = 0  # our position at the previous tick
+        self._penalty_stop = False  # the stop in progress is a drive-through or stop-go
         self._lap_one_done = False
-        self._gap_history: dict[int, list[tuple[int, float]]] = {}  # car index -> [(my lap, gap s)]
+        # (car index, "ahead"/"behind") -> [(my lap, gap s)]: a car that changes side starts a new series
+        self._gap_history: dict[tuple[int, str], list[tuple[int, float]]] = {}
         self._last_gap_lap = 0
         self._pending: list[_PendingMove] = []
         self._within_second_of: int | None = None
@@ -40,7 +44,7 @@ class RaceDetector(Detector):
         self._laps_to_go_called: set[int] = set()
         self._offset_said: dict[int, str] = {}  # car index -> last tyre-offset note given
         self._overtake_said: dict[int, bool] = {}  # car behind -> last overtake status we mentioned
-        self._told_gap: dict[int, float] = {}  # car index -> gap we last said out loud
+        self._told_gap: dict[tuple[int, str], float] = {}  # (car index, side) -> gap we last said out loud
         self._quiet_gap_updates = 0
         self._pit_lane_at = -1e9  # last time we were in the pit lane
 
@@ -48,6 +52,7 @@ class RaceDetector(Detector):
         # Keep the one-off calls (start, finish); drop pending moves and gap trends from the rewound future.
         self._pending.clear()
         self._gap_history.clear()
+        self._prev_pos = 0
 
     def check(self, ctx: Context) -> list[RadioCall]:
         world = ctx.world
@@ -57,9 +62,12 @@ class RaceDetector(Detector):
         if me is None or me.lap is None:
             return []
         calls: list[RadioCall] = []
+        done = me.lap.result_status != ResultStatus.ACTIVE  # flag taken (or out): no more racing talk
         for change in ctx.changes:
             if isinstance(change, LapCompleted) and change.car_index == me.index:
                 calls += self._on_my_lap(ctx, me, change.record.lap_num)
+            elif done:
+                continue
             elif isinstance(change, PitEntered) and change.car_index != me.index:
                 calls += self._rival_pitted(ctx, me, world.cars[change.car_index])
             elif isinstance(change, PitEntered) and change.car_index == me.index:
@@ -71,7 +79,8 @@ class RaceDetector(Detector):
         calls += self._overtakes(ctx, me)
         calls += self._fastest_lap(ctx, me)
         calls += self._finish(ctx, me)
-        calls += self._within_second(ctx, me)
+        if not done:
+            calls += self._within_second(ctx, me)
         return calls
 
     # -- laps ---------------------------------------------------------------------------------------
@@ -132,9 +141,9 @@ class RaceDetector(Detector):
         behind = world.car_at_position(me.lap.position + 1)
         g_ahead = world.race_gap_s(ahead, me) if ahead else None
         g_behind = world.race_gap_s(me, behind) if behind else None
-        for car, g in ((ahead, g_ahead), (behind, g_behind)):
+        for car, g, side in ((ahead, g_ahead, "ahead"), (behind, g_behind, "behind")):
             if car is not None and g is not None and g >= 0:
-                self._gap_history.setdefault(car.index, []).append((lap, g))
+                self._gap_history.setdefault((car.index, side), []).append((lap, g))
         return ahead, g_ahead, behind, g_behind
 
     def _gaps(self, ctx: Context, me: CarState, lap: int) -> list[RadioCall]:
@@ -150,11 +159,11 @@ class RaceDetector(Detector):
         if me.in_pit_lane:
             return []
 
-        def rate_of(car: CarState | None, g: float | None) -> float | None:
+        def rate_of(car: CarState | None, g: float | None, side: str) -> float | None:
             """Seconds per lap the gap is changing (negative: shrinking)."""
             if car is None or g is None:
                 return None
-            hist = [h for h in prev_hist.get(car.index, []) if h[0] < lap]
+            hist = [h for h in prev_hist.get((car.index, side), []) if h[0] < lap]
             if not hist:
                 return None
             then_lap, then_gap = hist[-min(every, len(hist))]
@@ -170,13 +179,17 @@ class RaceDetector(Detector):
             me,
             ahead if valid_ahead else None,
             g_ahead if valid_ahead else None,
-            rate_of(ahead, g_ahead) if valid_ahead else None,
+            rate_of(ahead, g_ahead, "ahead") if valid_ahead else None,
             behind if valid_behind else None,
             g_behind if valid_behind else None,
-            rate_of(behind, g_behind) if valid_behind else None,
+            rate_of(behind, g_behind, "behind") if valid_behind else None,
         )
         if not text:
             return []
+        # Remember what the driver heard, for "down from 1.4" next time (only once a call is made).
+        for car, g, ok, side in ((ahead, g_ahead, valid_ahead, "ahead"), (behind, g_behind, valid_behind, "behind")):
+            if ok and car is not None and g is not None and gap(g) in text:
+                self._told_gap[(car.index, side)] = g
         # Like a real pit wall: add the rival's tyre situation when it's new information.
         noted = False
         for car, ok in ((ahead, valid_ahead and me.lap.position > 1), (behind, valid_behind)):
@@ -245,8 +258,7 @@ class RaceDetector(Detector):
             """', down from 1.4' when the gap has moved a lot since we last told the driver."""
             if car is None or g is None:
                 return ""
-            prev = self._told_gap.get(car.index)
-            self._told_gap[car.index] = g
+            prev = self._told_gap.get((car.index, "ahead" if car is ahead else "behind"))
             if prev is None or abs(prev - g) < 0.5 or g >= 10 or prev >= 10:
                 return ""
             return f", {'down' if g < prev else 'up'} from {gap(prev)}"
@@ -372,8 +384,9 @@ class RaceDetector(Detector):
     def _within_second(self, ctx: Context, me: CarState) -> list[RadioCall]:
         assert me.lap
         ahead = ctx.world.car_at_position(me.lap.position - 1)
-        if ahead is None or me.in_pit_lane:
-            return []
+        s = ctx.world.session
+        if ahead is None or me.in_pit_lane or (s is not None and s.safety_car_status):
+            return []  # behind the safety car everyone's within a second: not news
         g = ctx.world.race_gap_s(ahead, me)
         if g is None:
             return []
@@ -449,6 +462,12 @@ class RaceDetector(Detector):
         return []
 
     def _my_stop_done(self, ctx: Context, me: CarState, change: PitExited) -> list[RadioCall]:
+        if self._penalty_stop:
+            self._penalty_stop = False
+            if me.lap is None:
+                return []
+            text = f"Penalty served. P{me.lap.position}."
+            return [ctx.call("pit_done", Priority.INFO, text, ttl=20, category="pit")]
         if change.stationary_ms <= 0 or me.lap is None:
             return []
         secs = f"{change.stationary_ms / 1000:.1f}"
@@ -468,6 +487,8 @@ class RaceDetector(Detector):
             self._pit_lane_at = ctx.now
             self._pending.clear()
         stopping = ctx.now - self._pit_lane_at < PIT_EXIT_QUIET_S
+        # The position before this tick: the event and the new position can arrive together.
+        self._prev_pos, now_pos = self._prev_pos or me.lap.position, me.lap.position
         for e in ctx.events:
             if e.code != "OVTK" or me.lap.lap_num < 2 or stopping:
                 continue
@@ -483,21 +504,31 @@ class RaceDetector(Detector):
                 continue
             other = ctx.world.cars[move.other] if 0 <= move.other < len(ctx.world.cars) else None
             pos = me.lap.position
+            # Being lapped, or lapping a backmarker, is an "overtake" too: no position change, no call.
+            if move.kind == "gained" and not (move.old_pos and pos < move.old_pos):
+                continue
+            if move.kind == "lost" and not (move.old_pos and pos > move.old_pos):
+                continue
             if move.kind == "gained":
                 text = ctx.say("gained_position", pos=pos, me=ctx.me)
                 out.append(
                     ctx.call("move", Priority.INFO, text, ttl=8, category="positions", verbosity=Verbosity.NORMAL)
                 )
             elif other is not None:
-                text = ctx.say("lost_position", name=other.name, pos=pos, old=pos - 1)
+                text = ctx.say("lost_position", name=other.name, pos=pos, old=move.old_pos)
                 out.append(
                     ctx.call("move", Priority.INFO, text, ttl=8, category="positions", verbosity=Verbosity.NORMAL)
                 )
         self._pending = keep
+        self._prev_pos = now_pos
         return out
 
     def _my_pit_entry(self, ctx: Context, me: CarState) -> list[RadioCall]:
         """Coming in: what we're fitting and who we'll be racing at the exit."""
+        assert me.lap
+        self._penalty_stop = bool(me.lap.unserved_drive_throughs or me.lap.unserved_stop_gos)
+        if self._penalty_stop:
+            return []  # serving a penalty: no tyres, no tyre plan
         plan = pitplan.rejoin(ctx.world, me)
         tyre = pitplan.next_tyre(ctx.world, me)
         if plan is None or tyre is None:
@@ -516,7 +547,7 @@ class RaceDetector(Detector):
             if m.other == other and m.kind != kind:
                 self._pending.remove(m)
                 return
-        self._pending.append(_PendingMove(kind, other, ctx.now))
+        self._pending.append(_PendingMove(kind, other, ctx.now, self._prev_pos))
 
     def _fastest_lap(self, ctx: Context, me: CarState) -> list[RadioCall]:
         for e in ctx.events:

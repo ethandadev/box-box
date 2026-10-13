@@ -8,7 +8,7 @@ Real engineers are good because of when they talk. The rules here:
 - Strategy calls and answers to the driver wait for a straight only briefly, then go anyway.
 - Non-urgent chatter is rationed per lap by the verbosity setting, with a minimum gap between calls.
 - A newer call with the same key replaces an unsaid older one; anything stale is dropped silently.
-- On a qualifying push lap only safety and traffic get through.
+- On a qualifying push lap only safety, traffic, "lap deleted" and "last chance" get through.
 - After a flashback, nothing already said in the abandoned future is said again (the driver heard it a
   minute ago), and the same sentence is never repeated word for word within a couple of minutes.
 - Pressing push-to-talk cuts the engineer off and holds the queue until the driver has finished.
@@ -30,6 +30,7 @@ BUDGET_PER_LAP = {Verbosity.QUIET: 2, Verbosity.NORMAL: 4, Verbosity.CHATTY: 7}
 MIN_SPACING_S = {Verbosity.QUIET: 8.0, Verbosity.NORMAL: 4.0, Verbosity.CHATTY: 2.5}
 STRAIGHT_HOLD_S = 0.35  # how long the car must have been "on a straight" before we start talking
 PUSH_LAP_ALLOWED = {"traffic", "flags"}
+PUSH_LAP_KEYS = {"lap_deleted", "last_chance"}  # things the driver must hear mid-lap (abort, or give it all)
 LINE_WINDOW_MS = 6000  # just after the line on back-to-back push laps: time for the lap time and position
 REPLY_HOLD_MAX_S = 15.0  # after the driver speaks, other calls wait this long at most for the answer
 REWIND_MEMORY_S = 180.0  # after a flashback, calls made this recently stay said for this long
@@ -218,7 +219,7 @@ class RadioDirector:
             if not safety and not reply:
                 if now < self._hold_until or now < self.muted_until:
                     continue
-                if push_lap and call.category not in PUSH_LAP_ALLOWED:
+                if push_lap and call.category not in PUSH_LAP_ALLOWED and call.key not in PUSH_LAP_KEYS:
                     line_call = call.category == "lap_feedback" or call.key == "quali_pos"
                     if not (just_crossed and line_call):
                         continue

@@ -8,7 +8,6 @@ from box_box.state import tracks
 
 # Penalty types (EA spec appendix).
 DRIVE_THROUGH, STOP_GO, TIME_PENALTY, WARNING = 0, 1, 4, 5
-LAP_INVALIDATED = {10, 11, 12, 13, 14, 15}
 
 # Infringements explained in a few words for the radio.
 INFRINGEMENT_REASON = {
@@ -182,7 +181,23 @@ class FlagsDetector(Detector):
         if ctx.now - self._blue_called_at < 25:
             return []
         self._blue_called_at = ctx.now
-        return [ctx.call("blue", Priority.SAFETY, ctx.say("blue_flags", name="the leader"), ttl=5, category="flags")]
+        name = self._lapping_car(ctx) or "the car behind"
+        return [ctx.call("blue", Priority.SAFETY, ctx.say("blue_flags", name=name), ttl=5, category="flags")]
+
+    @staticmethod
+    def _lapping_car(ctx: Context) -> str | None:
+        """The car coming to lap us: ahead in the race, closest behind us on the road."""
+        world, me = ctx.world, ctx.world.player
+        if me is None or me.lap is None or not world.track_length:
+            return None
+        best: tuple[float, str] | None = None
+        for car in world.running():
+            if car.index == me.index or car.lap is None or car.lap.position >= me.lap.position:
+                continue
+            behind_m = (me.lap.lap_distance - car.lap.lap_distance) % world.track_length
+            if behind_m < 400 and (best is None or behind_m < best[0]):
+                best = (behind_m, ctx.name(car, "the car behind"))
+        return best[1] if best else None
 
     def _lap_invalid(self, ctx: Context) -> list[RadioCall]:
         me = ctx.world.player

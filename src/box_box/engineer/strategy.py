@@ -96,6 +96,8 @@ class StrategyDetector(Detector):
             out += self._grid_tyres(ctx, me)
             completed = any(isinstance(c, LapCompleted) and c.car_index == me.index for c in ctx.changes)
             sprint = world.is_sprint  # short and flat out: no stop planned, so no pit strategy talk
+            if world.session and world.session.safety_car_status in (1, 2) and me.lap:
+                self._sc_laps.add(me.lap.lap_num)  # sprints too: an SC lap isn't a rhythm problem
             if completed and world.lights_out and not me.in_pit_lane:
                 if not sprint:
                     out += self._tyre_plan(ctx, me)
@@ -250,8 +252,6 @@ class StrategyDetector(Detector):
         s = ctx.world.session
         assert s
         prev, self._sc_status = self._sc_status, s.safety_car_status
-        if s.safety_car_status in (1, 2) and me.lap:
-            self._sc_laps.add(me.lap.lap_num)
         if s.safety_car_status not in (1, 2) or prev == s.safety_car_status:
             return []
         stint = me.pit_stops
