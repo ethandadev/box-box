@@ -58,3 +58,28 @@ def test_no_mate_after_the_drivers_name() -> None:
     h = Humanizer(random.Random(0))
     assert h._mate("That's fastest lap, Ethan.") is None
     assert h._mate("Good lap.") == "Good lap, mate."
+
+
+def test_variety_pack_only_uses_fields_each_call_receives() -> None:
+    """A template naming a field its caller doesn't pass would crash that call at runtime."""
+    import string
+
+    from box_box.engineer.phrases import ORIGINAL_FIELDS
+    from box_box.engineer.phrases_variety import VARIETY
+    from box_box.engineer.radio import variants
+
+    for key, lines in VARIETY.items():
+        assert len(lines) >= 3, key
+        for line in lines:
+            plain = line.replace("[", " ").replace("]", " ").replace("|", " ")
+            fields = {f for _, f, _, _ in string.Formatter().parse(plain) if f}
+            assert fields <= ORIGINAL_FIELDS[key], (key, line)
+        assert sum(variants(line) for line in lines) >= 6, key
+
+
+def test_the_same_call_rarely_repeats_word_for_word() -> None:
+    from box_box.engineer.radio import Phrasebook
+
+    say = Phrasebook(seed=4)
+    said = [say("gained_position", pos=3) for _ in range(12)]
+    assert len(set(said)) >= 11  # twelve overtakes, at most one sentence heard twice

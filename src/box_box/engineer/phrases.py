@@ -7,6 +7,10 @@ Personalities: "calm" (default, always complete), "fired_up", "dry". Missing one
 
 from __future__ import annotations
 
+import string as _string
+
+from box_box.engineer.phrases_variety import VARIETY
+
 PHRASES: dict[str, dict[str, list[str]]] = {
     # ---- session ------------------------------------------------------------------------------
     "greet_practice": {
@@ -725,4 +729,12 @@ _CLIPPED: dict[str, list[str]] = {
     "pit_stop_done": ["Good stop, {seconds} seconds. P{pos}.", "{seconds} second stop. P{pos}. Tyres need a lap."],
 }
 for _key, _lines in _CLIPPED.items():
+    PHRASES.setdefault(_key, {})["calm"] = _lines
+
+# Fields each call already receives, from the lines above: the variety pack may only use these.
+ORIGINAL_FIELDS = {
+    key: {f for line in table.get("calm", []) for _, f, _, _ in _string.Formatter().parse(line) if f}
+    for key, table in PHRASES.items()
+}
+for _key, _lines in VARIETY.items():
     PHRASES.setdefault(_key, {})["calm"] = _lines

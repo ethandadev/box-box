@@ -13,6 +13,12 @@
 - Radio text is said the way engineers say it: no "slash", "turns one to three", "five k p h", "S Q one".
 
 **Talks like a real engineer**
+- Crashes: a big hit gets "You okay?", then a moment later one report in words ("heavy damage on the left
+  side of the front wing, that's four tenths, box this lap"), never percentages.
+- Ask "check the floor", "how's the front wing", "check the engine" or "any damage": "Copy, having a
+  look", then the answer about that part. "Hi" just gets a hello back.
+- Far more variety: the common calls have hundreds of ways to be said between them, dealt so the same
+  sentence almost never comes back.
 - No repeats after flashbacks; no false punctures from worn tyres; no position commentary through your own stop.
 - Practice traffic: each car called once ("on a push lap, 8 seconds", then "let him by"), not five times.
 - Sprint weekends: the Sprint is called the Sprint, with no pit-stop talk and points for the top 8.

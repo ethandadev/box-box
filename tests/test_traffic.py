@@ -60,7 +60,7 @@ def test_slow_car_ahead_on_my_push_lap() -> None:
     sc = Scenario([Car("Ethan", 1000, 300, FLYING), Car("Fernando ALONSO", 1600, 140, OUT_LAP)])
     calls = run(sc, 20)
     assert len(calls) == 1
-    assert calls[0].text == "Traffic ahead, Alonso on an out lap, 6 seconds."
+    assert "Alonso" in calls[0].text and "6 seconds" in calls[0].text
     assert calls[0].priority == Priority.STRATEGY
 
 
