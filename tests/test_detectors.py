@@ -257,7 +257,7 @@ def test_practice_pb_then_slower_lap_names_the_sector() -> None:
     assert len(calls) == 1 and "1:30.0" in calls[0].text and "best" in calls[0].text.lower()
     sim.complete_lap(0, 90_600, s1=30_000, s2=30_550)  # sector 2 +0.55
     calls = sim.run(0.3)
-    assert len(calls) == 1 and "sector 2" in calls[0].text and "six tenths" in calls[0].text
+    assert len(calls) == 1 and "sector 2" in calls[0].text and "six tenths" in calls[0].text.lower()
 
 
 def test_flashback_across_the_line_is_not_a_new_lap() -> None:

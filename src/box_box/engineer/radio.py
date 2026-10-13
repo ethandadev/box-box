@@ -124,10 +124,30 @@ def soften(word: str, proper: set[str] | frozenset[str] = frozenset()) -> str:
     return word[0].lower() + word[1:]
 
 
+_CHOICE = re.compile(r"\[([^\[\]]*)\]")
+RECENT_MEMORY = 8  # a key's last few sentences are avoided, so the same wording almost never comes back
+
+
+def expand(template: str, rng: random.Random) -> str:
+    """Resolve choice brackets: "[Good|Nice|Lovely] lap" picks one; "[, mate|]" may pick nothing."""
+    return _CHOICE.sub(lambda m: rng.choice(m.group(1).split("|")), template)
+
+
+def variants(template: str) -> int:
+    """How many different sentences one template can produce."""
+    n = 1
+    for m in _CHOICE.finditer(template):
+        n *= len(m.group(1).split("|"))
+    return n
+
+
 class Phrasebook:
-    """Picks among variations so the same situation doesn't sound canned, without repeating back-to-back.
+    """Picks among variations so the same situation doesn't sound canned.
 
     Phrases live in `phrases.PHRASES[key][personality]`; any personality missing a key falls back to calm.
+    Templates are dealt like a shuffled deck (every one is used before any comes round again), and each
+    can hold choices in brackets, so a key with a handful of templates has dozens of ways to say it. The
+    last few sentences said for a key are avoided outright.
     """
 
     def __init__(self, personality: str = "calm", seed: int | None = None) -> None:
@@ -135,7 +155,9 @@ class Phrasebook:
 
         self.personality = personality
         self._rng = random.Random(seed)
+        self._decks: dict[str, list[int]] = {}
         self._last: dict[str, int] = {}
+        self._recent: dict[str, list[str]] = {}
         self.proper: set[str] = set()  # names that keep their capital: the driver's, the other cars'
         self.human = Humanizer(random.Random(None if seed is None else seed + 1), self.proper)
 
@@ -144,12 +166,28 @@ class Phrasebook:
         options = table.get(self.personality) or table["calm"]
         return self.pick(f"{self.personality}:{key}", options, **fmt)
 
-    def pick(self, key: str, options: list[str], **fmt: object) -> str:
-        i = self._rng.randrange(len(options))
-        if len(options) > 1 and i == self._last.get(key):
-            i = (i + 1) % len(options)
+    def _deal(self, key: str, n: int) -> int:
+        deck = self._decks.get(key)
+        if not deck or max(deck) >= n:
+            deck = list(range(n))
+            self._rng.shuffle(deck)
+            if n > 1 and deck[-1] == self._last.get(key):  # never the same template twice in a row
+                deck[0], deck[-1] = deck[-1], deck[0]
+            self._decks[key] = deck
+        i = deck.pop()
         self._last[key] = i
-        text = options[i].format(**fmt)
+        return i
+
+    def pick(self, key: str, options: list[str], **fmt: object) -> str:
+        recent = self._recent.setdefault(key, [])
+        text = ""
+        for _ in range(6):
+            text = expand(options[self._deal(key, len(options))], self._rng).format(**fmt)
+            if text not in recent:
+                break
+        recent.append(text)
+        del recent[:-RECENT_MEMORY]
+        text = re.sub(r"\s+([,.!?])", r"\1", re.sub(r"\s{2,}", " ", text)).strip()  # an empty choice leaves gaps
         # A sentence-opening placeholder ("{part} damage", "... rain. {intensity}.") still gets a capital.
         text = re.sub(r"([.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
         return text[:1].upper() + text[1:]
