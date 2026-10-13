@@ -83,3 +83,26 @@ def test_the_same_call_rarely_repeats_word_for_word() -> None:
     say = Phrasebook(seed=4)
     said = [say("gained_position", pos=3) for _ in range(12)]
     assert len(set(said)) >= 11  # twelve overtakes, at most one sentence heard twice
+
+
+def test_important_lines_sometimes_said_twice() -> None:
+    from box_box.engineer.human import Humanizer
+
+    h = Humanizer(random.Random(3))
+    outs = [h.emphasize("Tyres are 9 laps old. Push on them.", "human", key="tyres") for _ in range(400)]
+    twice = [o for o in outs if o.lower().count("tyres are 9 laps old") == 2]
+    assert 10 < len(twice) < 60  # sometimes, not always
+    assert all(o.endswith("Push on them.") for o in twice)
+    assert "Tyres are 9 laps old, tyres are 9 laps old. Push on them." in twice
+    # Never twice in a row, never on lap times, never when off.
+    assert all(not (a != outs[0] and b != outs[0]) for a, b in zip(outs, outs[1:], strict=False))
+    assert h.emphasize("1:26.4, that's a PB.", "human", key="lap") == "1:26.4, that's a PB."
+    assert Humanizer(random.Random(1)).emphasize("Tyres are 9 laps old.", "off", key="tyres") == "Tyres are 9 laps old."
+
+
+def test_box_call_sometimes_asks_to_confirm() -> None:
+    from box_box.engineer.human import Humanizer
+
+    h = Humanizer(random.Random(4))
+    outs = {h.emphasize("Box, box. Box this lap.", "subtle", key="box", me="Ethan") for _ in range(200)}
+    assert any("confirm" in o.lower() for o in outs) and "Box, box. Box this lap." in outs

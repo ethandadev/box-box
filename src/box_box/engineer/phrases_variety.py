@@ -148,6 +148,8 @@ VARIETY: dict[str, list[str]] = {
         "Box box, {me}. [In this lap|This lap].",
         "[Okay|Right] {me}, box this lap. Box this lap.",
         "Box, box, box. [Confirm on the MFD|In this lap].",
+        "Box box, {me}. Box and pit, confirm.",
+        "Box, box. [Box and pit confirm|Pit confirm].",
     ],
     "pit_stop_done": [
         "Good stop, {seconds} seconds. P{pos}.",

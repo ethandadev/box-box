@@ -32,6 +32,9 @@
   grass doesn't count, wet tyres don't get diff tips, and once you change the diff or bias he starts counting again.
 - No data yet? Sometimes "Stand by", sometimes "we're having trouble with the sensors", sometimes just
   "We are checking." A garbled transmission gets "bit of static on the radio, say again?".
+- Now and then he says the important bit twice so it lands ("Tyres are 9 laps old, tyres are 9 laps old",
+  "Gap to Leclerc is 1.2, gap to Leclerc is 1.2"), and a box call sometimes ends "Box and pit, confirm".
+  Rare (Natural speech setting decides how often), never on lap times.
 - Answers worked out live sometimes take a short thinking beat at a comma, like a person, not a script.
 - Far more variety: the common calls have hundreds of ways to be said between them, dealt so the same
   sentence almost never comes back.

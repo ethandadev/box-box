@@ -25,6 +25,24 @@ NUMBER_SLIP_EVERY = 12  # a misspoken number at most once in this many transmiss
 NUMBER_SLIP_KEYS = {"gaps", "pit_done", "rival", "time_left", "laps_to_go", "tyre_plan"}  # never a lap time
 COMPOUND_WORDS = ["softs", "mediums", "hards"]
 
+# Saying the important bit twice, the way engineers do to make sure it lands: "Tyres are 9 laps old,
+# tyres are 9 laps old." Rare, and only on short, important sentences.
+REPEAT_RATES = {"off": 0.0, "subtle": 0.06, "human": 0.12}
+REPEAT_GAP = 8  # at least this many transmissions between repeats
+REPEAT_KEYS = {
+    "box", "last_chance", "pit_in", "pit_window", "sc", "vsc", "red", "rain", "tyres", "wear", "tyre_plan",
+    "fuel", "ers_mode", "battery", "setup", "gaps", "rival", "laps_to_go", "last_lap", "penalty", "warning",
+    "blue", "traffic", "wing", "damage", "plan", "undercut",
+}  # fmt: skip
+BOX_CONFIRM = [
+    "Box and pit, confirm.",
+    "Box and pit confirm.",
+    "Confirm box.",
+    "Pit confirm, {me}.",
+    "Confirm, box box.",
+]
+BOX_CONFIRM_CHANCE = 0.35
+
 _DECIMAL = re.compile(r"(?<![\d:.])(\d+)\.(\d)(?!\d)")
 _LAP_TIME = re.compile(r"\b(\d):(\d{2})\.(\d)\b")
 
@@ -36,6 +54,8 @@ class Humanizer:
         self._since_slip = 99
         self._calls = 0
         self._last_number_slip = -99
+        self._last_repeat = -99
+        self._emphasis_calls = 0
 
     def apply(self, text: str, level: str, *, key: str = "", safety: bool = False, reply: bool = False) -> str:
         """Maybe add one natural imperfection. `reply` limits it to spoken-reply habits (no number slips)."""
@@ -65,6 +85,44 @@ class Humanizer:
                     self._last_number_slip = self._calls
                 return out
         return text
+
+    def emphasize(self, text: str, level: str, *, key: str = "", me: str = "") -> str:
+        """Sometimes say it twice to make sure it lands: a box call gets "Box and pit, confirm.", a short
+        important line gets repeated ("Tyres are 9 laps old, tyres are 9 laps old.")."""
+        rate = REPEAT_RATES.get(level, 0.0)
+        base = key.split(":")[0]
+        self._emphasis_calls += 1
+        if not rate or not text or base not in REPEAT_KEYS or self._emphasis_calls - self._last_repeat < REPEAT_GAP:
+            return text
+        if base in ("box", "last_chance"):
+            if "confirm" in text.lower() or self._rng.random() >= BOX_CONFIRM_CHANCE:
+                return text
+            self._last_repeat = self._emphasis_calls
+            extra = self._rng.choice(BOX_CONFIRM).format(me=me or "mate")
+            return text.rstrip() + " " + extra
+        if self._rng.random() >= rate:
+            return text
+        out = self._repeat_first(text)
+        if out != text:
+            self._last_repeat = self._emphasis_calls
+        return out
+
+    def _repeat_first(self, text: str) -> str:
+        m = re.match(r"(.+?)[.!?](?=\s|$)", text)
+        if not m:
+            return text
+        first, rest = m.group(1).strip(), text[m.end() :].strip()
+        words = first.split()
+        if not 3 <= len(words) <= 7 or "," in first:
+            return text  # too short to matter, or too long to say twice
+        lowered = first.lower()
+        if text.lower().count(lowered) > 1:
+            return text  # already said twice
+        from box_box.engineer.radio import soften
+
+        again = soften(words[0], self.proper) + (" " + " ".join(words[1:]) if len(words) > 1 else "")
+        said = f"{first}, {again}." if self._rng.random() < 0.6 else f"{first}. {first}."
+        return said + (" " + rest if rest else "")
 
     # ---- the slips ---------------------------------------------------------------------------------
 

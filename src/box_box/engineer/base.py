@@ -64,6 +64,7 @@ class Context:
             text = self.say.lead(text, me=self.me)
         crisp = priority == Priority.SAFETY or key.split(":")[0] in CRISP_KEYS
         text = self.say.human.apply(text, self.settings.engineer.natural_speech, key=key, safety=crisp)
+        text = self.say.human.emphasize(text, self.settings.engineer.natural_speech, key=key, me=self.me)
         return RadioCall(
             key=key,
             priority=priority,
