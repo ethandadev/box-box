@@ -85,8 +85,10 @@ _SHARE_RATE_HZ = {
     10: 2.0,
     11: 4.0,
     12: 0.5,  # tyre sets, per car
+    5: 0.5,  # car setups (diff, bias)
+    13: 10.0,  # the player's wheel slip: enough to catch wheelspin and lock-ups
 }  # telemetry, status, t2, damage, history (lap data: all)
-_SHARE_KEEP = {1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 16}  # no motion, setups, lobby, motion ex, time trial, positions
+_SHARE_KEEP = {1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16}  # no motion, lobby, time trial, positions
 
 
 def compact(src: str | Path, dest: str | Path) -> int:

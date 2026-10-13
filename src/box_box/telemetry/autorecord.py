@@ -6,6 +6,7 @@ session, or 2 minutes of silence (quit to menu, crash). Files are named once the
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 import time
@@ -73,10 +74,13 @@ class AutoRecorder:
             if now - self._last_flush > 2.0:
                 self._writer.flush()
                 self._last_flush = now
-        except OSError as e:
+        except OSError as e:  # disk full, say: stop for this session, don't churn new files
             self.error = f"recording stopped: {e}"
             log.error(self.error)
-            self._writer = None
+            writer, self._writer = self._writer, None
+            with contextlib.suppress(Exception):
+                writer.close()
+            self._closed_uid, self._path, self._uid = self._uid, None, None
         self._last_packet = now
 
     def tick(self) -> None:
@@ -129,12 +133,21 @@ class AutoRecorder:
             return None
 
     def _prune(self) -> None:
-        files = sorted(self.folder.glob("*.f1raw*"), key=lambda p: p.stat().st_mtime, reverse=True)
+        # Only our own recordings ("2026-10-13 171817 ..."): files the driver put here are theirs.
+        ours = [p for p in self.folder.glob("*.f1raw*") if re.match(r"\d{4}-\d{2}-\d{2} \d{6} ", p.name)]
+        files = sorted(ours, key=_mtime, reverse=True)
         for old in files[self.keep :]:
             try:
                 old.unlink()
             except OSError:
                 pass
+
+
+def _mtime(p: Path) -> float:
+    try:
+        return p.stat().st_mtime
+    except OSError:  # deleted between listing and looking
+        return 0.0
 
 
 def list_recordings(folder: Path) -> list[dict]:

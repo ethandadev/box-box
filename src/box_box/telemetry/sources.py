@@ -19,7 +19,10 @@ class _Queueing(asyncio.DatagramProtocol):
         self.queue = queue
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
-        # If we're behind, dropping beats lagging: the next frame supersedes this one.
+        # If we're behind, dropping beats lagging: drop the oldest frame (the new one supersedes it).
+        if self.queue.full():
+            with contextlib.suppress(asyncio.QueueEmpty):
+                self.queue.get_nowait()
         with contextlib.suppress(asyncio.QueueFull):
             self.queue.put_nowait(data)
 
@@ -61,10 +64,10 @@ async def udp_source(sock: socket.socket) -> AsyncIterator[bytes]:
 async def file_source(path: str | Path, speed: float = 1.0) -> AsyncIterator[bytes]:
     """Replay a recording. speed=0 means as fast as possible."""
     start = time.monotonic()
-    for t_ns, data in read_records(path):
-        if speed > 0:
-            due = start + t_ns / 1e9 / speed
-            delay = due - time.monotonic()
-            if delay > 0:
-                await asyncio.sleep(delay)
+    for n, (t_ns, data) in enumerate(read_records(path)):
+        delay = start + t_ns / 1e9 / speed - time.monotonic() if speed > 0 else 0.0
+        if delay > 0:
+            await asyncio.sleep(delay)
+        elif n % 200 == 0:
+            await asyncio.sleep(0)  # running behind (or flat out): still let the UI and the voice breathe
         yield data

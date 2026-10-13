@@ -44,11 +44,11 @@ class Track:
     def corner_after(self, lap_distance: float, game_length: float | None, within: float = 600.0) -> Corner | None:
         """The next corner from a point on the lap (wrapping past the line), if within `within` metres."""
         length = game_length or self.length_m
-        for c, at in self.corners_on(game_length):
-            ahead = (at - lap_distance) % length
-            if ahead <= within:
-                return c
-        return None
+        corners = self.corners_on(game_length)
+        if not corners:
+            return None
+        ahead, corner = min((((at - lap_distance) % length, c) for c, at in corners), key=lambda e: e[0])
+        return corner if ahead <= within else None  # the closest, not the first in list order
 
 
 @cache

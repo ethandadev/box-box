@@ -134,7 +134,9 @@ class CarState:
         """How the engineer refers to this driver on the radio."""
         if self.participant and self.participant.name:
             return names.surname(self.participant.name)
-        return f"car {self.index}"
+        if self.participant and self.participant.race_number:
+            return f"car {self.participant.race_number}"  # the number on the car, not our slot index
+        return "a car"
 
     @property
     def team(self) -> str | None:
@@ -308,9 +310,15 @@ class World:
         return None
 
     def find_driver(self, name: str) -> CarState | None:
-        """Match a spoken driver name ("Leclerc", "the Ferrari", "car 16") to a car."""
+        """Match a spoken driver name ("Leclerc", "Norris", "car 16") to a car."""
         q = name.strip().lower()
         if not q:
+            return None
+        if q.startswith("car ") and q[4:].isdigit():  # before the loose match: "car 16" isn't "car 1"
+            num = int(q[4:])
+            for c in self.running():
+                if c.participant and c.participant.race_number == num:
+                    return c
             return None
         for c in self.running():
             if c.name.lower() == q or (c.participant and c.participant.name.lower() == q):
@@ -318,11 +326,6 @@ class World:
         for c in self.running():
             if q in c.name.lower() or c.name.lower() in q:
                 return c
-        if q.startswith("car ") and q[4:].isdigit():
-            num = int(q[4:])
-            for c in self.running():
-                if c.participant and c.participant.race_number == num:
-                    return c
         return None
 
     def race_gap_s(self, a: CarState, b: CarState) -> float | None:
@@ -501,7 +504,21 @@ class World:
         # Lap completion: the lap number moves on, or the last-lap time changes (the chequered flag
         # updates the time without incrementing the lap).
         new_lap = lap.lap_num > prev.lap_num
-        new_time = lap.last_lap_ms and lap.last_lap_ms != prev.last_lap_ms
+        new_time = bool(lap.last_lap_ms) and lap.last_lap_ms != prev.last_lap_ms
+        if (
+            new_time
+            and not new_lap
+            and not (lap.result_status == ResultStatus.FINISHED or lap.current_lap_ms < prev.current_lap_ms)
+        ):
+            # The game corrected the previous lap's time mid-lap (no line crossed): fix the record, don't
+            # complete a phantom lap with half of this lap's sectors.
+            if car.laps and car.laps[-1].lap_num == lap.lap_num - 1:
+                old = car.laps[-1]
+                s3 = lap.last_lap_ms - old.sector1_ms - old.sector2_ms if old.sector1_ms and old.sector2_ms else 0
+                car.laps[-1] = replace(old, lap_ms=lap.last_lap_ms, sector3_ms=max(0, s3))
+                valid = [r.lap_ms for r in car.laps if r.valid and r.lap_ms > 0]
+                car.best_lap_ms = min(valid) if valid else None
+            new_time = False
         if (new_lap or new_time) and lap.last_lap_ms:
             s1, s2 = prev.sector1_ms, prev.sector2_ms
             s3 = lap.last_lap_ms - s1 - s2 if s1 and s2 else 0

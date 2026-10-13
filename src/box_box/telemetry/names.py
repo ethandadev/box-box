@@ -151,7 +151,11 @@ def surname(full_name: str) -> str:
     if not name:
         return name
     words = name.split()
-    upper = [w for w in words if w.isupper() and any(ch.isalpha() for ch in w)]
+    upper: list[str] = []
+    for w in reversed(words):  # the trailing run of uppercase words: "Max VERSTAPPEN", "Nyck DE VRIES"
+        if not (w.isupper() and sum(ch.isalpha() for ch in w) >= 2):
+            break  # "TJ Smith", "Lewis H": an online player's own name, not the game's surname format
+        upper.insert(0, w)
     if upper:
         # Surname is the run of uppercase words ("DE VRIES"); title-case it, keeping particles natural.
         return " ".join(_title(w) for w in upper)
