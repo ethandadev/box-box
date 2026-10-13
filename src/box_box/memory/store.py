@@ -176,11 +176,16 @@ class Memory:
     def add_note(self, kind: str, text: str) -> None:
         self._exec("INSERT INTO notes (created_at, kind, text) VALUES (?, ?, ?)", (time.time(), kind, text[:1000]))
 
-    def notes(self, limit: int = 15) -> list[dict[str, Any]]:
+    def notes(self, limit: int = 15, driver: bool | None = None) -> list[dict[str, Any]]:
+        """The newest notes: all of them, only what the driver asked us to remember (driver=True), or only the
+        rest (feedback answers, debriefs)."""
+        where = "" if driver is None else ("WHERE kind = 'driver'" if driver else "WHERE kind != 'driver'")
         rows = self._exec(
-            "SELECT created_at, kind, text FROM notes ORDER BY created_at DESC LIMIT ?", (limit,), fetch=True
+            f"SELECT created_at, kind, text FROM notes {where} ORDER BY created_at DESC LIMIT ?",  # noqa: S608
+            (limit,),
+            fetch=True,
         )
-        return [{"at": r[0], "kind": r[1], "text": r[2]} for r in rows]  # type: ignore[union-attr]
+        return [{"at": r[0], "kind": r[1], "text": r[2]} for r in rows or []]
 
     def radio_between(self, start: float, end: float) -> list[dict[str, Any]]:
         rows = self._exec(
@@ -197,7 +202,9 @@ class Memory:
     def driver_profile(self) -> str:
         """A few lines about the driver for the AI's context: notes, past debriefs, recent results."""
         lines = []
-        for n in reversed(self.notes(12)):
+        # What he asked us to remember always makes it in; feedback and debriefs pile up, so only the latest.
+        notes = self.notes(12, driver=True) + self.notes(4, driver=False)
+        for n in sorted(notes, key=lambda n: n["at"]):
             lines.append(f"- ({n['kind']}) {n['text']}")
         for s in self.recent_sessions(5):
             if s["best_lap_ms"] or s["position"]:

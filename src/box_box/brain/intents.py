@@ -24,7 +24,7 @@ class Actions(Protocol):
     def unmute(self) -> None: ...
     def set_gap_every(self, laps: int) -> None: ...
     def set_callout(self, category: str, enabled: bool) -> None: ...
-    def remember(self, note: str) -> None: ...
+    def remember(self, note: str, kind: str = "driver") -> None: ...
     def last_radio(self) -> str | None: ...
 
 
@@ -37,11 +37,14 @@ class Answer:
     delay_s: float = 0.0  # how long that moment is
 
 
-NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "every": 1, "each": 1}
+NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "other": 2,  # "every other lap"
+}  # fmt: skip
 
 
 def _num(text: str, default: int) -> int:
-    m = re.search(r"\b(\d+|one|two|three|four|five)\b", text)
+    m = re.search(r"\b(\d+|" + "|".join(NUMBER_WORDS) + r")\b", text)
     if not m:
         return default
     v = m.group(1)
@@ -76,7 +79,12 @@ def _normal(t: str, w: World, a: Actions, me: str) -> Answer:
 
 
 def _silence(t: str, w: World, a: Actions, me: str) -> Answer:
-    minutes = _num(t, 5)
+    if re.search(r"\ba couple\b", t):
+        minutes = 2
+    elif re.search(r"\ban? (?:minute|min|lap|second|sec)\b", t):
+        minutes = 1  # "for a minute", "for a lap"
+    else:
+        minutes = _num(t, 5)
     if re.search(r"\bsec(?:ond)?s?\b", t):
         minutes = 1  # "quiet for 30 seconds": the shortest mute is a minute
     elif re.search(r"\blaps?\b", t):
@@ -151,18 +159,27 @@ def _driver_gap(t: str, w: World, a: Actions, me: str) -> Answer | None:
     if not m:
         return None
     who = m.group(1).strip()
-    if who in (
-        "the leader",
-        "leader",
-        "the car ahead",
-        "the car behind",
-        "car ahead",
-        "car behind",
-        "them",
-        "him",
-        "her",
+    if (
+        who
+        in (
+            "the leader",
+            "leader",
+            "the car ahead",
+            "the car behind",
+            "car ahead",
+            "car behind",
+            "them",
+            "him",
+            "her",
+            "us",
+            "we",
+            "me",
+            "you",
+            "it",
+        )
+        or len(who) < 3
     ):
-        return None
+        return None  # "what about us": not Russell
     info = tools.driver(w, who)
     if "error" in info:
         return None
@@ -324,6 +341,13 @@ def _best_lap(t: str, w: World, a: Actions, me: str) -> Answer | None:
     if re.search(r"\bwho\b", t) or _about_someone_else(t, w):
         return None  # "who has the fastest lap": not ours
     me_car = w.player
+    if re.search(r"\bfastest lap\b", t) and not re.search(r"\b(?:my|our)\b", t):
+        best = w.best_lap_overall()  # "what's the fastest lap": the session's, not ours
+        if best is not None:
+            car, ms = best
+            if car is me_car:
+                return Answer(f"That's you, {lap_time(ms)}.")
+            return Answer(f"{car.name}, {lap_time(ms)}.")
     if me_car is None or not me_car.session_best_ms:
         return Answer("No lap time yet.")
     return Answer(f"Your best is {lap_time(me_car.session_best_ms)}.")
@@ -404,17 +428,9 @@ def _about_someone_else(t: str, w: World) -> bool:
     if re.search(r"\b(?:car|guy) (?:ahead|behind|in front)\b", t):
         return True
     me_car = w.player
-    for word in re.findall(r"[a-z]{3,}", t.replace("'s", "")):
-        car = w.find_driver(word) if word not in _COMMON_WORDS else None
-        if car is not None and car is not me_car:
-            return True
-    return False
-
-
-_COMMON_WORDS = {
-    "the", "what", "how", "are", "tyres", "tyre", "tires", "old", "who", "has", "fastest", "lap", "best", "is",
-    "on", "my", "our", "his", "their", "wear", "this", "that", "and", "for", "with", "these", "those", "car",
-}  # fmt: skip
+    words = set(re.findall(r"[a-z]{3,}", t.replace("'s", "")))
+    # Whole words only: "man" is in Bearman, "lap" in Colapinto.
+    return any(car is not me_car and words & set(re.findall(r"[a-z]{3,}", car.name.lower())) for car in w.running())
 
 
 def _no_gap_info(t: str, w: World, a: Actions, me: str) -> Answer:
@@ -423,7 +439,7 @@ def _no_gap_info(t: str, w: World, a: Actions, me: str) -> Answer:
 
 
 def _remember(t: str, w: World, a: Actions, me: str) -> Answer | None:
-    m = re.search(r"remember (?:that )?(.+)", t)
+    m = re.search(r"remember (?!(?:that|this|it)$)(?:that\s+)?(.{3,})", t)
     if not m or re.search(
         r"\b(?:do|did|don'?t|can) you remember\b|\bremember (?:what|when|how|if)\b|\b(?:i )?(?:don'?t|do not|can'?t|cannot) remember\b",
         t,
@@ -431,6 +447,13 @@ def _remember(t: str, w: World, a: Actions, me: str) -> Answer | None:
         return None  # a question about the past, not a note to keep
     a.remember(m.group(1).strip().rstrip("."))
     return Answer("Copy, noted.", command=True)
+
+
+_PASS = Answer("")  # matched, but not something to answer locally: stop looking
+
+
+def _not_a_request(t: str, w: World, a: Actions, me: str) -> Answer:
+    return _PASS
 
 
 RULES: list[Rule] = [
@@ -470,7 +493,13 @@ RULES: list[Rule] = [
         _plan,
     ),
     (r"\b(?:stop talking about|no more|stop telling me about|don'?t tell me about) tyres?\b", _no_tyre_info),
-    (r"\b(?:stop talking about|no more|stop telling me about|don'?t tell me about) (?:the )?gaps?\b", _no_gap_info),
+    (
+        r"\b(?:stop talking about|no more|stop telling me about|don'?t tell me about) (?:the )?gaps?\b|"
+        r"\bdon'?t (?:give|need|want)(?: me)? (?:the |any )?gaps?\b|\bno gaps?\b|\bstop the gaps?\b",
+        _no_gap_info,
+    ),
+    # "stop talking about the weather", "I don't need the fuel": not a request for it. Let the AI handle it.
+    (r"\b(?:stop (?:talking|telling me) about|don'?t (?:tell|give) me|i don'?t (?:need|want))\b", _not_a_request),
     (r"\bno more (?:radio|updates|info|chat)\b", _quiet),
     (r"\b(?:radio silence|stop talking(?! about)|shut up|be quiet for|go quiet|no radio)\b", _silence),
     (r"\b(?:talk to me again|radio back on|you can talk|unmute|come back on)\b", _unmute),
@@ -487,10 +516,14 @@ RULES: list[Rule] = [
     (r"\bstop the tyres?\b", _no_tyre_info),
     (
         r"^(?:box|box box|boxing|i'?m boxing|box this lap|pitting|i'?m pitting|i (?:need|want) (?:a box|to box|to pit|a stop)|"
-        r"box me|can (?:i|we) box|i'?m coming in|coming in)(?: this lap| now| please| jake| mate)*$",
+        r"box me|can (?:i|we) box|i'?m coming in|coming in|pit|pit me|we'?re boxing|we'?re pitting)"
+        r"(?: this lap| now| please| jake| mate)*$",
         _box,
     ),
-    (r"^(?:stay(?:ing)? out|not boxing)(?: this lap| please| jake| mate)*$", _stay_out),
+    (
+        r"^(?:(?:i'?m |we'?re )?stay(?:ing)? out|(?:i'?m |we'?re )?not (?:boxing|pitting))(?: this lap| please| jake| mate)*$",
+        _stay_out,
+    ),
     (
         r"\b(?:gap to|where(?:'s| is)|how far (?:is|to)|how far (?:ahead|behind) is|what about)\s+(?!the car|car |the leader|leader)\w"
         r"|\b\w+'s gap\b(?<!\bmy gap\b)",
@@ -509,7 +542,7 @@ RULES: list[Rule] = [
     (r"\bweather\b|\brain\b|\bforecast\b|\bradar\b", _weather),
     (
         r"\blaps? (?:left|to go|remaining)\b|\bhow many laps\b|\bhow long left\b|\btime left\b|\bminutes left\b|"
-        r"\bis (?:this|it) the last lap\b",
+        r"\b(?:is (?:this|it)|am i on|are we on) (?:the |my )?(?:last|final) lap\b",
         _laps_left,
     ),
     (r"\blast lap\b|\bwhat was that lap\b|\bwhat did i do\b|\blap time\b", _last_lap),
@@ -527,6 +560,8 @@ def answer(text: str, world: World, actions: Actions, me: str) -> Answer | None:
     for pattern, fn in _COMPILED:
         if pattern.search(t):
             result = fn(t, world, actions, me)
+            if result is _PASS:
+                return None
             if result is not None:
                 return result
     return None

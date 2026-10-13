@@ -100,7 +100,7 @@ class Conversation:
         topic = self._feedback_topic(text, local)
         if topic:
             where = f"{names.track_name(world.session.track_id)} {world.session_name}" if world.session else "a session"
-            self.actions.remember(f"{topic.capitalize()} feedback at {where}: {text}")
+            self.actions.remember(f"{topic.capitalize()} feedback at {where}: {text}", "feedback")
             if not self.brain.available:
                 yield self.say.human.apply(
                     self.say("feedback_ack", me=s.driver.name), s.engineer.natural_speech, reply=True
@@ -114,7 +114,7 @@ class Conversation:
             if (local is None or not quick) and describes_car(text):
                 # A statement ("the tyres are overheating"), not a question: acknowledge it like an engineer
                 # rather than reading out telemetry that may well contradict what the driver can feel.
-                self.actions.remember(f"Driver said: {text}")
+                self.actions.remember(f"Driver said: {text}", "feedback")
                 yield self.say.human.apply(
                     self.say("feedback_ack", me=s.driver.name), s.engineer.natural_speech, reply=True
                 )
@@ -221,7 +221,7 @@ class Conversation:
         if me.damage and max(me.damage.front_left_wing, me.damage.front_right_wing, me.damage.floor) >= 20:
             facts.append("Car came back with damage.")
         summary = " ".join(facts)
-        self.actions.remember(f"{names.track_name(world.session.track_id)} {world.session_name}: {summary}")
+        self.actions.remember(f"{names.track_name(world.session.track_id)} {world.session_name}: {summary}", "debrief")
         if not (self.brain.available and s.ai.debrief):
             return None
         prompt = (

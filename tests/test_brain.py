@@ -33,7 +33,7 @@ class FakeActions:
     def set_callout(self, category: str, enabled: bool) -> None:
         self.log.append(("callout", category, enabled))
 
-    def remember(self, note: str) -> None:
+    def remember(self, note: str, kind: str = "driver") -> None:
         self.log.append(("remember", note))
 
 
@@ -310,3 +310,34 @@ def test_hi_gets_a_hello_not_a_conversation() -> None:
     for hi in ("Hi", "hey", "Hello there", "morning"):
         ans = intents.answer(hi, race_sim().world, Act(), "Ethan")
         assert ans is not None and ans.instant and len(ans.text) < 80, hi
+
+
+@pytest.mark.parametrize(
+    ("said", "expected"),
+    [
+        ("what about us", None),
+        ("stop talking about the weather", None),
+        ("don't give me gaps", "no more gap"),
+        ("radio silence for a minute", "1 minute"),
+        ("gaps every other lap", "every 2 laps"),
+        ("pit now", "box this lap"),
+        ("I'm staying out", "stay out"),
+    ],
+)
+def test_driver_phrasings_route_right(said: str, expected: str | None) -> None:
+    ans = intents.answer(said, race_sim().world, FakeActions(), "Ethan")  # type: ignore[arg-type]
+    if expected is None:
+        assert ans is None
+    else:
+        assert ans is not None and expected in ans.text.lower()
+
+
+def test_tool_rounds_keep_hiding_bare_reasoning() -> None:
+    from box_box.brain.backends import SentenceStream
+
+    s = SentenceStream(hold=True)
+    s.feed("thinking</think>Copy.")
+    s.flush()
+    assert s.feed("Okay the tool says 1.2. So I answer. ") == []
+    s.feed("More.</think>Gap is 1.2.")
+    assert s.flush() == ["Gap is 1.2."]

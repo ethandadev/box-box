@@ -214,9 +214,6 @@ TOOL_DEFS: list[dict[str, Any]] = [
 ]
 
 
-LOCAL_TOOLS = {"radio_preferences", "remember"}
-
-
 MAX_REPLY_SENTENCES = 3  # an engineer on the radio, not an essay
 
 
@@ -486,8 +483,9 @@ class Brain:
                 if isinstance(gap_every, (int, float)) and not isinstance(gap_every, bool):
                     actions.set_gap_every(max(1, min(10, int(gap_every))))
                     done.append("gap frequency")
-                if isinstance(args.get("silence_minutes"), (int, float)):
-                    minutes = float(args["silence_minutes"])
+                silence = args.get("silence_minutes")
+                if isinstance(silence, (int, float)) and not isinstance(silence, bool):
+                    minutes = max(0.0, min(60.0, float(silence)))
                     if minutes > 0:
                         actions.mute(minutes)
                     else:

@@ -517,8 +517,8 @@ class Engine:
         if category in config.CalloutSettings.__dataclass_fields__:
             self.store.update({"callouts": {category: enabled}})
 
-    def remember(self, note: str) -> None:
-        self.memory.add_note("driver", note)
+    def remember(self, note: str, kind: str = "driver") -> None:
+        self.memory.add_note(kind, note)
 
     def last_radio(self) -> str | None:
         """The engineer's last transmission, for "say again"."""

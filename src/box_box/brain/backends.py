@@ -58,7 +58,7 @@ class SentenceStream:
         self.buffer = ""
         self._raw = ""
         self._thinking = False
-        self._hold = hold
+        self._hold = self._hold_each_round = hold
         self._held = ""
         self.saw_lone_think = False
         self.spoken: list[str] = []
@@ -116,8 +116,10 @@ class SentenceStream:
             sentences = self.feed(held)
             return sentences + self.flush()
         tail = "" if self._thinking else self._raw
-        self._raw = ""
+        self._raw, self._thinking = "", False
         rest, self.buffer = self.buffer + tail, ""
+        # The same stream carries every tool round: the next one may open with bare reasoning too.
+        self._hold = self._hold_each_round
         return self._keep([rest])
 
     def _keep(self, sentences: list[str]) -> list[str]:
