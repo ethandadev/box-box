@@ -33,6 +33,28 @@ THINK_GAP_S = (0.18, 0.42)
 _COMMA = re.compile(r",\s+")
 
 
+# Nobody talks at one speed: a little quicker when it's urgent, a touch steadier when it's chat, and a
+# bit of drift from one transmission to the next (and between the halves of a held one).
+PACE_JITTER = {"off": 0.0, "subtle": 0.035, "human": 0.06}
+URGENT_KEYS = {"box", "last_chance", "sc", "vsc", "red", "puncture", "yellow", "blue", "traffic", "impact", "wing"}
+
+
+def pace(call: RadioCall, piece: int, base: float, natural_speech: str) -> float:
+    """The speaking speed for one piece of a call. Decided from the call itself (like `hold_split`), so the
+    prefetched audio is the audio that plays."""
+    jitter = PACE_JITTER.get(natural_speech, 0.0)
+    if not jitter:
+        return base
+    rng = random.Random(f"pace:{call.id}:{call.text}")
+    factor = 1.0 + rng.uniform(-jitter, jitter)
+    if call.priority == Priority.SAFETY or call.key.split(":")[0] in URGENT_KEYS:
+        factor += 0.05
+    elif call.priority == Priority.COLOUR:
+        factor -= 0.03
+    factor += piece * rng.uniform(-0.03, 0.03)
+    return round(base * factor, 2)  # rounded: the synth cache is keyed on it
+
+
 def hold_split(call: RadioCall, natural_speech: str) -> tuple[list[str], float]:
     """The pieces to synthesize and the gap between them. Decided from the call itself, so the prefetch and
     the playback agree without sharing state.
@@ -92,8 +114,8 @@ class Speaker:
         voice, speed = self._voice()
         natural = self._settings().engineer.natural_speech
         for c in calls:
-            for piece in hold_split(c, natural)[0]:
-                self.tts.submit(for_speech(piece), voice, speed, urgent=False)
+            for n, piece in enumerate(hold_split(c, natural)[0]):
+                self.tts.submit(for_speech(piece), voice, pace(c, n, speed, natural), urgent=False)
 
     def stop(self) -> None:
         """Barge-in: cut the engineer off mid-sentence."""
@@ -117,7 +139,10 @@ class Speaker:
                 return True  # nothing to say ("...")
             voice, speed = self._voice()
             pieces, gap_s = hold_split(call, s.engineer.natural_speech)
-            futures = [self.tts.submit(for_speech(p), voice, speed) for p in pieces]
+            natural = s.engineer.natural_speech
+            futures = [
+                self.tts.submit(for_speech(p), voice, pace(call, n, speed, natural)) for n, p in enumerate(pieces)
+            ]
             try:
                 # shield: a timeout here must not cancel the shared future other callers may be waiting on
                 clips = [

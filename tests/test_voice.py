@@ -354,3 +354,24 @@ def test_overdrive_is_dirtier_but_just_as_loud() -> None:
     clean, hot = measure(0), measure(18)
     assert abs(clean[0] - hot[0]) < 1.0  # turned back down to the same level
     assert hot[1] > 3 * clean[1]  # but far more grit
+
+
+def test_paddock_words_said_like_the_pit_wall() -> None:
+    from box_box.voice.pronounce import to_phonemes
+
+    said = to_phonemes("Box for Inters, the inters are ready. Pirelli says so.", lambda chunk: f"<{chunk.strip()}>")
+    assert said.count("ˈɪntɚz") == 2 and "pɪɹˈɛli" in said
+    assert "<Box for>" in said  # everything else goes to the normal phonemizer
+
+
+def test_speed_varies_a_little_and_urgent_is_quicker() -> None:
+    from box_box.engineer.radio import Priority, RadioCall
+    from box_box.voice.speaker import pace
+
+    calls = [RadioCall("gaps", Priority.INFO, f"Gap is {i}.2 seconds.", 0, 10) for i in range(40)]
+    speeds = {pace(c, 0, 1.4, "human") for c in calls}
+    assert len(speeds) > 5 and all(1.3 <= v <= 1.5 for v in speeds)
+    assert pace(calls[0], 0, 1.4, "human") == pace(calls[0], 0, 1.4, "human")  # prefetch and playback agree
+    assert pace(calls[0], 0, 1.4, "off") == 1.4
+    box = [RadioCall("box", Priority.STRATEGY, f"Box, box {i}.", 0, 10) for i in range(40)]
+    assert sum(pace(c, 0, 1.4, "human") for c in box) > sum(pace(c, 0, 1.4, "human") for c in calls)

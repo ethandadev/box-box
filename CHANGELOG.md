@@ -6,6 +6,10 @@
 - Every transmission keys up like the real thing: a click and the beep, a moment of open channel, the voice
   swelling in narrow-band over a hiss floor, then the hiss tail and the closing beep. Sometimes he holds the
   key between two sentences. Your own push-to-talk clicks and chirps too.
+- Paddock words said like the pit wall: "Inters" is a quick IN-terz (not in-TERZ), plus Pirelli, Ferrari,
+  McLaren, Aston, Sauber, Haas, outlap, hotlap, quali, parc fermé, Tifosi, kerbs, deg.
+- A short breath between pieces of information instead of running sentences together, and the speed now
+  drifts a little from call to call: quicker on box and safety calls, steadier on chat.
 - Radio overdrive: the voice is pushed hot into the radio (clipped like a mic held too close), then turned
   back down so it's exactly as loud as before, just dirtier. Settings → Voice → Radio overdrive (default
   12 dB; 0 is clean, 20+ is a bad signal).

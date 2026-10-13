@@ -113,8 +113,39 @@ LEXICON: dict[str, str] = {
     "Madrid": "mədɹˈɪd",
 }
 
+# Paddock words the voice's dictionary gets wrong, said the way the pit wall says them. Matched in any
+# case ("Inters", "inters"). "Inters" is a quick IN-terz, not in-TERZ.
+JARGON: dict[str, str] = {
+    "inters": "ˈɪntɚz",
+    "inter": "ˈɪntɚ",
+    "outlap": "ˈaʊtlæp",
+    "inlap": "ˈɪnlæp",
+    "hotlap": "hˈɑtlæp",
+    "quali": "kwˈɑli",
+    "pirelli": "pɪɹˈɛli",
+    "ferrari": "fəɹˈɑɹi",
+    "mclaren": "məklˈæɹən",
+    "aston": "ˈæstən",
+    "sauber": "sˈaʊbɚ",
+    "haas": "hˈɑs",
+    "tifosi": "tifˈoʊzi",
+    "parc ferme": "pˈɑɹk fɛɹmˈeɪ",
+    "parc fermé": "pˈɑɹk fɛɹmˈeɪ",
+    "kerbs": "kˈɝbz",
+    "kerb": "kˈɝb",
+    "deg": "dˈɛɡ",
+    "monaco": "mˈɑnəkoʊ",
+}
+
 _NAMES = sorted(LEXICON, key=len, reverse=True)  # longest first: "Eau Rouge" before "Rouge"
-_PATTERN = re.compile(r"\b(" + "|".join(re.escape(n) for n in _NAMES) + r")('s)?\b")
+_WORDS = sorted(JARGON, key=len, reverse=True)
+_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(n) for n in _NAMES) + "|(?i:" + "|".join(re.escape(w) for w in _WORDS) + r"))('s)?\b"
+)
+
+
+def _ipa(word: str) -> str:
+    return LEXICON.get(word) or JARGON[word.lower()]
 
 
 def has_names(text: str) -> bool:
@@ -129,7 +160,7 @@ def to_phonemes(text: str, phonemize: Callable[[str], str]) -> str:
         before = text[pos : m.start()]
         if before.strip():
             out.append(phonemize(before).strip())
-        ipa = LEXICON[m.group(1)]
+        ipa = _ipa(m.group(1))
         if m.group(2):  # possessive: Leclerc's
             ipa += "z"
         out.append(ipa)

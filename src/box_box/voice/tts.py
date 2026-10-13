@@ -92,7 +92,7 @@ class KokoroEngine(Engine):
         # Names in IPA (the dictionary mangles Leclerc, Ocon, Sainz...), everything else phonemized normally.
         phonemes = to_phonemes(text, lambda chunk: kokoro.tokenizer.phonemize(chunk, lang))
         samples, sr = kokoro.create(
-            phonemes, voice=voice, speed=speed, lang=lang, is_phonemes=True, sentence_pause=0.08, clause_pause=0.02
+            phonemes, voice=voice, speed=speed, lang=lang, is_phonemes=True, sentence_pause=0.18, clause_pause=0.04
         )
         return tighten(np.asarray(samples, dtype=np.float32), int(sr)), int(sr)
 
@@ -138,7 +138,7 @@ def stretch(audio: np.ndarray, sr: int, rate: float) -> np.ndarray:
     return (out / norm)[: int(len(x) / rate)].astype(np.float32)
 
 
-def tighten(audio: np.ndarray, sr: int, max_pause_s: float = 0.16, floor: float = 0.008) -> np.ndarray:
+def tighten(audio: np.ndarray, sr: int, max_pause_s: float = 0.24, floor: float = 0.008) -> np.ndarray:
     """Radio delivery is clipped: shorten long pauses the voice model leaves between phrases, and trim the
     ends. Pauses keep a short fade so nothing clicks."""
     if len(audio) < sr // 10:
