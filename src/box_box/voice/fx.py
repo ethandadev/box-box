@@ -64,6 +64,22 @@ def _crunch(x: np.ndarray, sr: int, amount: float) -> np.ndarray:
     return ((1 - amount) * x + amount * y).astype(np.float32)
 
 
+def _rms(x: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.square(x, dtype=np.float64)))) if len(x) else 0.0
+
+
+def _overdrive(x: np.ndarray, gain_db: float) -> np.ndarray:
+    """A hot mic into the radio: the voice pushed `gain_db` into the link's clipping. Half hard clip (the
+    flat-topped buzz on loud syllables), half soft (warmth), and lopsided, because real preamps clip one
+    side first: that's what gives team radio its edge. The level is put back by the caller."""
+    if gain_db <= 0:
+        return x
+    y = x * 10 ** (gain_db / 20)
+    hard = np.clip(y, -0.9, 0.7)
+    soft = np.tanh(y)
+    return (0.55 * hard + 0.45 * soft).astype(np.float32)
+
+
 def _ramp(n: int, rising: bool) -> np.ndarray:
     r = 0.5 - 0.5 * np.cos(np.linspace(0, np.pi, max(n, 1), dtype=np.float32))
     return r if rising else r[::-1]
@@ -126,12 +142,16 @@ def radio(
     seed: int | None = None,
     open_beep: bool = True,
     close_beep: bool = True,
+    drive_db: float = 12.0,
 ) -> np.ndarray:
     """Process a mono float32 voice clip into a team-radio transmission.
 
     A reply spoken in several pieces is one transmission: only the first piece keys up (click, beep,
     a moment of carrier) and only the last lets go (hiss tail, beep); the pieces between are bridged by
-    a short stretch of open carrier, so it sounds like he kept the button down."""
+    a short stretch of open carrier, so it sounds like he kept the button down.
+
+    `drive_db` is how hard the voice is pushed into the radio (scaled by `intensity`): louder into the
+    clipping, then turned back down, so it's dirtier but just as loud as the clean voice."""
     rng = np.random.default_rng(seed)
     x = _normalize(np.nan_to_num(np.asarray(samples, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0))
     i = float(np.clip(intensity, 0.0, 1.0))
@@ -141,14 +161,19 @@ def radio(
         low, high = 220 + 180 * i, 7000 - 3500 * i
         wet = _bandpass(x, sr, low, high)
         wet = _compress(wet, sr)
-        drive = 1.0 + 1.6 * i
-        wet = np.tanh(wet * drive) / np.tanh(drive)
+        # The radio's usual level (a gently saturated voice peaking at 0.8): driven or not, it plays this loud.
+        sat = 1.0 + 1.6 * i
+        loudness = 0.9 * _rms(_normalize(np.tanh(wet * sat) / np.tanh(sat), 0.8))  # less what the link filters off
+        wet = _overdrive(wet, max(drive_db, 0.0) * i)
         wet = _crunch(wet, sr, 0.6 * i)
         wet = _bandpass(wet, sr, low, high)  # the link's own filtering, after the crunch
         if i > 0.85:  # a weak-signal crackle only at the very top of the range
             crackles = rng.random(len(x)) < (i - 0.85) * 0.0004
             wet = wet + crackles * rng.standard_normal(len(x)).astype(np.float32) * 0.2
-        x = (1 - i) * x + i * _normalize(wet, 0.8)
+        # Same loudness whatever the drive: boost into the clipping, then turn it back down.
+        wet = wet * (loudness / (_rms(wet) + 1e-9))
+        x = (1 - i) * x + i * wet
+        x = np.clip(x, -0.95, 0.95)
         x = _channel_sweep(x, sr, i)
 
     # Time on the open channel either side of the voice: longer on key-up/down, a short bridge between

@@ -6,6 +6,9 @@
 - Every transmission keys up like the real thing: a click and the beep, a moment of open channel, the voice
   swelling in narrow-band over a hiss floor, then the hiss tail and the closing beep. Sometimes he holds the
   key between two sentences. Your own push-to-talk clicks and chirps too.
+- Radio overdrive: the voice is pushed hot into the radio (clipped like a mic held too close), then turned
+  back down so it's exactly as loud as before, just dirtier. Settings → Voice → Radio overdrive (default
+  12 dB; 0 is clean, 20+ is a bad signal).
 - Speaking speed applies to every voice (up to 1.6); cloud voices are sped up without changing pitch.
 - Google Gemini (free tier) and OpenAI voices each have their own key in Settings → Voice, so a human-sounding
   voice works whichever AI you chat with. A voice that runs out of credits is swapped for the local one for the

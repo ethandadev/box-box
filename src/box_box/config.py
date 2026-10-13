@@ -144,6 +144,15 @@ class VoiceSettings:
     radio_effect: float = opt(
         0.5, "Radio effect", "0 is studio-clean, 1 is a crackly team radio.", min=0.0, max=1.0, step=0.05
     )
+    radio_drive_db: float = opt(
+        12.0,
+        "Radio overdrive (dB)",
+        "How hard the voice is pushed into the radio before it's turned back down: same loudness, dirtier "
+        "sound. 0 is clean, 12 is a real team radio, 20+ is a bad signal.",
+        min=0.0,
+        max=24.0,
+        step=1.0,
+    )
     beeps: bool = opt(True, "Radio beeps", "Play the click and beep when he keys the radio.")
     ptt_beeps: bool = opt(True, "Push-to-talk beeps", "A click and chirp when you press and release your radio button.")
     output_device: str = opt(

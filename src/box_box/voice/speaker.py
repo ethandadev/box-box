@@ -150,7 +150,13 @@ class Speaker:
             close_beep = tx is None or not self.has_followup(call)
             try:
                 audio = fx.radio(
-                    samples, sr, s.voice.radio_effect, beeps=s.voice.beeps, open_beep=open_beep, close_beep=close_beep
+                    samples,
+                    sr,
+                    s.voice.radio_effect,
+                    beeps=s.voice.beeps,
+                    open_beep=open_beep,
+                    close_beep=close_beep,
+                    drive_db=s.voice.radio_drive_db,
                 )
             except Exception:  # noqa: BLE001 - a broken effect must never silence the engineer
                 log.exception("radio effect failed; playing the dry voice")

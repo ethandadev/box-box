@@ -338,3 +338,19 @@ def test_replies_sometimes_take_a_thinking_beat_at_a_comma() -> None:
     assert beats and len(beats) < len(split)
     assert all(p[0].endswith(",") and 0.18 <= gap <= 0.42 for p, gap in beats)
     assert all(len(hold_split(c, "off")[0]) == 1 for c in replies)
+
+
+def test_overdrive_is_dirtier_but_just_as_loud() -> None:
+    sr = 24_000
+    t = np.arange(sr) / sr
+    voice = (0.5 * np.sin(2 * np.pi * 220 * t) * (0.5 + 0.5 * np.sin(2 * np.pi * 3 * t))).astype(np.float32)
+
+    def measure(drive: float) -> tuple[float, float]:
+        out = fx.radio(voice, sr, 0.9, beeps=False, seed=1, drive_db=drive)[int(0.35 * sr) : -int(0.35 * sr)]
+        spec, f = np.abs(np.fft.rfft(out)), np.fft.rfftfreq(len(out), 1 / sr)
+        loud = 20 * np.log10(np.sqrt(np.mean(out**2)))
+        return loud, spec[(f > 400) & (f < 4000)].sum() / spec[(f > 200) & (f < 240)].sum()
+
+    clean, hot = measure(0), measure(18)
+    assert abs(clean[0] - hot[0]) < 1.0  # turned back down to the same level
+    assert hot[1] > 3 * clean[1]  # but far more grit

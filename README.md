@@ -113,7 +113,7 @@ and Diagnostics says why.
 **The radio.** Every transmission keys up like the real thing: a click and the beep, a moment of open
 channel, the voice swelling in narrow-band over a hiss floor, then the hiss tail and the closing beep.
 Sometimes he holds the key between two sentences while he checks something. Your own push-to-talk
-clicks and chirps too. **Radio effect** goes from studio-clean (0) to a crackly onboard radio (1). **Speaking speed** (up to 1.6, default 1.25) applies to every voice: where a cloud voice can't go that fast itself, it's sped up without changing pitch.
+clicks and chirps too. **Radio effect** goes from studio-clean (0) to a crackly onboard radio (1). **Radio overdrive** pushes the voice into the radio's clipping and turns it back down, so it's grittier at the same volume (12 dB default; 0 clean, 20+ a bad signal). **Speaking speed** (up to 1.6, default 1.25) applies to every voice: where a cloud voice can't go that fast itself, it's sped up without changing pitch.
 
 He sounds like a person, not a script: now and then a "mate", an "Okay, so...", "copy, copy", or a quick
 self-correction on a gap like *"1.3, sorry, 1.2"* (the correction is always the real number). Never on
