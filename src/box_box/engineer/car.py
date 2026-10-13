@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections import deque
 
-from box_box.engineer import damage
+from box_box.engineer import advice, damage
 from box_box.engineer.base import Context, Detector
-from box_box.engineer.radio import Priority, RadioCall, Verbosity
+from box_box.engineer.radio import Priority, RadioCall, Verbosity, expand
 from box_box.state.model import CarState, LapCompleted
 from box_box.telemetry.packets import CarDamage
 
@@ -31,6 +31,7 @@ class CarDetector(Detector):
         self._wear_stint = -1
         self._fault_seen = {"ers": False, "drs": False}
         self._fuel_call_lap = 0
+        self._fuel_was_short = False
         self._speeds: deque[tuple[float, float]] = deque()  # (session time, kph) over the last moment
         self._report_due: float | None = None  # when to come back with the damage after an impact
         self._report_base: CarDamage | None = None  # the car before the impact
@@ -234,9 +235,20 @@ class CarDetector(Detector):
         lap = me.lap.lap_num
         if margin < -0.3 and lap - self._fuel_call_lap >= 4:
             self._fuel_call_lap = lap
-            text = ctx.say("fuel_short", laps=f"{abs(margin):.1f}")
+            self._fuel_was_short = True
+            # On standard or richer there's a map to change too: "Fuel map lean, and lift and coast."
+            text = advice.fuel_short(me, abs(margin), ctx.say.rng) or ctx.say("fuel_short", laps=f"{abs(margin):.1f}")
             return [ctx.call("fuel", Priority.STRATEGY, text, ttl=30, category="fuel")]
         remaining = world.laps_remaining
+        if self._fuel_was_short and margin > 0.8 and me.status.fuel_mix == 0 and lap - self._fuel_call_lap >= 2:
+            self._fuel_was_short = False  # saved enough: give the pace back
+            self._fuel_call_lap = lap
+            text = expand(
+                "[Fuel's recovered|We've saved enough fuel|Fuel's good now], [back to standard|standard map again|"
+                "fuel map standard]. [You can stop the lift and coast|No more saving needed].",
+                ctx.say.rng,
+            )
+            return [ctx.call("fuel", Priority.INFO, text, ttl=30, category="fuel", verbosity=Verbosity.NORMAL)]
         if (
             margin > 1.0
             and remaining is not None

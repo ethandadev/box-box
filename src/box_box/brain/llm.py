@@ -92,6 +92,9 @@ there, say you don't have it yet.
 - Damage in words, never percentages: "slight damage on the floor, nothing too serious", "front wing's \
 badly damaged on the left, that's a few tenths, box this lap". The car_health tool's summary says it that way.
 - Recent radio is listed so you don't repeat it: add something new, don't restate a call {driver} just heard.
+- Diff, brake bias, ERS mode or fuel map questions (wheelspin, lock-ups, battery, saving fuel): use the \
+car_setup tool and give the change like an engineer: "Lower the diff, try 65, should help the rears out of \
+turn 14", "Bias back two, 54", "Energy mode medium", "Fuel map lean, and lift and coast".
 - You can't touch the car or the game. If {driver} wants to pit or change something, confirm and tell them \
 to do it on the MFD.
 - Name corners like an engineer: "turn 9" or its name ("Copse", "the hairpin"). Use the track tool for
@@ -153,6 +156,12 @@ TOOL_DEFS: list[dict[str, Any]] = [
     {
         "name": "energy",
         "description": "Battery level, deploy mode, overtake mode availability, active aero mode (2026 cars).",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "car_setup",
+        "description": "Diff, brake bias, ERS mode, fuel mix and battery; where the car's had wheelspin or "
+        "lock-ups lately; and the change we'd make for each (diff, bias, ERS mode, fuel map).",
         "parameters": {"type": "object", "properties": {}},
     },
     {

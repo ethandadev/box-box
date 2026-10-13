@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from box_box.brain import tools
-from box_box.engineer import damage, pitplan
-from box_box.engineer.radio import expand, gap, lap_time, tenths
+from box_box.engineer import advice, damage, pitplan
+from box_box.engineer.radio import expand, gap, lap_time, no_data, tenths
 from box_box.state.model import World
 
 
@@ -111,7 +111,7 @@ def _position(t: str, w: World, a: Actions, me: str) -> Answer | None:
 def _gap(t: str, w: World, a: Actions, me: str) -> Answer | None:
     g = tools.gaps(w)
     if "error" in g:
-        return Answer("Stand by, no timing yet.")
+        return Answer(no_data(_rng, "timing"))
     if not w.is_race:
         if g.get("fastest") and g.get("my_best"):
             if g["fastest"]["name"] == (w.player.name if w.player else ""):
@@ -171,7 +171,7 @@ def _driver_gap(t: str, w: World, a: Actions, me: str) -> Answer | None:
 def _tyres(t: str, w: World, a: Actions, me: str) -> Answer | None:
     info = tools.tyres(w)
     if "error" in info:
-        return Answer("Stand by, no tyre data yet.")
+        return Answer(no_data(_rng, "tyre"))
     text = f"{info['compound'].capitalize()}, {info['age_laps']} laps old"
     if "average_wear_pct" in info:
         text += f", {info['average_wear_pct']} percent wear"
@@ -196,7 +196,7 @@ def _tyres(t: str, w: World, a: Actions, me: str) -> Answer | None:
 def _fuel(t: str, w: World, a: Actions, me: str) -> Answer | None:
     info = tools.fuel(w)
     if "error" in info:
-        return Answer("Stand by, no fuel data.")
+        return Answer(no_data(_rng, "fuel"))
     if w.is_race:
         m = info["margin_laps_at_finish"]
         if m < -0.2:
@@ -209,7 +209,7 @@ def _damage(t: str, w: World, a: Actions, me: str) -> Answer | None:
     """'Check the floor', 'how's the front wing?', 'any damage?': looked at properly, then said in words."""
     me_car = w.player
     if me_car is None or me_car.damage is None:
-        return Answer("Stand by, no car data yet.")
+        return Answer(no_data(_rng, "car"))
     parts = damage.parts_named(t)
     text = damage.report(me_car.damage, _rng, race=w.is_race, parts=parts or None)
     preface = expand(
@@ -247,6 +247,21 @@ def _box_rejoin(t: str, w: World, a: Actions, me: str) -> Answer | None:
     return Answer(text[:1].upper() + text[1:], instant=True, preface=preface, delay_s=_rng.uniform(1.8, 3.0))
 
 
+def _setup_advice(t: str, w: World, a: Actions, me: str) -> Answer | None:
+    """'I keep getting wheelspin, any diff advice?', 'bias?', 'what ERS mode?', 'fuel map?': the change to make
+    on the wheel, from what he says and what the car's been doing. Said after a quick look at the data."""
+    text = advice.answer(t, w, _rng)
+    if text is None:
+        return None
+    preface = expand(
+        _rng.choice(
+            ["[Copy|Okay|Copy that], [stand by|let me look|having a look].", "[Copy|Yeah], one sec.", "Stand by."]
+        ),
+        _rng,
+    )
+    return Answer(text, instant=True, preface=preface, delay_s=_rng.uniform(1.2, 2.2))
+
+
 GREETINGS = [
     "[Hey|Hi|Hello] {me}[, loud and clear|, good to hear you|].",
     "[Hey|Hi] {me}. [All good here|We're with you|Ready when you are].",
@@ -263,7 +278,7 @@ def _hello(t: str, w: World, a: Actions, me: str) -> Answer:
 def _weather(t: str, w: World, a: Actions, me: str) -> Answer | None:
     info = tools.weather(w)
     if "error" in info:
-        return Answer("Stand by, no weather data.")
+        return Answer(no_data(_rng, "weather"))
     rain = next(
         (f for f in info["forecast"] if f["in_min"] > 0 and f["rain_pct"] >= 40 and "rain" in f["weather"]), None
     )
@@ -397,6 +412,15 @@ RULES: list[Rule] = [
         r"\bhow many (?:places|positions)\b|\b(?:places|positions) (?:do|would|will) (?:we|i) lose\b|"
         r"\b(?:rejoin|come out) (?:where|in what position)\b",
         _box_rejoin,
+    ),
+    (
+        r"\bdiff(?:erential)?s?\b|\bwheel ?spin|\btraction\b|\bbias\b|\block(?:ing|s|ed)?(?: up)?\b|\block-?ups?\b|"
+        r"\b(?:ers|energy|deploy\w*|battery) (?:mode|map|advice|setting|tips?)\b|\bhot ?lap mode\b|\b(?:which|what) mode\b|"
+        r"\bfuel (?:map|mode|mix|advice|setting)\b|\b(?:lean|rich) (?:mix|map|mode)\b|\benough fuel\b|"
+        r"\b(?:will|does|can|do) (?:we|i) (?:make|last) (?:it )?(?:to )?the end\b|\b(?:will|does) the fuel (?:make|last)\b|\bunstable (?:on|under|into) (?:the )?brak|"
+        r"\b(?:understeer|oversteer) (?:on|into|out of) (?:the )?(?:entry|exits?)\b|\b(?:entry|exit) (?:understeer|oversteer)\b|"
+        r"\brears? (?:go|goes|going|step|steps|stepping|kick|kicks|kicking|let go|snap|snaps)\b|\bwon'?t (?:rotate|turn in)\b",
+        _setup_advice,
     ),
     (
         r"\bwhere (?:am i|are we) (?:losing|slow)|\bwhere can i (?:find|gain)|\bwhere(?:'s| is) the time\b|\bwhich corner\b",

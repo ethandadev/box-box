@@ -254,6 +254,9 @@ VARIETY: dict[str, list[str]] = {
         "Sorry, say again?",
         "Radio's broken up, say again?",
         "[Missed that|Didn't get that|Broken up there], [say again|repeat|once more]?",
+        "[Lot of static on the radio|There's some static on the radio|Just static this end], [say again|say again, {me}]?",
+        "[You're breaking up|Radio's crackling|Signal's bad there], [say again|repeat that]?",
+        "[Sorry|Apologies], [only got static|all static there]. [Say again?|Once more?]",
     ],
     "ask_balance": [
         "How's the balance?",

@@ -653,7 +653,12 @@ PHRASES: dict[str, dict[str, list[str]]] = {
     # ---- radio system ---------------------------------------------------------------------------
     "stand_by": {"calm": ["Stand by.", "Stand by one."]},
     "didnt_catch": {
-        "calm": ["Say again, {me}? Didn't catch that.", "Sorry, say again?", "Radio's broken up, say again?"],
+        "calm": [
+            "Say again, {me}? Didn't catch that.",
+            "Sorry, say again?",
+            "Radio's broken up, say again?",
+            "Bit of static on the radio, say again?",
+        ],
     },
 }
 

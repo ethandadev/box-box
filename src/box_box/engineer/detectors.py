@@ -6,6 +6,7 @@ from box_box.engineer.base import Detector
 from box_box.engineer.car import CarDetector
 from box_box.engineer.energy import EnergyDetector
 from box_box.engineer.flags import FlagsDetector
+from box_box.engineer.handling import HandlingDetector
 from box_box.engineer.laps import LapFeedbackDetector
 from box_box.engineer.race import RaceDetector
 from box_box.engineer.session import SessionDetector
@@ -24,6 +25,7 @@ def all_detectors() -> list[Detector]:
         LapFeedbackDetector(),
         WeatherDetector(),
         EnergyDetector(),
+        HandlingDetector(),
         SessionDetector(),
         StrategyDetector(),
     ]

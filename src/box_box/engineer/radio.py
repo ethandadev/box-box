@@ -65,6 +65,23 @@ def gap(seconds: float) -> str:
     return f"{max(seconds, 0.1):.1f}"  # side by side is "point one", never "zero point zero"
 
 
+NO_DATA = [
+    "Stand by, no {what} data yet.",
+    "[Stand by|Bear with us], [we're having trouble with the sensors|sensor problem this end|we've lost some sensors].",
+    "We are checking.",
+    "[We are checking|Checking], [stand by|give us a moment].",
+    "[Data's dropped out|We've lost the data|Telemetry's dropped] [for a moment|this end], [stand by|give us a sec].",
+    "[Stand by|One sec], [we're not seeing the {what} data|no {what} readings here yet].",
+]
+
+
+def no_data(rng: random.Random, what: str = "car") -> str:
+    """What the pit wall says when the screens are blank: sometimes plain, sometimes sensors, sometimes
+    the famous "We are checking"."""
+    text = expand(rng.choice(NO_DATA), rng).format(what=what)
+    return text.replace("no car data", "no data").replace("the car data", "the data")
+
+
 def tenths(seconds: float) -> str:
     """A small delta the way engineers say it: 'a tenth', 'three tenths', 'half a second', '1.4 seconds'."""
     s = abs(seconds)

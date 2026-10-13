@@ -14,6 +14,7 @@ from box_box.telemetry import names
 from box_box.telemetry.packets import (
     CarDamage,
     CarMotion,
+    CarSetup,
     CarStatus,
     CarTelemetry,
     CarTelemetry2,
@@ -27,6 +28,7 @@ from box_box.telemetry.packets import (
     Session,
     SessionHistory,
     TyreSets,
+    WheelSlip,
 )
 
 log = logging.getLogger(__name__)
@@ -93,6 +95,16 @@ class TimelineRewound:
     """Flashback or save reload: anything remembered from the future is now wrong."""
 
 
+@dataclass(frozen=True, slots=True)
+class Slide:
+    """A moment the player's car lost grip: rears spinning up on a corner exit, or a wheel locking."""
+
+    lap: int
+    kind: str  # "wheelspin", "front_lock" or "rear_lock"
+    corner: str | None  # "turn 14", "the hairpin"
+    time: float  # session time
+
+
 Change = LapCompleted | PitEntered | PitExited | PositionChanged | Retired | SessionChanged | TimelineRewound
 
 
@@ -111,6 +123,7 @@ class CarState:
     best_lap_ms: int | None = None
     pit_stops: int = 0
     tyre_sets: TyreSets | None = None
+    setup: CarSetup | None = None
     _lap_start_fuel: float | None = None
     _lap_had_pit: bool = False
     _pit_stationary_ms: int = 0
@@ -205,6 +218,8 @@ class World:
     session_ended: bool = False
     fastest_lap: tuple[int, float] | None = None  # (car index, seconds) from FTLP events
     plan_extended_from: int = 0  # ideal pit lap the strategist told the driver we'd go past
+    wheel_slip: WheelSlip | None = None  # the player's, from the extended motion packet
+    slides: list[Slide] = field(default_factory=list)  # the player's recent wheelspin and lock-ups
     coach_note: str | None = None  # latest "lost two tenths at Copse..." from the corner coach
     last_packet_time: float = 0.0  # monotonic, set by the engine
 
@@ -399,6 +414,11 @@ class World:
             case PacketId.MOTION:
                 for car, m in zip(self.cars, packet.data, strict=False):  # type: ignore[call-overload]
                     car.motion = m
+            case PacketId.CAR_SETUPS:
+                for car, setup in zip(self.cars, packet.data, strict=False):  # type: ignore[call-overload]
+                    car.setup = setup
+            case PacketId.MOTION_EX:
+                self.wheel_slip = packet.data  # type: ignore[assignment]
             case PacketId.TYRE_SETS:
                 ts: TyreSets = packet.data  # type: ignore[assignment]
                 if 0 <= ts.car_index < len(self.cars):
@@ -426,6 +446,8 @@ class World:
         self.fastest_lap = None
         self.plan_extended_from = 0
         self.coach_note = None
+        self.wheel_slip = None
+        self.slides = []
 
     def _rewind(self) -> None:
         """The clock went backwards: forget laps from the abandoned future."""

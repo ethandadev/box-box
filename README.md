@@ -120,6 +120,12 @@ self-correction on a gap like *"1.3, sorry, 1.2"* (the correction is always the 
 urgent calls or lap times. **Settings → Engineer → Natural speech** sets it to Off, Subtle (default) or
 Very human.
 
+**Diff, brake bias, ERS and fuel map.** Ask "I keep getting wheelspin, any diff advice?", "brake bias?",
+"what ERS mode?" or "fuel map?" and he answers with the change to make on the MFD: *"Lower the diff, try 65,
+should help with the rears out of turn 14"*, *"Bias back two, 54"*, *"Energy mode medium"*, *"Fuel map lean,
+and lift and coast"*. He also watches the wheels (the game's wheel-slip data): wheelspin or lock-ups at the
+same corner lap after lap get a suggestion unprompted, and so does a flat battery in hotlap mode.
+
 **Sprint weekends.** The sprint is called the Sprint (the game says "Race"), with no pit-stop talk and
 points for the top 8; sprint qualifying is SQ1 to SQ3.
 

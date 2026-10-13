@@ -253,7 +253,12 @@ class CalloutSettings:
     damage: bool = opt(True, "Damage", "")
     weather: bool = opt(True, "Weather changes", "")
     fuel: bool = opt(True, "Fuel", "")
-    energy: bool = opt(True, "Battery & overtake mode (2026 cars)", "")
+    energy: bool = opt(True, "Battery, ERS mode & overtake", "")
+    setup: bool = opt(
+        True,
+        "Diff & brake bias tips",
+        "Wheelspin or lock-ups at the same corner lap after lap: what to change on the MFD.",
+    )
     pit: bool = opt(True, "Pit window & strategy", "")
     encouragement: bool = opt(True, "Encouragement & banter", "")
     straights_only: bool = opt(

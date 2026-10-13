@@ -403,6 +403,30 @@ class TyreSet:
 
 
 @dataclass(frozen=True, slots=True)
+class CarSetup:
+    """The car's setup as the game reports it. The on-throttle diff and brake bias can also be changed from
+    the MFD while driving; the rest is fixed once the car leaves the garage (parc fermé in qualifying)."""
+
+    front_wing: int
+    rear_wing: int
+    on_throttle_diff: int  # percent, 10-100
+    off_throttle_diff: int
+    brake_pressure: int  # percent
+    brake_bias: int  # percent to the front
+    engine_braking: int  # percent
+    fuel_load: float  # kg
+
+
+@dataclass(frozen=True, slots=True)
+class WheelSlip:
+    """The player's wheels (RL, RR, FL, FR), from the extended motion packet: slip ratio is positive when
+    a wheel spins up under power and goes towards -1 when it locks under braking."""
+
+    slip_ratio: tuple[float, float, float, float]
+    wheel_speed: tuple[float, float, float, float]  # m/s
+
+
+@dataclass(frozen=True, slots=True)
 class TyreSets:
     car_index: int
     sets: tuple[TyreSet, ...]
@@ -441,7 +465,7 @@ class Packet:
     header: Header
     id: PacketId
     # One of: list[CarMotion], Session, list[LapData], Event, list[Participant], list[CarTelemetry],
-    # list[CarStatus], list[CarDamage], list[CarTelemetry2], or None for recognised-but-unparsed packets.
+    # list[CarStatus], list[CarDamage], list[CarTelemetry2], list[CarSetup], WheelSlip, TyreSets, or None for recognised-but-unparsed packets.
     data: object
     num_active_cars: int | None = None
 
@@ -712,6 +736,24 @@ def _session(data: bytes, fmt: int) -> Session:
     )
 
 
+_CAR_SETUP = struct.Struct("<BBBBffffBBBBBBBBBffffBf")  # 50 bytes, same in both formats
+
+
+def _car_setups(lay: Layout, data: bytes) -> list[CarSetup]:
+    return [
+        CarSetup(v[0], v[1], v[2], v[3], v[14], v[15], v[16], round(v[22], 1))
+        for v in _slots(_CAR_SETUP, data, HEADER.size, lay.max_cars)
+    ]
+
+
+_WHEELS = struct.Struct("<4f4f")  # wheel speed then slip ratio, after 12 floats of suspension data
+
+
+def _wheel_slip(data: bytes) -> WheelSlip:
+    v = _WHEELS.unpack_from(data, HEADER.size + 48)
+    return WheelSlip(slip_ratio=v[4:8], wheel_speed=v[0:4])
+
+
 _TYRE_SET = struct.Struct("<BBBBBBBhB")  # 10 bytes x 20 sets
 
 
@@ -830,6 +872,8 @@ class Decoder:
             PacketId.SESSION_HISTORY,
             PacketId.CAR_TELEMETRY_2,
             PacketId.TYRE_SETS,
+            PacketId.CAR_SETUPS,
+            PacketId.MOTION_EX,  # the player's wheel slip: where the rears spin and the fronts lock
         }
     )
 
@@ -891,6 +935,10 @@ class Decoder:
                 return Packet(header, pid, _session_history(data))
             case PacketId.TYRE_SETS:
                 return Packet(header, pid, _tyre_sets(data))
+            case PacketId.CAR_SETUPS:
+                return Packet(header, pid, _car_setups(lay, data))
+            case PacketId.MOTION_EX:
+                return Packet(header, pid, _wheel_slip(data))
             case _:
                 return Packet(header, pid, None)
 

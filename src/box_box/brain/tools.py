@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from box_box.engineer import damage, pitplan
+from box_box.engineer import advice, damage, pitplan
 from box_box.engineer.radio import lap_time
 from box_box.state.model import CarState, World
 from box_box.telemetry import names
@@ -213,6 +213,35 @@ def energy(world: World) -> dict[str, Any]:
     return out
 
 
+def car_setup(world: World) -> dict[str, Any]:
+    """The settings the driver can change from the wheel, where the car's been sliding, and what we'd change."""
+    me = world.player
+    if me is None or me.status is None:
+        return {"error": "No car data yet."}
+    rng = random.Random()
+    s = me.status
+    out: dict[str, Any] = {
+        "brake_bias_front_pct": s.front_brake_bias,
+        "fuel_mix": advice.MIX.get(s.fuel_mix, "standard"),
+        "ers_mode": advice.ers_mode_name(s.ers_deploy_mode, world),
+        "battery_pct": advice.battery_pct(me),
+    }
+    if me.setup:
+        out["diff_on_throttle_pct"] = me.setup.on_throttle_diff
+        out["diff_off_throttle_pct"] = me.setup.off_throttle_diff
+        out["engine_braking_pct"] = me.setup.engine_braking
+    for kind in ("wheelspin", "front_lock", "rear_lock"):
+        slides = advice.recent(world, kind)
+        if slides:
+            out[f"{kind}_last_3_laps"] = {"times": len(slides), "worst_corner": advice.worst_corner(slides)}
+    # Say these the way they're written: the change, the number, and the corner it helps.
+    out["diff_advice"] = advice.diff(world, me, rng)
+    out["brake_bias_advice"] = advice.bias(world, me, rng)
+    out["ers_advice"] = advice.ers(world, me, rng)
+    out["fuel_map_advice"] = advice.fuel(world, me, rng)
+    return out
+
+
 def weather(world: World) -> dict[str, Any]:
     s = world.session
     if s is None:
@@ -373,6 +402,7 @@ TOOLS: dict[str, Any] = {
     "car_health": car_health,
     "fuel": fuel,
     "energy": energy,
+    "car_setup": car_setup,
     "weather": weather,
     "lap_times": lap_times,
     "strategy": strategy,

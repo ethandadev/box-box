@@ -20,6 +20,14 @@
 - Coming into the pits: which tyres you're going to and where you'll rejoin ("fresh hards, out in P7,
   right behind Alonso, close on pit exit"). Ask "how many positions do we lose if we box?" and he works it
   out from the gaps and the pit loss (calibrated to the game's own rejoin prediction).
+- Diff, brake bias, ERS and fuel map advice, said like the pit wall: "I keep getting wheelspin, any diff
+  advice?" gets "Lower the diff, try 65, should help with the rears out of turn 14". Locking the fronts:
+  "Bias back two, 54". Flat battery in hotlap mode: "Energy mode medium". Short on fuel on standard:
+  "Fuel map lean, and lift and coast". Once fuel's recovered: "back to standard".
+- He watches the wheels: wheelspin or lock-ups at the same corner lap after lap get a diff or bias
+  suggestion without being asked (Settings → Callouts → Diff & brake bias tips).
+- No data yet? Sometimes "Stand by", sometimes "we're having trouble with the sensors", sometimes just
+  "We are checking." A garbled transmission gets "bit of static on the radio, say again?".
 - Answers worked out live sometimes take a short thinking beat at a comma, like a person, not a script.
 - Far more variety: the common calls have hundreds of ways to be said between them, dealt so the same
   sentence almost never comes back.
