@@ -26,6 +26,7 @@ from box_box.telemetry.packets import (
     ResultStatus,
     Session,
     SessionHistory,
+    TyreSets,
 )
 
 log = logging.getLogger(__name__)
@@ -109,6 +110,7 @@ class CarState:
     laps: list[LapRecord] = field(default_factory=list)
     best_lap_ms: int | None = None
     pit_stops: int = 0
+    tyre_sets: TyreSets | None = None
     _lap_start_fuel: float | None = None
     _lap_had_pit: bool = False
     _pit_stationary_ms: int = 0
@@ -397,6 +399,10 @@ class World:
             case PacketId.MOTION:
                 for car, m in zip(self.cars, packet.data, strict=False):  # type: ignore[call-overload]
                     car.motion = m
+            case PacketId.TYRE_SETS:
+                ts: TyreSets = packet.data  # type: ignore[assignment]
+                if 0 <= ts.car_index < len(self.cars):
+                    self.cars[ts.car_index].tyre_sets = ts
             case PacketId.SESSION_HISTORY:
                 hist: SessionHistory = packet.data  # type: ignore[assignment]
                 if 0 <= hist.car_index < len(self.cars):

@@ -435,6 +435,14 @@ PHRASES: dict[str, dict[str, list[str]]] = {
             "{part} damage, {pct} percent. Car's still okay to continue.",
         ],
     },
+    "pit_entry_plan": {
+        "calm": [
+            "[Okay|Right], we're going to {tyre}. [You'll come out|Should rejoin|Rejoin] P{pos}, {near}.",
+            "{tyre} [on this stop|going on]. [Out in|Rejoining in|Coming out] P{pos}, {near}.",
+            "[Going to|Fitting] {tyre}. P{pos} [on exit|at the exit|when you come out], {near}.",
+            "[Watch the speed limit|Limiter on|Pit limiter]. {tyre}, [out in P{pos}|rejoin P{pos}], {near}.",
+        ],
+    },
     "impact_check": {
         "calm": [
             "[You okay?|Are you okay?|You alright?|You okay, {me}?]",

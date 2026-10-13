@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from box_box.brain import tools
-from box_box.engineer import damage
+from box_box.engineer import damage, pitplan
 from box_box.engineer.radio import expand, gap, lap_time, tenths
 from box_box.state.model import World
 
@@ -225,6 +225,28 @@ def _damage(t: str, w: World, a: Actions, me: str) -> Answer | None:
     return Answer(text, preface=preface, delay_s=_rng.uniform(2.0, 3.5))
 
 
+def _box_rejoin(t: str, w: World, a: Actions, me: str) -> Answer | None:
+    """'How many positions do we lose if we box?': worked out from the gaps behind and the pit loss."""
+    car = w.player
+    if car is None or not w.is_race:
+        return None
+    plan = pitplan.rejoin(w, car)
+    if plan is None:
+        return None
+    tyre = pitplan.next_tyre(w, car)
+    lost = (
+        expand("[You'd keep the place|No places lost|You'd hold position]", _rng)
+        if plan.places_lost == 0
+        else f"You'd lose {plan.places_lost} " + ("place" if plan.places_lost == 1 else "places")
+    )
+    text = f"{lost}, out in P{plan.position}, {pitplan.near_words(plan, _rng)}."
+    if tyre is not None:
+        fit = ("fresh " if tyre.fresh else "") + tyre.compound
+        text += " " + expand("[We'd fit|We'd go to|That's on] ", _rng) + fit + "."
+    preface = expand("[Stand by|Copy, stand by|One sec], [running the numbers|working it out|checking the gaps].", _rng)
+    return Answer(text[:1].upper() + text[1:], instant=True, preface=preface, delay_s=_rng.uniform(1.8, 3.0))
+
+
 GREETINGS = [
     "[Hey|Hi|Hello] {me}[, loud and clear|, good to hear you|].",
     "[Hey|Hi] {me}. [All good here|We're with you|Ready when you are].",
@@ -370,6 +392,12 @@ RULES: list[Rule] = [
     ),
     (r"^(?:thanks|thank you|cheers|nice one)\b", _thanks),
     (r"\bremember\b", _remember),
+    (
+        r"\bif (?:we|i) (?:box|pit|stop)\b|\bwhere (?:do|would|will|did) (?:we|i) (?:come out|rejoin|end up|be)\b|"
+        r"\bhow many (?:places|positions)\b|\b(?:places|positions) (?:do|would|will) (?:we|i) lose\b|"
+        r"\b(?:rejoin|come out) (?:where|in what position)\b",
+        _box_rejoin,
+    ),
     (
         r"\bwhere (?:am i|are we) (?:losing|slow)|\bwhere can i (?:find|gain)|\bwhere(?:'s| is) the time\b|\bwhich corner\b",
         _losing_time,

@@ -317,3 +317,24 @@ def test_stretch_changes_speed_not_pitch() -> None:
     assert abs(len(voice) / len(fast) - 1.4) < 0.03
     f = np.fft.rfftfreq(len(fast), 1 / sr)
     assert abs(f[np.argmax(np.abs(np.fft.rfft(fast)))] - 300) < 3
+
+
+def test_replies_sometimes_take_a_thinking_beat_at_a_comma() -> None:
+    from box_box.voice.speaker import hold_split
+
+    replies = [
+        RadioCall(
+            f"reply:{i}:0",
+            Priority.STRATEGY,
+            "You'd lose two places, out in P7, right behind Alonso.",
+            0,
+            10,
+            source="reply",
+        )
+        for i in range(40)
+    ]
+    split = [hold_split(c, "human") for c in replies]
+    beats = [s for s in split if len(s[0]) == 2]
+    assert beats and len(beats) < len(split)
+    assert all(p[0].endswith(",") and 0.18 <= gap <= 0.42 for p, gap in beats)
+    assert all(len(hold_split(c, "off")[0]) == 1 for c in replies)

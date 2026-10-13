@@ -27,26 +27,33 @@ PLAY_GRACE_S = 3.0  # playback should end this long after the audio's own length
 HOLD_CHANCE = {"off": 0.0, "subtle": 0.2, "human": 0.35}
 HOLD_GAP_S = (0.35, 0.8)
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
+# Working an answer out live: a short beat at a comma ("You'd lose two places, ... out in P7").
+THINK_CHANCE = {"off": 0.0, "subtle": 0.3, "human": 0.5}
+THINK_GAP_S = (0.18, 0.42)
+_COMMA = re.compile(r",\s+")
 
 
 def hold_split(call: RadioCall, natural_speech: str) -> tuple[list[str], float]:
-    """The pieces to synthesize and the held-key gap between them. Decided from the call itself, so the
-    prefetch and the playback agree without sharing state."""
-    chance = HOLD_CHANCE.get(natural_speech, 0.0)
-    pieces = _SENTENCE_BREAK.split(call.text.strip(), maxsplit=1)
-    if (
-        not chance
-        or call.priority != Priority.INFO  # box calls, warnings and strategy are said in one breath
-        or call.source != "engineer"
-        or len(pieces) < 2
-        or len(pieces[0]) < 8
-        or len(pieces[1]) < 8
-    ):
-        return [call.text], 0.0
+    """The pieces to synthesize and the gap between them. Decided from the call itself, so the prefetch and
+    the playback agree without sharing state.
+
+    Two human habits: holding the key between two sentences while checking something (routine calls),
+    and a short thinking beat at a comma when working an answer out live (replies, not scripted calls)."""
     rng = random.Random(f"{call.id}:{call.text}")
-    if rng.random() >= chance:
+    text = call.text.strip()
+    if call.priority == Priority.SAFETY:
         return [call.text], 0.0
-    return pieces, rng.uniform(*HOLD_GAP_S)
+    if call.source == "engineer" and call.priority == Priority.INFO:  # box calls etc. are said in one breath
+        pieces = _SENTENCE_BREAK.split(text, maxsplit=1)
+        chance = HOLD_CHANCE.get(natural_speech, 0.0)
+        if len(pieces) == 2 and min(len(p) for p in pieces) >= 8 and rng.random() < chance:
+            return pieces, rng.uniform(*HOLD_GAP_S)
+    think = THINK_CHANCE.get(natural_speech, 0.0) * (1.0 if call.source == "reply" else 0.3)
+    commas = [m.end() for m in _COMMA.finditer(text) if 10 <= m.start() <= len(text) - 10]
+    if commas and think and rng.random() < think:
+        at = rng.choice(commas)
+        return [text[:at].strip(), text[at:].strip()], rng.uniform(*THINK_GAP_S)
+    return [call.text], 0.0
 
 
 def reply_prefix(call: RadioCall) -> str | None:

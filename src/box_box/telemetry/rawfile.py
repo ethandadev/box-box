@@ -84,8 +84,9 @@ _SHARE_RATE_HZ = {
     16: 10.0,
     10: 2.0,
     11: 4.0,
+    12: 0.5,  # tyre sets, per car
 }  # telemetry, status, t2, damage, history (lap data: all)
-_SHARE_KEEP = {1, 2, 3, 4, 6, 7, 8, 10, 11, 16}  # no motion, setups, lobby, tyre sets, motion ex, time trial, positions
+_SHARE_KEEP = {1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 16}  # no motion, setups, lobby, motion ex, time trial, positions
 
 
 def compact(src: str | Path, dest: str | Path) -> int:
@@ -101,7 +102,7 @@ def compact(src: str | Path, dest: str | Path) -> int:
             if pid not in _SHARE_KEEP:
                 continue
             # Session history comes one car per packet, in rotation: thin it per car, not overall.
-            stream = (pid, data[29] if pid == 11 and len(data) > 29 else -1)
+            stream = (pid, data[29] if pid in (11, 12) and len(data) > 29 else -1)
             rate = _SHARE_RATE_HZ.get(pid)
             if rate and t_ns - last.get(stream, -(10**18)) < 1e9 / rate:
                 continue

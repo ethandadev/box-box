@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from box_box.engineer import damage
+from box_box.engineer import damage, pitplan
 from box_box.engineer.radio import lap_time
 from box_box.state.model import CarState, World
 from box_box.telemetry import names
@@ -261,6 +261,19 @@ def strategy(world: World) -> dict[str, Any]:
     if s.pit_window_ideal_lap:
         out["game_pit_window"] = {"ideal_lap": s.pit_window_ideal_lap, "latest_lap": s.pit_window_latest_lap}
         out["predicted_rejoin_position"] = s.pit_rejoin_position or None
+    me_car = world.player
+    plan = pitplan.rejoin(world, me_car) if me_car is not None else None
+    if plan is not None:
+        out["if_we_box_now"] = {
+            "rejoin_position": plan.position,
+            "places_lost": plan.places_lost,
+            "pit_loss_s": round(plan.pit_loss_s, 1),
+            "behind_car": {"name": plan.ahead[0].name, "gap_s": plan.ahead[1]} if plan.ahead else None,
+            "ahead_of_car": {"name": plan.behind[0].name, "gap_s": plan.behind[1]} if plan.behind else None,
+        }
+        tyre = pitplan.next_tyre(world, me_car) if me_car is not None else None
+        if tyre is not None:
+            out["if_we_box_now"]["tyre"] = ("fresh " if tyre.fresh else "used ") + tyre.compound
     t = tyres(world)
     if "laps_until_70pct" in t and t["laps_until_70pct"] is not None:
         out["tyre_life_laps_left_estimate"] = t["laps_until_70pct"]

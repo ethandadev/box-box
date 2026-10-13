@@ -133,7 +133,7 @@ def test_practice_asks_about_the_balance_and_remembers_the_answer() -> None:
         return [s async for s in conv.handle(text, sim.world)]
 
     reply = asyncio.run(say("bit of understeer in the slow corners, rears are fine"))
-    assert reply and reply[0].startswith(("Copy", "Okay"))
+    assert reply and reply[0].startswith(("Copy", "Okay", "Understood", "Got it"))
     assert acts.log[-1][0] == "remember" and "Balance feedback" in acts.log[-1][1] and "understeer" in acts.log[-1][1]
     # The next thing said is a normal question again.
     assert asyncio.run(say("what's the gap")) != reply
@@ -261,3 +261,52 @@ def test_cold_tyres_behind_the_safety_car_and_new_tyre_briefing() -> None:
     sim.lap(0, pit_status=0, num_pit_stops=1)
     done = [c for c in sim.run(0.3) if c.key == "pit_done"]
     assert len(done) == 1 and "2.5" in done[0].text and "hards" in done[0].text
+
+
+def _pit_sim():  # type: ignore[no-untyped-def]
+    from box_box.telemetry.packets import TyreSet, TyreSets
+
+    sim = Sim([RaceDetector()], cars=8)
+    # Me P3; cars behind at 2, 5, 12, 21 and 30 s; the game predicts P7 after a stop.
+    for i, d in enumerate([0, 3000, 6000, 8000, 11000, 18000, 27000, 36000]):
+        sim.lap(i, position=i + 1, delta_to_leader_ms=d, lap_num=10)
+    sim.lap(0, position=3, delta_to_leader_ms=6000)
+    sim.lap(2, position=1, delta_to_leader_ms=0)
+    sim.set_session(pit_rejoin_position=7, total_laps=30)
+    sim.tick()
+    sim.world.player.tyre_sets = TyreSets(  # type: ignore[union-attr]
+        0,
+        (
+            TyreSet(17, 17, 40, True, 15, 20, 20, 0, True),  # fitted: used mediums
+            TyreSet(18, 18, 0, True, 15, 28, 28, 0, False),  # new hards, last 28 laps
+            TyreSet(16, 16, 0, True, 15, 12, 12, 0, False),  # new softs, only 12
+        ),
+        0,
+    )
+    return sim
+
+
+def test_if_we_box_now_is_worked_out_from_the_gaps() -> None:
+    from box_box.brain import intents
+    from box_box.engineer import pitplan
+
+    sim = _pit_sim()
+    plan = pitplan.rejoin(sim.world, sim.world.player)
+    assert plan is not None and plan.position == 7 and plan.places_lost == 4
+    assert 21 < plan.pit_loss_s < 30  # pinned between the gaps by the game's own prediction
+    tyre = pitplan.next_tyre(sim.world, sim.world.player)
+    assert tyre is not None and tyre.compound == "hards" and tyre.fresh  # softs wouldn't last 21 laps
+
+    class Act:
+        def __getattr__(self, n):  # type: ignore[no-untyped-def]
+            return lambda *a, **k: None
+
+    ans = intents.answer("how many positions do we lose if we box", sim.world, Act(), "Ethan")
+    assert ans is not None and ans.preface and "4 places" in ans.text and "P7" in ans.text and "hards" in ans.text
+
+
+def test_pit_entry_says_the_tyres_and_where_we_rejoin() -> None:
+    sim = _pit_sim()
+    sim.lap(0, pit_status=1)
+    calls = [c for c in sim.run(0.3) if c.key == "pit_in"]
+    assert len(calls) == 1 and "hards" in calls[0].text and "P7" in calls[0].text

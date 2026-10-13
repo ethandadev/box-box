@@ -92,6 +92,6 @@ def for_speech(text: str) -> str:
     t = re.sub(r"(?<![\w.])-(\d+)\b", r"minus \1", t)  # "-3 places"
     t = re.sub(r"\b(\d+)\b", lambda m: number_words(int(m.group(1))) if len(m.group(1)) <= 6 else m.group(1), t)
     t = t.replace("%", " percent").replace("°C", " degrees").replace("°F", " degrees").replace("°", " degrees")
-    for acronym in ("VSC", "DRS", "ERS", "DNF", "MFD"):
+    for acronym in ("VSC", "DRS", "ERS", "DNF", "MFD", "PB"):
         t = re.sub(rf"\b{acronym}\b", " ".join(acronym), t)
     return re.sub(r"\s+", " ", t).strip()

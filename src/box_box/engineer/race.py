@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from box_box.engineer import pitplan
 from box_box.engineer.base import Context, Detector
 from box_box.engineer.radio import Priority, RadioCall, Verbosity, gap, tenths
 from box_box.engineer.strategy import tyre_offset
@@ -61,6 +62,8 @@ class RaceDetector(Detector):
                 calls += self._on_my_lap(ctx, me, change.record.lap_num)
             elif isinstance(change, PitEntered) and change.car_index != me.index:
                 calls += self._rival_pitted(ctx, me, world.cars[change.car_index])
+            elif isinstance(change, PitEntered) and change.car_index == me.index:
+                calls += self._my_pit_entry(ctx, me)
             elif isinstance(change, PitExited) and change.car_index == me.index:
                 calls += self._my_stop_done(ctx, me, change)
             elif isinstance(change, Retired) and change.car_index != me.index:
@@ -492,6 +495,20 @@ class RaceDetector(Detector):
                 )
         self._pending = keep
         return out
+
+    def _my_pit_entry(self, ctx: Context, me: CarState) -> list[RadioCall]:
+        """Coming in: what we're fitting and who we'll be racing at the exit."""
+        plan = pitplan.rejoin(ctx.world, me)
+        tyre = pitplan.next_tyre(ctx.world, me)
+        if plan is None or tyre is None:
+            return []
+        text = ctx.say(
+            "pit_entry_plan",
+            tyre=("fresh " if tyre.fresh else "") + tyre.compound,
+            pos=plan.position,
+            near=pitplan.near_words(plan, ctx.say.rng),
+        )
+        return [ctx.call("pit_in", Priority.STRATEGY, text, ttl=8, category="pit")]
 
     def _add_move(self, ctx: Context, kind: str, other: int) -> None:
         # A pass straight back within 3 s cancels both: nothing changed.

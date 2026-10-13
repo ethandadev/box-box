@@ -17,6 +17,10 @@
   side of the front wing, that's four tenths, box this lap"), never percentages.
 - Ask "check the floor", "how's the front wing", "check the engine" or "any damage": "Copy, having a
   look", then the answer about that part. "Hi" just gets a hello back.
+- Coming into the pits: which tyres you're going to and where you'll rejoin ("fresh hards, out in P7,
+  right behind Alonso, close on pit exit"). Ask "how many positions do we lose if we box?" and he works it
+  out from the gaps and the pit loss (calibrated to the game's own rejoin prediction).
+- Answers worked out live sometimes take a short thinking beat at a comma, like a person, not a script.
 - Far more variety: the common calls have hundreds of ways to be said between them, dealt so the same
   sentence almost never comes back.
 - No repeats after flashbacks; no false punctures from worn tyres; no position commentary through your own stop.

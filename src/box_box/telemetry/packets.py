@@ -390,6 +390,26 @@ class Event:
 
 
 @dataclass(frozen=True, slots=True)
+class TyreSet:
+    actual_compound: int
+    visual_compound: int
+    wear: int  # percent
+    available: bool
+    recommended_session: int
+    life_span: int  # laps
+    usable_life: int  # laps
+    lap_delta_ms: int
+    fitted: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TyreSets:
+    car_index: int
+    sets: tuple[TyreSet, ...]
+    fitted_index: int
+
+
+@dataclass(frozen=True, slots=True)
 class HistoryLap:
     lap_ms: int
     sector1_ms: int
@@ -692,6 +712,18 @@ def _session(data: bytes, fmt: int) -> Session:
     )
 
 
+_TYRE_SET = struct.Struct("<BBBBBBBhB")  # 10 bytes x 20 sets
+
+
+def _tyre_sets(data: bytes) -> TyreSets:
+    car = data[HEADER.size]
+    sets = tuple(
+        TyreSet(v[0], v[1], v[2], bool(v[3]), v[4], v[5], v[6], v[7], bool(v[8]))
+        for v in (_TYRE_SET.unpack_from(data, HEADER.size + 1 + i * _TYRE_SET.size) for i in range(20))
+    )
+    return TyreSets(car, sets, data[HEADER.size + 1 + 20 * _TYRE_SET.size])
+
+
 _HISTORY_HEAD = struct.Struct("<7B")
 _HISTORY_LAP = struct.Struct("<IHBHBHBB")  # 14 bytes
 _HISTORY_STINT = struct.Struct("<3B")
@@ -797,6 +829,7 @@ class Decoder:
             PacketId.CAR_DAMAGE,
             PacketId.SESSION_HISTORY,
             PacketId.CAR_TELEMETRY_2,
+            PacketId.TYRE_SETS,
         }
     )
 
@@ -856,6 +889,8 @@ class Decoder:
                 return Packet(header, pid, _car_telemetry_2(lay, data))
             case PacketId.SESSION_HISTORY:
                 return Packet(header, pid, _session_history(data))
+            case PacketId.TYRE_SETS:
+                return Packet(header, pid, _tyre_sets(data))
             case _:
                 return Packet(header, pid, None)
 
