@@ -91,7 +91,7 @@ ERS_WORDS = re.compile(
 )
 FUEL_WORDS = re.compile(
     r"\bfuel (?:map|mode|mix|advice|setting)\b|\b(?:lean|rich) (?:mix|map|mode)\b|"
-    r"\b(?:will|does|can|do) (?:we|i) (?:make|last) (?:it )?(?:to )?the end\b|\b(?:will|does) the fuel (?:make|last)\b|\benough fuel\b"
+    r"\b(?:will|does|can|do) (?:we|i) (?:make|last) (?:it )?(?:to )?the end\b(?!.*\btyres?\b)|\b(?:will|does) the fuel (?:make|last)\b|\benough fuel\b"
 )
 
 

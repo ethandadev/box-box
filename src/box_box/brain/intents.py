@@ -79,6 +79,8 @@ def _silence(t: str, w: World, a: Actions, me: str) -> Answer:
     minutes = _num(t, 5)
     if re.search(r"\bsec(?:ond)?s?\b", t):
         minutes = 1  # "quiet for 30 seconds": the shortest mute is a minute
+    elif re.search(r"\blaps?\b", t):
+        minutes = max(1, round(minutes * 1.5))  # "two laps": about a minute and a half each
     a.mute(minutes)
     return Answer(
         f"Copy. Radio silence for {minutes} minute{'' if minutes == 1 else 's'}, safety calls only.", command=True
@@ -142,7 +144,10 @@ def _gap(t: str, w: World, a: Actions, me: str) -> Answer | None:
 
 
 def _driver_gap(t: str, w: World, a: Actions, me: str) -> Answer | None:
-    m = re.search(r"(?:gap to|where(?:'s| is)|how far (?:is|to)|what about)\s+([a-z\- ]+?)(?:\?|$| now| at| doing)", t)
+    m = re.search(
+        r"(?:gap to|where(?:'s| is)|how far (?:is|to)|how far (?:ahead|behind) is|what about)\s+([a-z\- ]+?)(?:\?|$| now| at| doing)",
+        t,
+    ) or re.search(r"\b([a-z\-]+)'s gap\b", t)
     if not m:
         return None
     who = m.group(1).strip()
@@ -169,6 +174,8 @@ def _driver_gap(t: str, w: World, a: Actions, me: str) -> Answer | None:
 
 
 def _tyres(t: str, w: World, a: Actions, me: str) -> Answer | None:
+    if _about_someone_else(t, w):
+        return None  # "what tyres is Norris on": not ours; the AI can look it up
     info = tools.tyres(w)
     if "error" in info:
         return Answer(no_data(_rng, "tyre"))
@@ -314,6 +321,8 @@ def _last_lap(t: str, w: World, a: Actions, me: str) -> Answer | None:
 
 
 def _best_lap(t: str, w: World, a: Actions, me: str) -> Answer | None:
+    if re.search(r"\bwho\b", t) or _about_someone_else(t, w):
+        return None  # "who has the fastest lap": not ours
     me_car = w.player
     if me_car is None or not me_car.session_best_ms:
         return Answer("No lap time yet.")
@@ -390,9 +399,35 @@ def _losing_time(t: str, w: World, a: Actions, me: str) -> Answer | None:
     return Answer("Need a couple more clean laps to compare. Keep pushing and I'll tell you.")
 
 
+def _about_someone_else(t: str, w: World) -> bool:
+    """The question names another driver, or the car ahead/behind."""
+    if re.search(r"\b(?:car|guy) (?:ahead|behind|in front)\b", t):
+        return True
+    me_car = w.player
+    for word in re.findall(r"[a-z]{3,}", t.replace("'s", "")):
+        car = w.find_driver(word) if word not in _COMMON_WORDS else None
+        if car is not None and car is not me_car:
+            return True
+    return False
+
+
+_COMMON_WORDS = {
+    "the", "what", "how", "are", "tyres", "tyre", "tires", "old", "who", "has", "fastest", "lap", "best", "is",
+    "on", "my", "our", "his", "their", "wear", "this", "that", "and", "for", "with", "these", "those", "car",
+}  # fmt: skip
+
+
+def _no_gap_info(t: str, w: World, a: Actions, me: str) -> Answer:
+    a.set_callout("gaps", False)
+    return Answer("Copy, no more gap updates.", command=True)
+
+
 def _remember(t: str, w: World, a: Actions, me: str) -> Answer | None:
     m = re.search(r"remember (?:that )?(.+)", t)
-    if not m or re.search(r"\b(?:do|did|don'?t|can) you remember\b|\bremember (?:what|when|how|if)\b", t):
+    if not m or re.search(
+        r"\b(?:do|did|don'?t|can) you remember\b|\bremember (?:what|when|how|if)\b|\b(?:i )?(?:don'?t|do not|can'?t|cannot) remember\b",
+        t,
+    ):
         return None  # a question about the past, not a note to keep
     a.remember(m.group(1).strip().rstrip("."))
     return Answer("Copy, noted.", command=True)
@@ -405,7 +440,7 @@ RULES: list[Rule] = [
         r"(?: there| mate| man| guys| team| buddy| jake| engineer)?$",
         _hello,
     ),
-    (r"^(?:thanks|thank you|cheers|nice one)\b", _thanks),
+    (r"^(?:thanks|thank you|cheers|nice one|ta)(?: mate| jake| guys| very much| a lot)?$", _thanks),
     (r"\bremember\b", _remember),
     (
         r"\bif (?:we|i) (?:box|pit|stop)\b|\bwhere (?:do|would|will|did) (?:we|i) (?:come out|rejoin|end up|be)\b|"
@@ -417,7 +452,7 @@ RULES: list[Rule] = [
         r"\bdiff(?:erential)?s?\b|\bwheel ?spin|\btraction\b(?! control)|\bbias\b|\block(?:ing|s|ed)?(?: up)?\b|\block-?ups?\b|"
         r"\b(?:ers|energy|deploy\w*|battery) (?:mode|map|advice|setting|tips?)\b|\bhot ?lap mode\b|\b(?:which|what) mode\b|"
         r"\bfuel (?:map|mode|mix|advice|setting)\b|\b(?:lean|rich) (?:mix|map|mode)\b|\benough fuel\b|"
-        r"\b(?:will|does|can|do) (?:we|i) (?:make|last) (?:it )?(?:to )?the end\b|\b(?:will|does) the fuel (?:make|last)\b|\bunstable (?:on|under|into) (?:the )?brak|"
+        r"\b(?:will|does|can|do) (?:we|i) (?:make|last) (?:it )?(?:to )?the end\b(?!.*\btyres?\b)|\b(?:will|does) the fuel (?:make|last)\b|\bunstable (?:on|under|into) (?:the )?brak|"
         r"\b(?:understeer|oversteer) (?:on|into|out of) (?:the )?(?:entry|exits?)\b|\b(?:entry|exit) (?:understeer|oversteer)\b|"
         r"\brears? (?:go|goes|going|step|steps|stepping|kick|kicks|kicking|let go|snap|snaps)\b|\bwon'?t (?:rotate|turn in)\b",
         _setup_advice,
@@ -435,23 +470,32 @@ RULES: list[Rule] = [
         _plan,
     ),
     (r"\b(?:stop talking about|no more|stop telling me about|don'?t tell me about) tyres?\b", _no_tyre_info),
-    (r"\b(?:radio silence|stop talking|shut up|be quiet for|go quiet|no radio)\b", _silence),
+    (r"\b(?:stop talking about|no more|stop telling me about|don'?t tell me about) (?:the )?gaps?\b", _no_gap_info),
+    (r"\bno more (?:radio|updates|info|chat)\b", _quiet),
+    (r"\b(?:radio silence|stop talking(?! about)|shut up|be quiet for|go quiet|no radio)\b", _silence),
     (r"\b(?:talk to me again|radio back on|you can talk|unmute|come back on)\b", _unmute),
     (
         r"\b(?:less (?:radio|talking|chat)|quiet(?:er)? please|too much (?:talking|radio)|only (?:the )?essentials)\b",
         _quiet,
     ),
-    (r"\b(?:more (?:radio|updates|info)|talk more|chattier|keep me updated)\b", _chatty),
+    (
+        r"^(?:(?:give me |i want |can i (?:get|have) )?more (?:radio|updates|info)(?: please)?|talk more|chattier|keep me updated)$",
+        _chatty,
+    ),
     (r"\bnormal (?:radio|amount)\b", _normal),
     (r"\bgaps? every\b", _gap_every),
     (r"\bstop the tyres?\b", _no_tyre_info),
     (
-        r"^(?:box|box box|boxing|i'?m boxing|box this lap|pitting|i'?m pitting)\b|"
-        r"^(?:i (?:need|want) (?:a box|to box|to pit|a stop)|box me|can (?:i|we) box|i'?m coming in|coming in)\b",
+        r"^(?:box|box box|boxing|i'?m boxing|box this lap|pitting|i'?m pitting|i (?:need|want) (?:a box|to box|to pit|a stop)|"
+        r"box me|can (?:i|we) box|i'?m coming in|coming in)(?: this lap| now| please| jake| mate)*$",
         _box,
     ),
-    (r"^(?:stay(?:ing)? out|not boxing)\b", _stay_out),
-    (r"\b(?:gap to|where(?:'s| is)|how far (?:is|to)|what about)\s+(?!the car|car |the leader|leader)\w", _driver_gap),
+    (r"^(?:stay(?:ing)? out|not boxing)(?: this lap| please| jake| mate)*$", _stay_out),
+    (
+        r"\b(?:gap to|where(?:'s| is)|how far (?:is|to)|how far (?:ahead|behind) is|what about)\s+(?!the car|car |the leader|leader)\w"
+        r"|\b\w+'s gap\b(?<!\bmy gap\b)",
+        _driver_gap,
+    ),
     (r"\bgaps?\b|\bhow far (?:ahead|behind)\b|\b(?:car|guy) (?:ahead|behind|in front)\b", _gap),
     (r"\bwhat position\b|\bwhere am i\b|\bwhat(?:'s| is) my position\b|\bwhat place\b|\bwhat p\b", _position),
     (r"\bwho(?:'s| is) (?:around|ahead|behind|in front)\b", _whos_around),
@@ -464,7 +508,8 @@ RULES: list[Rule] = [
     ),
     (r"\bweather\b|\brain\b|\bforecast\b|\bradar\b", _weather),
     (
-        r"\blaps? (?:left|to go|remaining)\b|\bhow many laps\b|\bhow long left\b|\btime left\b|\bminutes left\b",
+        r"\blaps? (?:left|to go|remaining)\b|\bhow many laps\b|\bhow long left\b|\btime left\b|\bminutes left\b|"
+        r"\bis (?:this|it) the last lap\b",
         _laps_left,
     ),
     (r"\blast lap\b|\bwhat was that lap\b|\bwhat did i do\b|\blap time\b", _last_lap),
@@ -476,7 +521,8 @@ _COMPILED = [(re.compile(p), fn) for p, fn in RULES]
 
 def answer(text: str, world: World, actions: Actions, me: str) -> Answer | None:
     t = text.lower().strip()
-    t = re.sub(r"[,.!]", " ", t)
+    t = re.sub(r"[,.!?]", " ", t)
+    t = re.sub(r"\b(what|where|how|who|that|there)s\b", r"\1's", t)  # speech-to-text drops the apostrophe
     t = re.sub(r"\s+", " ", t).strip()
     for pattern, fn in _COMPILED:
         if pattern.search(t):

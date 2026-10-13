@@ -28,8 +28,8 @@ QUESTION_START = re.compile(
 )
 # The driver describing the car: feedback to acknowledge (or think about), not a request for numbers.
 DESCRIBING = re.compile(
-    r"\b(?:i'?m|i am|i'?ve|my|it'?s|feels?|feeling|the car|they'?re|we'?re|getting|no grip|understeer\w*|"
-    r"oversteer\w*|sliding|overheating|locking|bouncing|snappy|dead|gone|struggling)\b",
+    r"\b(?:i'?m|i am|i'?ve|it'?s|feels?|feeling|they'?re|we'?re|no grip|understeer\w*|"
+    r"oversteer\w*|sliding|over-?heat\w*|lock(?:ing|s) up|locking|bouncing|snappy|dead|gone|struggling)\b",
     re.I,
 )
 # Questions that need judgement, not a number off the screen: these always go to the AI.
@@ -82,6 +82,8 @@ class Conversation:
             return None
         if (local and (local.command or local.instant)) or is_question(text):
             return None  # "say again", "radio check", "box box" are never balance feedback
+        if local is not None and quick_question(text) and not describes_car(text):
+            return None  # "gap to Leclerc": a request that happens to come after the question, not an answer
         self.awaiting = None
         return topic
 
@@ -109,7 +111,7 @@ class Conversation:
         quick = local is not None and (local.command or local.instant or (s.ai.fast_answers and quick_question(text)))
         use_llm = self.brain.available and not quick
         if not use_llm:
-            if local and not quick and describes_car(text):
+            if (local is None or not quick) and describes_car(text):
                 # A statement ("the tyres are overheating"), not a question: acknowledge it like an engineer
                 # rather than reading out telemetry that may well contradict what the driver can feel.
                 self.actions.remember(f"Driver said: {text}")

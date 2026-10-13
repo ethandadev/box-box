@@ -59,7 +59,7 @@ VARIETY: dict[str, list[str]] = {
     ],
     # ---- positions --------------------------------------------------------------------------------
     "gained_position": [
-        "[Nice move|Good move|Great move|Lovely move]. P{pos}[, keep it going|.|, well done].",
+        "[Nice move|Good move|Great move|Lovely move]. P{pos}[, keep it going||, well done].",
         "[Good job|Well done|Nice one], P{pos}.",
         "P{pos}. [Well done|Good job|Nicely done][, mate|].",
         "[That's|Up to] P{pos}. [Clean move|Good stuff|Keep pushing].",
@@ -182,7 +182,7 @@ VARIETY: dict[str, list[str]] = {
     "after_lap_one_gained": [
         "P{pos}. Good start, up {n}.",
         "Nice start. P{pos}, up {n}.",
-        "[Great|Mega|Lovely] start, [{n} places|up {n}]. P{pos}[, keep it going|].",
+        "[Great|Mega|Lovely] start, up {n}. P{pos}[, keep it going|].",
     ],
     "after_lap_one_lost": [
         "P{pos}. Lost {n}, long race. Stay calm.",
@@ -225,7 +225,7 @@ VARIETY: dict[str, list[str]] = {
         "Yellow flag, {where}. Careful.",
         "Yellows at {where}. Don't get caught out.",
         "Yellow flag ahead, {where}.",
-        "[Careful|Heads up|Watch out], yellow[s|] {where}[, no overtaking|].",
+        "[Careful|Heads up|Watch out], yellow[s|] at {where}[, no overtaking|].",
     ],
     "safety_car": [
         "Safety car, safety car. [Slow down, stay positive to the delta|Positive delta].",

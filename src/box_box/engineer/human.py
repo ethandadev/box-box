@@ -128,7 +128,9 @@ class Humanizer:
 
     def _okay_so(self, text: str) -> str | None:
         """'Okay, so gap to Leclerc...': a spoken lead-in, without a stumble the voice can't pull off."""
-        if text.startswith(("Okay", "So", "And", "Just for info", "Yeah")):
+        if text.startswith(
+            ("Okay", "So", "And", "Just for info", "For info", "Yeah", "Right", "Heads up", "Careful", "Copy")
+        ):
             return None
         first, _, rest = text.partition(" ")
         if not rest or not first[:1].isalpha():

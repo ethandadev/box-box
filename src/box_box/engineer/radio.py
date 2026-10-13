@@ -111,10 +111,9 @@ def lap_time(ms: int) -> str:
     """1:26.7 style, for display; the TTS normaliser turns it into 'one twenty-six seven'."""
     if ms <= 0:
         return "no time"
-    total = ms / 1000.0
-    minutes = int(total // 60)
-    seconds = total - minutes * 60
-    return f"{minutes}:{seconds:04.1f}" if minutes else f"{seconds:.1f}"
+    tenths_total = round(ms / 100)  # rounded first, so 1:59.96 is 2:00.0, never 1:60.0
+    minutes, rest = divmod(tenths_total, 600)
+    return f"{minutes}:{rest / 10:04.1f}" if minutes else f"{rest / 10:.1f}"
 
 
 # Words that keep their capital mid-sentence ("Okay, so Russell is through"). Driver names in the session
@@ -224,7 +223,9 @@ class Phrasebook:
             not text
             or self._since_lead <= 2
             or not self.chance(p)
-            or text.startswith(("Okay", "And ", "Just for info"))
+            or text.startswith(
+                ("Okay", "So", "And", "Just for info", "For info", "Yeah", "Right", "Heads up", "Careful", "Copy")
+            )  # never "Just for info, for info, ..."
         ):
             return text
         self._since_lead = 0
