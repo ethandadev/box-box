@@ -445,7 +445,11 @@ RULES: list[Rule] = [
     (r"\bnormal (?:radio|amount)\b", _normal),
     (r"\bgaps? every\b", _gap_every),
     (r"\bstop the tyres?\b", _no_tyre_info),
-    (r"^(?:box|box box|boxing|i'?m boxing|box this lap|pitting|i'?m pitting)\b", _box),
+    (
+        r"^(?:box|box box|boxing|i'?m boxing|box this lap|pitting|i'?m pitting)\b|"
+        r"^(?:i (?:need|want) (?:a box|to box|to pit|a stop)|box me|can (?:i|we) box|i'?m coming in|coming in)\b",
+        _box,
+    ),
     (r"^(?:stay(?:ing)? out|not boxing)\b", _stay_out),
     (r"\b(?:gap to|where(?:'s| is)|how far (?:is|to)|what about)\s+(?!the car|car |the leader|leader)\w", _driver_gap),
     (r"\bgaps?\b|\bhow far (?:ahead|behind)\b|\b(?:car|guy) (?:ahead|behind|in front)\b", _gap),

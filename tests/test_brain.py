@@ -60,6 +60,8 @@ def race_sim() -> Sim:
         ("how many laps left", "15 laps to go"),
         ("weather?", "It's clear, track 30 degrees. No rain"),
         ("box box", "Copy, box this lap."),
+        ("I need a box.", "Copy, box this lap."),
+        ("box me this lap", "Copy, box this lap."),
         ("fuel", "Fuel's fine, about 0.5 laps in hand."),
     ],
 )

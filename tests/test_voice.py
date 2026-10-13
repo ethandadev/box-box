@@ -375,3 +375,12 @@ def test_speed_varies_a_little_and_urgent_is_quicker() -> None:
     assert pace(calls[0], 0, 1.4, "off") == 1.4
     box = [RadioCall("box", Priority.STRATEGY, f"Box, box {i}.", 0, 10) for i in range(40)]
     assert sum(pace(c, 0, 1.4, "human") for c in box) > sum(pace(c, 0, 1.4, "human") for c in calls)
+
+
+def test_every_lexicon_symbol_is_one_kokoro_can_say() -> None:
+    config = pytest.importorskip("kokoro_onnx.config")
+    from box_box.voice.pronounce import JARGON, LEXICON
+
+    vocab = config.DEFAULT_VOCAB
+    bad = {w: [c for c in ipa if c != " " and c not in vocab] for w, ipa in {**LEXICON, **JARGON}.items()}
+    assert not {w: c for w, c in bad.items() if c}  # an unknown symbol is silently dropped: "kerbs" became "kbz"

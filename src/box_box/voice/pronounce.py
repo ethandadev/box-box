@@ -10,7 +10,9 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-# Pronunciations as said on F1 radio and TV (anglicised where the paddock anglicises).
+# Pronunciations as said on F1 radio and TV (anglicised where the paddock anglicises). Written in
+# espeak-style IPA with the stress mark just before the vowel; every symbol must be in Kokoro's
+# vocabulary (anything else is silently dropped: a test checks).
 LEXICON: dict[str, str] = {
     # drivers
     "Leclerc": "ləklˈɛɹ",
@@ -25,11 +27,11 @@ LEXICON: dict[str, str] = {
     "Gasly": "ɡæzlˈiː",
     "Perez": "pˈɛɹɛz",
     "Pérez": "pˈɛɹɛz",
-    "Hulkenberg": "hˈʊlkənbɛɹɡ",
-    "Hülkenberg": "hˈʊlkənbɛɹɡ",
-    "Bottas": "bˈɑtæs",
+    "Hulkenberg": "hˈʌlkənbɜːɡ",
+    "Hülkenberg": "hˈʌlkənbɜːɡ",
+    "Bottas": "bˈɑtəs",
     "Valtteri": "vˈɑltɛɹi",
-    "Verstappen": "fɚstˈæpən",
+    "Verstappen": "vɚstˈæpən",
     "Kimi": "kˈiːmi",
     "Antonelli": "ˌæntoʊnˈɛli",
     "Ricciardo": "ɹɪkˈɑɹdoʊ",
@@ -131,8 +133,8 @@ JARGON: dict[str, str] = {
     "tifosi": "tifˈoʊzi",
     "parc ferme": "pˈɑɹk fɛɹmˈeɪ",
     "parc fermé": "pˈɑɹk fɛɹmˈeɪ",
-    "kerbs": "kˈɝbz",
-    "kerb": "kˈɝb",
+    "kerbs": "kˈɜːbz",
+    "kerb": "kˈɜːb",
     "deg": "dˈɛɡ",
     "monaco": "mˈɑnəkoʊ",
 }

@@ -6,6 +6,11 @@
 - Every transmission keys up like the real thing: a click and the beep, a moment of open channel, the voice
   swelling in narrow-band over a hiss floor, then the hiss tail and the closing beep. Sometimes he holds the
   key between two sentences. Your own push-to-talk clicks and chirps too.
+- Driver names said the way English commentary says them: Verstappen with a V (not the Dutch F),
+  "HULL-ken-burg", "BOT-us". "Kerbs" no longer loses its vowel.
+- "I need a box", "box me", "coming in" get the box confirmation straight away instead of a question.
+- The AI no longer tells you to "check the setup tool", and acknowledges feedback in your words instead of
+  inventing a symptom ("slippery" isn't "understeer in the slow stuff").
 - Paddock words said like the pit wall: "Inters" is a quick IN-terz (not in-TERZ), plus Pirelli, Ferrari,
   McLaren, Aston, Sauber, Haas, outlap, hotlap, quali, parc fermé, Tifosi, kerbs, deg.
 - A short breath between pieces of information instead of running sentences together, and the speed now
