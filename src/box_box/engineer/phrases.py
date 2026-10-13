@@ -431,6 +431,15 @@ PHRASES: dict[str, dict[str, list[str]]] = {
             "{part} damage, {pct} percent. Car's still okay to continue.",
         ],
     },
+    "impact_check": {
+        "calm": [
+            "[You okay?|Are you okay?|You alright?|You okay, {me}?]",
+            "[Big hit.|Ooh.|That was a big one.|Okay.] [You okay?|Are you alright?|You good?]",
+            "[Are you okay?|You alright?] [Talk to me.|Let us know.|Give us a word.]",
+        ],
+        "fired_up": ["[Whoa!|Ooh!] [You okay, {me}?|Are you alright?]"],
+        "dry": ["[You okay?|Still with us?] [That looked expensive.|The mechanics felt that one.|]"],
+    },
     "puncture": {
         "calm": ["Puncture, {corner}! Box, box, box.", "You've got a puncture, {corner}. Bring it in, box."],
     },

@@ -6,13 +6,15 @@ exact (the numbers come straight from telemetry). Anything not matched here goes
 
 from __future__ import annotations
 
+import random
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
 from box_box.brain import tools
-from box_box.engineer.radio import gap, lap_time, tenths
+from box_box.engineer import damage
+from box_box.engineer.radio import expand, gap, lap_time, tenths
 from box_box.state.model import World
 
 
@@ -31,6 +33,8 @@ class Answer:
     text: str
     command: bool = False  # changed a setting (so it's handled even when the AI is available)
     instant: bool = False  # radio etiquette ("radio check", "thanks", "say again"): never worth the AI
+    preface: str | None = None  # said straight away when the real answer takes a moment ("Copy, having a look.")
+    delay_s: float = 0.0  # how long that moment is
 
 
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "every": 1, "each": 1}
@@ -45,6 +49,7 @@ def _num(text: str, default: int) -> int:
 
 
 Rule = tuple[str, Callable[[str, World, Actions, str], Answer | None]]
+_rng = random.Random()
 
 
 def _radio_check(t: str, w: World, a: Actions, me: str) -> Answer:
@@ -201,25 +206,36 @@ def _fuel(t: str, w: World, a: Actions, me: str) -> Answer | None:
 
 
 def _damage(t: str, w: World, a: Actions, me: str) -> Answer | None:
-    info = tools.car_health(w)
-    if "error" in info:
-        return Answer("Stand by, no car data.")
-    bits = []
-    for key, label in (
-        ("front_wing_left_pct", "front wing left"),
-        ("front_wing_right_pct", "front wing right"),
-        ("rear_wing_pct", "rear wing"),
-        ("floor_pct", "floor"),
-        ("diffuser_pct", "diffuser"),
-        ("sidepod_pct", "sidepod"),
-        ("engine_pct", "engine"),
-        ("gearbox_pct", "gearbox"),
-    ):
-        if info[key] >= 5:
-            bits.append(f"{label} {info[key]} percent")
-    if not bits:
-        return Answer("Car looks fine, no damage.")
-    return Answer("We've got " + ", ".join(bits) + ".")
+    """'Check the floor', 'how's the front wing?', 'any damage?': looked at properly, then said in words."""
+    me_car = w.player
+    if me_car is None or me_car.damage is None:
+        return Answer("Stand by, no car data yet.")
+    parts = damage.parts_named(t)
+    text = damage.report(me_car.damage, _rng, race=w.is_race, parts=parts or None)
+    preface = expand(
+        _rng.choice(
+            [
+                "[Copy|Okay|Copy that], [having a look|checking|we'll have a look|looking at it now].",
+                "Stand by, [checking the data|having a look|looking at it].",
+                "[Copy|Okay], one sec.",
+            ]
+        ),
+        _rng,
+    )
+    return Answer(text, preface=preface, delay_s=_rng.uniform(2.0, 3.5))
+
+
+GREETINGS = [
+    "[Hey|Hi|Hello] {me}[, loud and clear|, good to hear you|].",
+    "[Hey|Hi] {me}. [All good here|We're with you|Ready when you are].",
+    "[Hey mate|Hi mate|Hello mate], [loud and clear|good to hear you|all good this end].",
+    "[Hey|Hi], {me}. [How's it feeling?|How's the car?|All good?]",
+    "[Morning|Hey] {me}[, we're with you|]. [Ready when you are|Let's get to work].",
+]
+
+
+def _hello(t: str, w: World, a: Actions, me: str) -> Answer:
+    return Answer(expand(_rng.choice(GREETINGS), _rng).format(me=me), instant=True)
 
 
 def _weather(t: str, w: World, a: Actions, me: str) -> Answer | None:
@@ -347,6 +363,11 @@ def _remember(t: str, w: World, a: Actions, me: str) -> Answer | None:
 
 RULES: list[Rule] = [
     (r"\bradio check\b|\bcan you hear me\b|\bdo you (?:read|copy)\b", _radio_check),
+    (
+        r"^(?:hi|hello|hey|hiya|yo|sup|howdy|morning|good (?:morning|afternoon|evening)|what'?s up)"
+        r"(?: there| mate| man| guys| team| buddy| jake| engineer)?$",
+        _hello,
+    ),
     (r"^(?:thanks|thank you|cheers|nice one)\b", _thanks),
     (r"\bremember\b", _remember),
     (
@@ -380,7 +401,11 @@ RULES: list[Rule] = [
     (r"\bwho(?:'s| is) (?:around|ahead|behind|in front)\b", _whos_around),
     (r"\btyres?\b|\btires?\b|\bwear\b|\bdeg\b", _tyres),
     (r"\bfuel\b|\bsave fuel\b|\blift and coast\b", _fuel),
-    (r"\bdamage\b|\bwing\b|\bfloor\b|\bcar ok\b|\bcar okay\b|\bcar alright\b", _damage),
+    (
+        r"\bdamage\w*\b|\bwing\b|\bnose\b|\bfloor\b|\bdiffuser\b|\bsidepods?\b|\bgearbox\b|\bpower unit\b|"
+        r"\bengine\b(?! mode)|\bcar (?:ok|okay|alright|fine|good)\b|\bcheck the car\b|\bhow(?:'s| is) the car\b",
+        _damage,
+    ),
     (r"\bweather\b|\brain\b|\bforecast\b|\bradar\b", _weather),
     (
         r"\blaps? (?:left|to go|remaining)\b|\bhow many laps\b|\bhow long left\b|\btime left\b|\bminutes left\b",

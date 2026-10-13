@@ -6,8 +6,10 @@ imagination: it has to call one of these.
 
 from __future__ import annotations
 
+import random
 from typing import Any
 
+from box_box.engineer import damage
 from box_box.engineer.radio import lap_time
 from box_box.state.model import CarState, World
 from box_box.telemetry import names
@@ -163,6 +165,8 @@ def car_health(world: World) -> dict[str, Any]:
         "drs_fault": d.drs_fault,
         "ers_fault": d.ers_fault,
         "tyre_damage_pct": dict(zip(CORNERS, d.tyre_damage, strict=True)),
+        # Say this, not the percentages: how an engineer actually describes damage on the radio.
+        "summary": damage.report(d, random.Random(), race=world.is_race),
     }
     if me.telemetry:
         out["brake_temp_c"] = dict(zip(CORNERS, me.telemetry.brake_temps, strict=True))

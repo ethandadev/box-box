@@ -58,7 +58,6 @@ def race_sim() -> Sim:
         ("where's Norris", "Norris is P1, 4.2 ahead of you."),
         ("what position am I", "You're P3."),
         ("how many laps left", "15 laps to go"),
-        ("any damage?", "Car looks fine, no damage."),
         ("weather?", "It's clear, track 30 degrees. No rain"),
         ("box box", "Copy, box this lap."),
         ("fuel", "Fuel's fine, about 0.5 laps in hand."),
@@ -279,3 +278,34 @@ def test_a_lone_closing_think_tag_drops_the_reasoning_before_it() -> None:
     assert said == ["Gap is 1.2."] and first.saw_lone_think
     plain = SentenceStream()  # an ordinary answer still streams sentence by sentence
     assert plain.feed("Gap is 1.2. He's on") == ["Gap is 1.2."]
+
+
+def test_damage_checks_take_a_moment_and_come_back_in_words() -> None:
+    from box_box.brain import intents
+
+    sim = race_sim()
+    sim.car_damage(0, floor=23)
+    sim.tick()
+
+    class Act:
+        def __getattr__(self, n):  # type: ignore[no-untyped-def]
+            return lambda *a, **k: None
+
+    for ask in ("check the floor", "any damage?", "how's the front wing", "check the engine"):
+        ans = intents.answer(ask, sim.world, Act(), "Ethan")
+        assert ans is not None and ans.preface and ans.delay_s >= 2.0, ask
+        assert "percent" not in ans.text and "%" not in ans.text and "23" not in ans.text, ans.text
+    floor = intents.answer("check the floor", sim.world, Act(), "Ethan")
+    assert floor is not None and "floor" in floor.text.lower()
+
+
+def test_hi_gets_a_hello_not_a_conversation() -> None:
+    from box_box.brain import intents
+
+    class Act:
+        def __getattr__(self, n):  # type: ignore[no-untyped-def]
+            return lambda *a, **k: None
+
+    for hi in ("Hi", "hey", "Hello there", "morning"):
+        ans = intents.answer(hi, race_sim().world, Act(), "Ethan")
+        assert ans is not None and ans.instant and len(ans.text) < 80, hi

@@ -200,15 +200,31 @@ def test_puncture_is_a_safety_call() -> None:
     assert len(calls) == 1 and calls[0].priority == Priority.SAFETY and "front left" in calls[0].text
 
 
-def test_heavy_wing_damage_in_race_means_box() -> None:
+def test_damage_is_reported_in_words_after_a_moment() -> None:
     sim = Sim([CarDetector()])
     sim.run(0.3)
     sim.car_damage(0, front_left_wing=12)
-    calls = sim.run(0.3)
-    assert len(calls) == 1 and "12" in calls[0].text
-    sim.car_damage(0, front_left_wing=55)
-    calls = sim.run(0.3)
-    assert len(calls) == 1 and "box" in calls[0].text.lower() and calls[0].priority == Priority.STRATEGY
+    assert sim.run(1.0) == []  # the pit wall takes a moment to read the data
+    calls = sim.run(6)
+    assert len(calls) == 1 and calls[0].key == "damage"
+    assert "12" not in calls[0].text and "front wing" in calls[0].text and "percent" not in calls[0].text
+    sim.car_damage(0, front_left_wing=55)  # a big hit this time: he checks on the driver, then reports
+    calls = sim.run(7)
+    assert [c.key for c in calls] == ["impact", "damage"]
+    assert "box" in calls[1].text.lower() and calls[1].priority == Priority.STRATEGY
+
+
+def test_a_big_crash_checks_on_the_driver_first() -> None:
+    sim = Sim([CarDetector()])
+    sim.car_telemetry(0, speed_kph=250)
+    sim.run(0.5)
+    sim.car_telemetry(0, speed_kph=20)
+    sim.car_damage(0, front_left_wing=80, front_right_wing=75, floor=30)
+    first = sim.run(0.3)
+    assert [c.key for c in first] == ["impact"]
+    assert any(w in first[0].text.lower() for w in ("okay", "alright", "good", "with us"))
+    later = sim.run(7)
+    assert [c.key for c in later] == ["damage"] and "box" in later[0].text.lower()
 
 
 def test_flashback_undoing_damage_is_not_new_damage() -> None:

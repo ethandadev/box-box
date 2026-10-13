@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections import deque
+
+from box_box.engineer import damage
 from box_box.engineer.base import Context, Detector
 from box_box.engineer.radio import Priority, RadioCall, Verbosity
 from box_box.state.model import CarState, LapCompleted
@@ -14,6 +17,7 @@ SLICKS = {16, 17, 18, 19, 20, 21, 22}
 HOT_SLICK, COLD_SLICK = 112, 75
 HOT_WET, COLD_WET = 100, 55
 BRAKES_HOT = 1050
+REPORT_DELAY_S = (3.5, 6.0)  # after an impact, the pit wall takes a moment to read the data
 
 
 class CarDetector(Detector):
@@ -27,11 +31,17 @@ class CarDetector(Detector):
         self._wear_stint = -1
         self._fault_seen = {"ers": False, "drs": False}
         self._fuel_call_lap = 0
+        self._speeds: deque[tuple[float, float]] = deque()  # (session time, kph) over the last moment
+        self._report_due: float | None = None  # when to come back with the damage after an impact
+        self._report_base: CarDamage | None = None  # the car before the impact
+        self._big_hit = False
 
     def on_rewind(self) -> None:
         # Flashbacks undo damage: re-baseline so restored parts don't look like new damage.
         self._last_damage = None
         self._hot_since.clear()
+        self._speeds.clear()
+        self._report_due, self._report_base, self._big_hit = None, None, False
 
     def _cooldown(self, key: str, now: float, seconds: float) -> bool:
         """True (and arms the timer) if `key` hasn't been called in the last `seconds`."""
@@ -60,63 +70,70 @@ class CarDetector(Detector):
 
     def _damage(self, ctx: Context, me: CarState, dmg: CarDamage) -> list[RadioCall]:
         prev, self._last_damage = self._last_damage, dmg
-        if prev is None:
-            return []
         out: list[RadioCall] = []
-        race = ctx.world.is_race
+        now = ctx.now
+        speed = me.speed_kph
+        self._speeds.append((now, speed))
+        while self._speeds and now - self._speeds[0][0] > 0.8:
+            self._speeds.popleft()
+        if prev is None:
+            return out
 
         # Puncture: a tyre's damage jumps. Damage also creeps up with wear (a 20-lap-old hard reads 60%),
         # so a slow climb past a threshold is a worn tyre, not a puncture.
         for i, (a, b) in enumerate(zip(prev.tyre_damage, dmg.tyre_damage, strict=True)):
             sudden = b - a >= 25 or (b >= 85 > a and b - dmg.tyre_wear[i] >= 30)
-            if sudden and self._cooldown(f"puncture{i}", ctx.now, 60):
+            if sudden and self._cooldown(f"puncture{i}", now, 60):
                 out.append(
                     ctx.call(
                         "puncture", Priority.SAFETY, ctx.say("puncture", corner=CORNERS[i]), ttl=15, category="damage"
                     )
                 )
 
-        for side, a, b in (
-            ("left", prev.front_left_wing, dmg.front_left_wing),
-            ("right", prev.front_right_wing, dmg.front_right_wing),
-        ):
-            if b - a >= 8:
-                if b >= 40 and race:
-                    out.append(
-                        ctx.call("wing", Priority.STRATEGY, ctx.say("wing_damage_box"), ttl=30, category="damage")
-                    )
-                elif b >= 40 and not ctx.world.is_time_trial:
-                    # Practice/quali: no point running a broken car, the data and laps are worthless.
-                    text = ctx.say("wing_damage_practice", side=side, pct=b)
-                    out.append(ctx.call("wing", Priority.STRATEGY, text, ttl=30, category="damage"))
-                else:
-                    out.append(
-                        ctx.call(
-                            "wing", Priority.INFO, ctx.say("wing_damage", side=side, pct=b), ttl=20, category="damage"
-                        )
-                    )
-
-        for part, a, b in (
-            ("floor", prev.floor, dmg.floor),
-            ("diffuser", prev.diffuser, dmg.diffuser),
-            ("sidepod", prev.sidepod, dmg.sidepod),
-            ("rear wing", prev.rear_wing, dmg.rear_wing),
-        ):
-            if b - a >= 10:
+        # An impact: new damage, a contact event, or the car stopping dead. Like a real pit wall: check on
+        # the driver first if it was a big one, then come back with what the data shows once it's settled.
+        jump = max(
+            (getattr(dmg, k) - getattr(prev, k) for k in ("front_left_wing", "front_right_wing", "floor",
+                                                          "diffuser", "sidepod", "rear_wing")),
+            default=0,
+        ) + max(0, dmg.engine - prev.engine) // 2  # fmt: skip
+        stopped = max((v for _, v in self._speeds), default=speed) - speed
+        contact = any(e.code == "COLL" and me.index in (e.vehicle_idx, e.other_vehicle_idx) for e in ctx.events)
+        hit = jump >= 8 or (dmg.engine - prev.engine) >= 10 or (contact and jump >= 3)
+        big = jump >= 25 or (stopped >= 120 and speed < 100) or (contact and jump >= 15)
+        if (hit or big) and self._report_due is None:
+            self._report_base = prev
+            self._report_due = now + ctx.say.rng.uniform(*REPORT_DELAY_S)
+            self._big_hit = big
+            if big and self._cooldown("impact", now, 30):
+                out.append(
+                    ctx.call("impact", Priority.STRATEGY, ctx.say("impact_check", me=ctx.me), ttl=4, category="damage")
+                )
+        elif big and self._report_due is not None:
+            self._big_hit = True
+        if self._report_due is not None and now >= self._report_due:
+            base, big_hit = self._report_base, self._big_hit
+            self._report_due, self._report_base, self._big_hit = None, None, False
+            fresh = base is None or any(
+                getattr(dmg, p.key) - getattr(base, p.key) >= damage.NOTICE_PCT for p in damage.PARTS
+            )
+            if fresh or big_hit:
+                race = ctx.world.is_race
+                urgent = damage.needs_box(dmg, race) and not ctx.world.is_time_trial
+                # Told to box a moment ago: don't repeat it with every bit of extra damage.
+                advise = urgent and self._cooldown("advise_box", now, 90)
+                text = damage.report(dmg, ctx.say.rng, race=race, since=base, advise_box=advise)
                 out.append(
                     ctx.call(
-                        f"dmg:{part}",
-                        Priority.INFO,
-                        ctx.say("floor_damage", part=part, pct=b),
-                        ttl=20,
+                        "damage",
+                        Priority.STRATEGY if urgent else Priority.INFO,
+                        text,
+                        ttl=30,
                         category="damage",
                     )
                 )
 
-        if dmg.engine - prev.engine >= 10:
-            out.append(
-                ctx.call("engine", Priority.INFO, ctx.say("engine_damage", pct=dmg.engine), ttl=30, category="damage")
-            )
+        race = ctx.world.is_race
         if dmg.ers_fault and not self._fault_seen["ers"]:
             out.append(ctx.call("ers_fault", Priority.STRATEGY, ctx.say("ers_fault"), ttl=30, category="damage"))
         if dmg.drs_fault and not self._fault_seen["drs"] and race:

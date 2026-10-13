@@ -192,6 +192,10 @@ class Phrasebook:
         text = re.sub(r"([.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
         return text[:1].upper() + text[1:]
 
+    @property
+    def rng(self) -> random.Random:
+        return self._rng
+
     def chance(self, p: float) -> bool:
         return self._rng.random() < p
 
@@ -207,7 +211,7 @@ class Phrasebook:
         ):
             return text
         self._since_lead = 0
-        opener = self.pick("lead", ["Okay, ", "And ", "Just for info, "])
+        opener = self.pick("lead", ["Okay,", "And", "Just for info,", "[Okay|Right], so", "So,"])
         first, _, rest = text.partition(" ")
         first = soften(first, self.proper | {me})
-        return opener + first + (" " + rest if rest else "")
+        return f"{opener} {first}" + (" " + rest if rest else "")

@@ -117,7 +117,15 @@ class Conversation:
                     self.say("feedback_ack", me=s.driver.name), s.engineer.natural_speech, reply=True
                 )
             elif local:
-                text = self.say.human.apply(local.text, s.engineer.natural_speech, reply=True)
+                if local.preface:
+                    # Some answers take a look at the data first: "Copy, having a look." ... then the answer.
+                    yield local.preface
+                    await asyncio.sleep(local.delay_s)
+                text = (
+                    local.text
+                    if local.preface
+                    else self.say.human.apply(local.text, s.engineer.natural_speech, reply=True)
+                )
                 yield text[:1].upper() + text[1:]
             elif self.brain.disabled_reason:
                 yield "I can only do the basics right now. Check the AI settings after the session."
