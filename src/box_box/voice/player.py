@@ -1,7 +1,8 @@
 """Audio output: one always-open stream so the radio starts instantly, with cut-off for barge-in.
 
-`sounddevice` (PortAudio) is imported lazily: if it's missing or there's no output device, a
-`NullPlayer` stands in, so the rest of the app keeps working and the UI can say what's wrong.
+`sounddevice` (PortAudio) is imported lazily: if it's missing or there's no output device, the player
+records the error (shown in the UI and Diagnostics) and every clip resolves straight away as not played,
+so the rest of the app keeps working. `NullPlayer` plays nothing in real time, for tests.
 """
 
 from __future__ import annotations
@@ -122,7 +123,6 @@ class AudioPlayer:
             info = sd.query_devices(index, "output")
             self.samplerate = int(info["default_samplerate"]) or 48_000
             channels = min(2, int(info["max_output_channels"]) or 1)
-            self._channels = channels
             self._stream = sd.OutputStream(
                 device=index,
                 samplerate=self.samplerate,
@@ -152,7 +152,7 @@ class AudioPlayer:
 
     def play(self, samples: np.ndarray, samplerate: int) -> Future[bool]:
         fut: Future[bool] = Future()
-        if self._stream is None:
+        if self._stream is None or self.error:  # no device (or it went away): don't queue into nothing
             fut.set_result(False)
             return fut
         data = resample(np.asarray(samples, dtype=np.float32), samplerate, self.samplerate)
@@ -165,7 +165,7 @@ class AudioPlayer:
 
     def blip(self, samples: np.ndarray, samplerate: int) -> None:
         """Play a short sound now, over whatever is playing, without queueing or being cut by `stop`."""
-        if self._stream is None:
+        if self._stream is None or self.error:
             return
         data = resample(np.asarray(samples, dtype=np.float32), samplerate, self.samplerate)
         with self._lock:
@@ -175,14 +175,14 @@ class AudioPlayer:
         """Cut off everything playing or queued (barge-in)."""
         with self._lock:
             clips, self._clips = list(self._clips), deque()
+            head = clips[0] if clips and clips[0].pos > 0 else None
+            if head is not None:  # mid-word: fade the next few ms out instead of a hard cut (a click)
+                tail = head.data[head.pos : head.pos + int(self.samplerate * 0.008)].copy()
+                tail *= np.linspace(1.0, 0.0, len(tail), dtype=np.float32)
+                self._clips.append(_Clip(tail, Future()))
         for c in clips:
             if not c.future.done():
                 c.future.set_result(False)
-
-    @property
-    def busy(self) -> bool:
-        with self._lock:
-            return bool(self._clips)
 
     def _callback(self, outdata, frames, time_info, status) -> None:  # type: ignore[no-untyped-def]
         out = np.zeros(frames, dtype=np.float32)

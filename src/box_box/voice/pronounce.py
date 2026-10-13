@@ -150,10 +150,6 @@ def _ipa(word: str) -> str:
     return LEXICON.get(word) or JARGON[word.lower()]
 
 
-def has_names(text: str) -> bool:
-    return bool(_PATTERN.search(text))
-
-
 def to_phonemes(text: str, phonemize: Callable[[str], str]) -> str:
     """Phonemize `text`, using the lexicon for known names and `phonemize` for everything else."""
     out: list[str] = []

@@ -51,6 +51,7 @@ class Microphone:
                 dtype="float32",
                 blocksize=800,
                 callback=self._callback,
+                finished_callback=self._finished,
             )
             self._stream.start()
             self.error = None
@@ -61,13 +62,19 @@ class Microphone:
             log.error(self.error)
 
     def close(self) -> None:
-        if self._stream is not None:
+        stream, self._stream = self._stream, None  # cleared first: closing isn't an unplug
+        if stream is not None:
             try:
-                self._stream.stop()
-                self._stream.close()
+                stream.stop()
+                stream.close()
             except Exception:  # noqa: BLE001
                 pass
-            self._stream = None
+
+    def _finished(self) -> None:
+        # The stream stopped on its own: the mic was unplugged or the driver reset.
+        if self._stream is not None:
+            self.error = "microphone stopped (unplugged?)"
+            log.warning(self.error)
 
     def _callback(self, indata, frames, time_info, status) -> None:  # type: ignore[no-untyped-def]
         block = indata[:, 0].copy()

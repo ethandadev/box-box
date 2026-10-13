@@ -12,10 +12,8 @@ import queue
 import sys
 import threading
 import time
-import wave
 from collections import OrderedDict
 from concurrent.futures import Future
-from pathlib import Path
 
 import numpy as np
 
@@ -49,6 +47,7 @@ class KokoroEngine(Engine):
         self.files = files
         self._kokoro = None
         self.model: str | None = None
+        self._load_lock = threading.Lock()  # the voice-load thread and the TTS worker can both ask for it
 
     def available_model(self) -> str | None:
         voices = self.files.path("voices-v1.0.bin")
@@ -71,6 +70,11 @@ class KokoroEngine(Engine):
     def load(self) -> None:
         if self._kokoro is not None:
             return
+        with self._load_lock:
+            if self._kokoro is None:
+                self._load()
+
+    def _load(self) -> None:
         model = self.available_model()
         if model is None:
             raise TTSUnavailable("Kokoro voice files aren't downloaded yet")
@@ -239,21 +243,6 @@ class SilentEngine(Engine):
         return np.zeros(0, dtype=np.float32), 24_000
 
 
-def read_wav(path: Path) -> Audio:
-    with wave.open(str(path)) as w:
-        sr, width, channels = w.getframerate(), w.getsampwidth(), w.getnchannels()
-        raw = w.readframes(w.getnframes())
-    dtype = {1: np.uint8, 2: np.int16, 4: np.int32}[width]
-    data = np.frombuffer(raw, dtype=dtype).astype(np.float32)
-    if width == 1:
-        data = (data - 128) / 128
-    else:
-        data /= float(np.iinfo(dtype).max)
-    if channels > 1:
-        data = data.reshape(-1, channels).mean(axis=1)
-    return data, sr
-
-
 URGENT, PREFETCH = 0, 1
 PREFETCH_MAX_AGE_S = 20.0  # a prefetch still queued after this long is for a call that's gone stale
 DEAD_RETRY_S = 600.0  # a cloud voice that rejected us (key, credits) is retried this rarely
@@ -272,6 +261,8 @@ class TTS:
         self._queue: queue.PriorityQueue = queue.PriorityQueue()
         self._seq = itertools.count()
         self._inflight: dict[tuple, Future[Audio]] = {}
+        self._promoted: set[tuple] = set()  # prefetches a speaker is now waiting on: never cancel as stale
+        self._synth_failed = False  # the shown error is from a failed line (cleared once lines work again)
         self._cache: OrderedDict[tuple, Audio] = OrderedDict()
         self._cache_size = cache_size
         self._lock = threading.Lock()
@@ -332,6 +323,7 @@ class TTS:
                 existing = None
             if existing is not None:
                 if urgent:  # promote: queue it again at the front; the worker skips whichever runs second
+                    self._promoted.add(key)  # and never cancels it as a stale prefetch now someone's waiting
                     self._queue.put((URGENT, next(self._seq), time.monotonic(), key, text, voice, speed))
                 return existing
             fut = Future()
@@ -351,21 +343,26 @@ class TTS:
             if fut is None or fut.done():
                 continue  # already synthesized via a promoted copy, or abandoned
             if priority == PREFETCH and time.monotonic() - queued_at > PREFETCH_MAX_AGE_S:
-                with self._lock:
-                    self._inflight.pop(key, None)
-                fut.cancel()
-                continue
+                with self._lock:  # decided under the lock: a speaker may be promoting this very line
+                    stale = key not in self._promoted
+                    if stale:
+                        self._inflight.pop(key, None)
+                if stale:
+                    fut.cancel()
+                    continue
             self._used_fallback = False
             try:
                 audio = self._synth(key, text, voice, speed)
             except Exception as e:  # noqa: BLE001
                 with self._lock:
                     self._inflight.pop(key, None)
+                    self._promoted.discard(key)
                 if not fut.done():
                     fut.set_exception(e)
                 continue
             with self._lock:
                 self._inflight.pop(key, None)
+                self._promoted.discard(key)
                 if not self._used_fallback:  # a stand-in voice's audio must not stick to the real voice's key
                     self._cache[key] = audio
                 while len(self._cache) > self._cache_size:
@@ -384,6 +381,9 @@ class TTS:
         try:
             audio = engine.synthesize(text, voice, speed)
             self._failures.pop(engine.name, None)
+            if self._synth_failed:  # it's working again: don't leave an old failure on the screen
+                self._synth_failed = False
+                self.error, self.status = None, "ready"
             if dead_since is not None:
                 self._dead.pop(engine.name, None)
                 self.error, self.status = None, "ready"
@@ -404,6 +404,7 @@ class TTS:
         except Exception as e:
             log.warning("speech synthesis failed with %s: %s", engine.name, e)
             self.error = f"{engine.name}: {e}"
+            self._synth_failed = True
             if not cloud and engine.name != "kokoro":
                 raise
             if cloud:

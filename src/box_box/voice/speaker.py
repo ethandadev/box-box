@@ -162,6 +162,14 @@ class Speaker:
                     message="The voice is taking too long. Your CPU may be busy; try the Windows voice in Settings > Voice.",
                 )
                 return False
+            except asyncio.CancelledError:
+                # The synthesis itself was cancelled (an abandoned prefetch), not this task: lose the line,
+                # not the speaker. A real cancellation of this task still goes through.
+                task = asyncio.current_task()
+                if (task is not None and task.cancelling()) or not any(f.cancelled() for f in futures):
+                    raise
+                log.warning("voice line dropped, its synthesis was cancelled: %r", call.text)
+                return False
             except Exception as e:  # noqa: BLE001
                 log.error("couldn't synthesize %r: %s", call.text, e)
                 self.bus.publish("warning", message=f"Voice failed: {e or type(e).__name__}")

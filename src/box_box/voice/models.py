@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -114,6 +115,11 @@ class ModelDownloader:
                 if have > f.size:
                     part.unlink()
                     have = 0
+                if have == f.size:  # finished last time but closed before the rename: no range left to ask for
+                    self._add(have)
+                    self._verify(part, f)
+                    os.replace(part, dest)
+                    return
                 req = urllib.request.Request(f.url, headers={"User-Agent": "box-box"})
                 if have:
                     req.add_header("Range", f"bytes={have}-")
@@ -134,8 +140,9 @@ class ModelDownloader:
                     self.done_bytes = sum(
                         self.path(x.name).stat().st_size for x in self.files if self.path(x.name).exists()
                     )
-                if isinstance(e, DownloadError) and part.exists():
-                    part.unlink()  # corrupt: don't resume from it
+                range_refused = isinstance(e, urllib.error.HTTPError) and e.code == 416
+                if (isinstance(e, DownloadError) or range_refused) and part.exists():
+                    part.unlink()  # corrupt, or a range the server won't serve: start this file over
                 if attempt == attempts:
                     raise DownloadError(f"couldn't download {f.name}: {e}") from e
                 log.warning("download of %s failed (%s), retrying", f.name, e)

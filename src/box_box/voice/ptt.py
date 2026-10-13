@@ -206,6 +206,7 @@ class PushToTalk:
         self.binding = Binding("none")
         self.mode = "hold"
         self._ui_down = False
+        self._ui_held = False  # the current press came from the web UI's talk button (always hold-to-talk)
         self._udp_buttons = 0
         self._udp_at = 0.0
         self._udp_repeats = False  # does the game resend BUTN while a button is held?
@@ -277,7 +278,9 @@ class PushToTalk:
                     self._raw = False
                 if raw != self._raw:
                     self._raw = raw
-                    if self.mode == "toggle" and self.binding.kind != "none" and not self._ui_down:
+                    via_ui = self._ui_down or self._ui_held  # the UI button's release must release too
+                    self._ui_held = self._ui_down and raw
+                    if self.mode == "toggle" and self.binding.kind != "none" and not via_ui:
                         if raw:  # toggle on press only
                             self._set(not self.active)
                     else:

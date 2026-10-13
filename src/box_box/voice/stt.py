@@ -175,9 +175,18 @@ class SpeechToText:
             condition_on_previous_text=False,
             without_timestamps=True,
             vad_filter=False,
-            initial_prompt=(F1_VOCAB + " " + self.extra_vocab).strip(),
+            initial_prompt=(F1_VOCAB + " " + self.extra_vocab).strip(),  # vocabulary hint
         )
-        text = " ".join(s.text for s in segments).strip()
-        if re.sub(r"[^\w ]", "", text.lower()).strip() in HALLUCINATIONS:
+        prompt = (F1_VOCAB + " " + self.extra_vocab).strip()
+        # Noise or a breath can come back as words: Whisper's own "probably not speech" plus low confidence
+        # means it was guessing. A guess is worse than "say again", above all when it guesses "box box".
+        kept = [
+            s for s in segments if not (getattr(s, "no_speech_prob", 0) > 0.6 and getattr(s, "avg_logprob", 0) < -1.0)
+        ]
+        text = " ".join(s.text for s in kept).strip()
+        clean = re.sub(r"[^\w ]", "", text.lower()).strip()
+        if clean in HALLUCINATIONS:
             text = ""
+        elif len(clean.split()) >= 3 and clean in re.sub(r"[^\w ]", "", prompt.lower()):
+            text = ""  # the prompt echoed back on non-speech, not something the driver said
         return Transcript(text, seconds, time.perf_counter() - start)

@@ -70,8 +70,17 @@ def _symbols(t: str) -> str:
     t = re.sub(r"\s*km\s*/\s*h\b|\bkph\b", " k p h", t, flags=re.IGNORECASE)
     t = re.sub(r"\bmph\b", "m p h", t, flags=re.IGNORECASE)
     t = re.sub(r"(\d)\s?kg\b", r"\1 kilos", t)
-    t = re.sub(r"(?<![\d:.])(?<!the )(\d{1,3}(?:\.\d+)?)s\b", r"\1 seconds", t)  # "2.6s"; not "the 90s"
+    t = re.sub(r"(\d)\s?MJ\b", r"\1 megajoules", t)
+    t = re.sub(r"(\d)x\b", r"\1 times", t)
+    t = re.sub(r"\bthe (\d0)s\b", r"the \1 s", t)  # "the 90s" (a decade) is left alone below
+    t = re.sub(r"(?<![\d:.])(\d{1,3}(?:\.\d+)?)s\b", r"\1 seconds", t)  # "2.6s", "the 5s penalty"
+    t = re.sub(r"\bthe (\d0) s\b", r"the \1s", t)
     t = re.sub(r"\bT(\d{1,2})\b", r"turn \1", t)
+    t = re.sub(
+        r"\s*/\s*(lap|km|kilometre|kilometer|second|sec|s)\b",
+        lambda m: " per " + {"s": "second", "sec": "second"}.get(m.group(1), m.group(1)),
+        t,
+    )  # "0.6s/lap"
     t = re.sub(r"\b(\d+)\s*/\s*(\d+)\b", r"\1 of \2", t)  # "lap 3/5" -> "lap 3 of 5"
     t = re.sub(r"(?<=[A-Za-z])\s*/\s*(?=[A-Za-z])", " or ", t)  # "softs/mediums"
     t = t.replace("/", " ")
@@ -80,14 +89,17 @@ def _symbols(t: str) -> str:
 
 
 def for_speech(text: str) -> str:
-    t = text.replace("...", ",")  # long pauses sound like the voice is stuck on a word
+    t = text.replace("...", ",")
+    t = re.sub(
+        r"(?<=\d),(?=\d{3}(?!\d))", "", t
+    )  # "1,000" is a thousand, not "one, zero"  # long pauses sound like the voice is stuck on a word
     t = _symbols(t)
     t = re.sub(r"\b(\d{1,2}):(\d{2}(?:\.\d+)?)\b", _lap_time, t)
     t = re.sub(r"\bFP(\d)\b", lambda m: "F P " + ONES[int(m.group(1))], t)
     t = re.sub(r"\bP(\d{1,2})\b", lambda m: "P " + number_words(int(m.group(1))), t)
     t = re.sub(r"\bSQ(\d)\b", lambda m: "S Q " + ONES[int(m.group(1))], t)
     t = re.sub(r"\bQ(\d)\b", lambda m: "Q " + ONES[int(m.group(1))], t)
-    t = re.sub(r"(?<![\w.])([+-])?(\d+)\.(\d+)\b", _decimal, t)
+    t = re.sub(r"(?<![\w.])([+-])?(\d+)\.(\d+)(?![\d.])", _decimal, t)  # also "4.0MJ"
     t = re.sub(r"(?<![\w.])\+(\d+)\b", r"plus \1", t)  # "+1 lap"
     t = re.sub(r"(?<![\w.])-(\d+)\b", r"minus \1", t)  # "-3 places"
     t = re.sub(r"\b(\d+)\b", lambda m: number_words(int(m.group(1))) if len(m.group(1)) <= 6 else m.group(1), t)

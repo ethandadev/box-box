@@ -57,7 +57,9 @@ def _crunch(x: np.ndarray, sr: int, amount: float) -> np.ndarray:
     """The digital link: a lower effective sample rate (sample-and-hold) and a few less bits."""
     if amount <= 0 or len(x) == 0:
         return x
-    hold = max(1, round(sr / (16_000 - 6_000 * amount)))  # 16 kHz clean-ish down to 10 kHz at full effect
+    hold = max(
+        1, round(sr / (16_000 - 6_000 * amount))
+    )  # a held-sample link: about half the voice rate (12 kHz at 24 kHz) once the effect is on
     y = np.repeat(x[::hold], hold)[: len(x)]
     levels = 2 ** (12 - 4 * amount)  # 12 bits down to 8
     y = np.round(y * levels) / levels
@@ -108,7 +110,9 @@ def carrier(n: int, sr: int, i: float, rng: np.random.Generator) -> np.ndarray:
         return np.zeros(max(n, 0), dtype=np.float32)
     hiss = _bandpass(rng.standard_normal(n).astype(np.float32), sr, 900, 5000)
     hiss = hiss / (np.std(hiss) + 1e-9) * 0.016 * i
-    rumble = _bandpass(np.cumsum(rng.standard_normal(n)).astype(np.float32), sr, 320, 900)
+    walk = np.cumsum(rng.standard_normal(n))
+    walk -= np.linspace(walk[0], walk[-1], n)  # ends at zero: the circular filter doesn't ring at the edges
+    rumble = _bandpass(walk.astype(np.float32), sr, 320, 900)
     rumble = rumble / (np.std(rumble) + 1e-9)
     t = np.arange(n, dtype=np.float32) / sr
     swell = 0.5 + 0.5 * np.sin(2 * np.pi * rng.uniform(0.15, 0.4) * t + rng.uniform(0, 2 * np.pi))
@@ -237,6 +241,8 @@ def driver_key(sr: int, pressed: bool, intensity: float, seed: int | None = None
 def resample(x: np.ndarray, sr_in: int, sr_out: int) -> np.ndarray:
     if sr_in == sr_out or len(x) == 0:
         return x.astype(np.float32)
+    if sr_out < sr_in:  # going down (a hands-free headset at 16 kHz): filter first so nothing folds back
+        x = _bandpass(np.asarray(x, dtype=np.float32), sr_in, 20, 0.45 * sr_out)
     n_out = int(round(len(x) * sr_out / sr_in))
     positions = np.linspace(0, len(x) - 1, n_out)
     return np.interp(positions, np.arange(len(x)), x).astype(np.float32)
