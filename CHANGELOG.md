@@ -6,6 +6,8 @@
 - Every transmission keys up like the real thing: a click and the beep, a moment of open channel, the voice
   swelling in narrow-band over a hiss floor, then the hiss tail and the closing beep. Sometimes he holds the
   key between two sentences. Your own push-to-talk clicks and chirps too.
+- The first sound of a transmission is no longer clipped ("erstappen", "eclerc"): silence trimming keeps
+  quiet first consonants, and the radio's channel-opening effect is shorter and gentler on the first word.
 - Driver names said the way English commentary says them: Verstappen with a V (not the Dutch F),
   "HULL-ken-burg", "BOT-us". "Kerbs" no longer loses its vowel.
 - "I need a box", "box me", "coming in" get the box confirmation straight away instead of a question.

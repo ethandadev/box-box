@@ -384,3 +384,15 @@ def test_every_lexicon_symbol_is_one_kokoro_can_say() -> None:
     vocab = config.DEFAULT_VOCAB
     bad = {w: [c for c in ipa if c != " " and c not in vocab] for w, ipa in {**LEXICON, **JARGON}.items()}
     assert not {w: c for w, c in bad.items() if c}  # an unknown symbol is silently dropped: "kerbs" became "kbz"
+
+
+def test_trimming_keeps_a_soft_first_sound() -> None:
+    from box_box.voice.tts import tighten
+
+    sr = 24_000
+    t = np.arange(int(sr * 0.05)) / sr
+    soft = (0.004 * np.sin(2 * np.pi * 200 * t)).astype(np.float32)  # the V of Verstappen: quiet
+    loud = (0.3 * np.sin(2 * np.pi * 200 * np.arange(sr // 2) / sr)).astype(np.float32)
+    audio = np.concatenate([np.zeros(sr // 10, dtype=np.float32), soft, loud])
+    out = tighten(audio, sr)
+    assert len(out) >= len(soft) + len(loud)  # the quiet onset survives the trim

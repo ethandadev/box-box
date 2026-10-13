@@ -173,8 +173,10 @@ def tighten(audio: np.ndarray, sr: int, max_pause_s: float = 0.24, floor: float 
                 gap[-fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
             pieces.append(gap)
             i = j
-    lead = audio[max(0, (first - 2) * frame) : first * frame]
-    tail = audio[(last + 1) * frame : min(len(audio), (last + 4) * frame)]
+    # Generous margins: a soft first sound (the V of Verstappen, the L of Leclerc) sits below the loudness
+    # floor, and trimming to the first loud frame cut it off.
+    lead = audio[max(0, (first - 6) * frame) : first * frame]
+    tail = audio[(last + 1) * frame : min(len(audio), (last + 8) * frame)]
     return np.concatenate([lead, *pieces, tail]).astype(np.float32)
 
 

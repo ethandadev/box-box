@@ -89,15 +89,16 @@ def _channel_sweep(x: np.ndarray, sr: int, i: float) -> np.ndarray:
     """The channel opening and closing: the first and last moments are narrower and quieter, so the voice
     swells in after the key-up and fades out on the release instead of starting and stopping dead."""
     n = len(x)
-    head, tail = min(n // 3, int(sr * 0.09)), min(n // 3, int(sr * 0.12))
+    # Short and gentle at the start: the first sound of the first word (often a name) has to survive it.
+    head, tail = min(n // 3, int(sr * 0.035)), min(n // 3, int(sr * 0.1))
     if head < 8 or tail < 8 or i <= 0:
         return x
     narrow = _bandpass(x, sr, 700, 2200)
     y = x.copy()
     h = _ramp(head, rising=True)
-    y[:head] = (1 - h) * narrow[:head] * 0.5 + h * x[:head]
+    y[:head] = (1 - h) * narrow[:head] * 0.8 + h * x[:head]
     t = _ramp(tail, rising=False)
-    y[-tail:] = (1 - t) * narrow[-tail:] * 0.35 + t * x[-tail:]
+    y[-tail:] = (1 - t) * narrow[-tail:] * 0.45 + t * x[-tail:]
     return y
 
 
