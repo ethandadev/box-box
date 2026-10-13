@@ -68,12 +68,9 @@ class Memory:
         self._open()
 
     def _open(self) -> None:
-        db = None
         try:
-            self._db = db = self._connect()
+            self._db = self._connect()
         except sqlite3.DatabaseError as e:
-            if db is not None:
-                db.close()  # Windows can't move a file that's still open
             corrupt = "malformed" in str(e).lower() or "not a database" in str(e).lower()
             if not corrupt:  # locked by another copy of the app, say: leave the file alone
                 log.error("memory unavailable this session: %s", e)
@@ -95,10 +92,14 @@ class Memory:
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, check_same_thread=False, timeout=5)
-        db.execute("PRAGMA journal_mode=WAL")
-        db.execute("PRAGMA foreign_keys=ON")
-        db.executescript(SCHEMA)
-        db.commit()
+        try:
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA foreign_keys=ON")
+            db.executescript(SCHEMA)
+            db.commit()
+        except BaseException:
+            db.close()  # Windows can't move a file that's still open
+            raise
         return db
 
     def _exec(self, sql: str, args: tuple = (), fetch: bool = False) -> list[tuple] | int | None:
