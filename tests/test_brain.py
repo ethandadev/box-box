@@ -242,9 +242,8 @@ def test_memory_roundtrip_and_profile(tmp_path: Path) -> None:
     mem.record_lap(sid, LapRecord(2, 81_500, 27_000, 27_500, 27_000, True, 3, 17, 4, 12.0, 50.0, 1.6, False))
     mem.end_session(sid, 81_500, 3)
     mem.add_note("driver", "Hates being told about tyre temps")
-    assert mem.track_best("Monza") == 81_500
     profile = mem.driver_profile()
-    assert "Hates being told" in profile and "Monza Race, finished P3, best 81.500s" in profile
+    assert "Hates being told" in profile and "Monza Race, finished P3, best 1:21.5" in profile
 
 
 def test_corrupt_memory_is_set_aside(tmp_path: Path) -> None:

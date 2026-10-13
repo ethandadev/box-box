@@ -63,14 +63,15 @@ got a tyre advantage over."
 - "You're clearly the fastest car and have nothing to prove. Bring it home."
 - "Okay mate, let's get back in the rhythm." / "Looks like overheating. Get back in the rhythm, it should help."
 - Practice: "Yeah, we'll check, we'll compare to the other car." / "Everything's fine, good chance to get a feel for the car." / "Mid to exit turn 1, you can take less kerb."
-- "Copy, copy." / "Yeah, saw that one. All okay?" / "Understood, we're looking into it."
+- "Copy, copy." / "Yeah, saw that one. All okay?" / "Understood."
 - "Possible rain in 20 laps. It'll be heavy if it hits." / "Push and hold, and we'll box this lap."
 - "P2, just 11 thousandths to pole. So tight, really good effort."
 - "P3, not a bad day. You earned your money today." / "Damage limitation, but we'll take the points."
 - When the driver is frustrated: steady them in a few words, then give them something useful to do.
   Driver: "The rears are just done." You: "Yep, I see it. Even with that, you're still catching the cars ahead."
   Driver: "Why? I was managing so much!" You: "I'm asking the same question. We'll find it. For now, lift and coast into turn one."
-- If you don't know yet, say so and come back: "Stand by, we're looking." Never guess.
+- If the data isn't there, say you don't have it yet ("Don't have that yet, sorry."). Never guess, and \
+never promise to come back to it: you can't.
 - Just answer. Never open with "Let me check", "Sure", "Great question", or by repeating the question.
 - Under a safety car or red flag: calm, procedural, short. "Red flag, red flag. No overtaking. Pit limiter on the way in."
 
@@ -98,7 +99,7 @@ turn 14", "Bias back two, 54", "Energy mode medium", "Fuel map lean, and lift an
 itself; never tell {driver} to check a tool or a screen.
 - You can't touch the car or the game. If {driver} wants to pit or change something, confirm and tell them \
 to do it on the MFD.
-- Name corners like an engineer: "turn 9" or its name ("Copse", "the hairpin"). Use the track tool for
+- Name corners like an engineer: "turn 9" or its name ("Copse", "the hairpin"). Use the track tool for \
 corner names, overtaking spots and where {driver} is losing time; never guess a corner name.
 - If {driver} gives feedback (balance, tyres, the car), acknowledge what they actually said in a few words \
 ("Copy, slippery, noted"; never put a symptom in their mouth they didn't describe) and save anything lasting \
@@ -241,6 +242,9 @@ def session_mode(world: World) -> str | None:
     return None
 
 
+_CLOSING: set = set()  # backends being closed in the background
+
+
 class Brain:
     """Conversation with whichever AI service is configured. Safe to use when it isn't: check `available`."""
 
@@ -315,9 +319,11 @@ class Brain:
         import asyncio
 
         try:
-            asyncio.get_running_loop().create_task(backend.aclose())
+            task = asyncio.get_running_loop().create_task(backend.aclose())
         except RuntimeError:
-            pass  # no loop: it'll be garbage collected
+            return  # no loop: it'll be garbage collected
+        _CLOSING.add(task)  # held until done: an unreferenced task can be collected before it runs
+        task.add_done_callback(_CLOSING.discard)
 
     async def aclose(self) -> None:
         if self._backend is not None:

@@ -16,10 +16,9 @@ from box_box.telemetry import names
 from box_box.telemetry.packets import ResultStatus
 
 CORNERS = ("rear_left", "rear_right", "front_left", "front_right")
-SLICKS = {16, 17, 18, 19, 20, 21, 22}
 
 
-def _car_brief(world: World, car: CarState) -> dict[str, Any]:
+def _car_brief(car: CarState) -> dict[str, Any]:
     lap = car.lap
     return {
         "name": car.name,
@@ -92,14 +91,14 @@ def gaps(world: World) -> dict[str, Any]:
 
 def standings(world: World, top: int = 10) -> dict[str, Any]:
     cars = world.by_position()
-    return {"standings": [_car_brief(world, c) for c in cars[: max(1, min(top, 24))]]}
+    return {"standings": [_car_brief(c) for c in cars[: max(1, min(top, 24))]]}
 
 
 def driver(world: World, name: str) -> dict[str, Any]:
     car = world.find_driver(name)
     if car is None:
         return {"error": f"No driver matching '{name}'."}
-    info = _car_brief(world, car)
+    info = _car_brief(car)
     me = world.player
     if world.is_race and me and me.lap and car.lap and car is not me:
         g = world.race_gap_s(car, me)
@@ -290,8 +289,7 @@ def strategy(world: World) -> dict[str, Any]:
     if s.pit_window_ideal_lap:
         out["game_pit_window"] = {"ideal_lap": s.pit_window_ideal_lap, "latest_lap": s.pit_window_latest_lap}
         out["predicted_rejoin_position"] = s.pit_rejoin_position or None
-    me_car = world.player
-    plan = pitplan.rejoin(world, me_car) if me_car is not None else None
+    plan = pitplan.rejoin(world, me)
     if plan is not None:
         out["if_we_box_now"] = {
             "rejoin_position": plan.position,
@@ -300,7 +298,7 @@ def strategy(world: World) -> dict[str, Any]:
             "behind_car": {"name": plan.ahead[0].name, "gap_s": plan.ahead[1]} if plan.ahead else None,
             "ahead_of_car": {"name": plan.behind[0].name, "gap_s": plan.behind[1]} if plan.behind else None,
         }
-        tyre = pitplan.next_tyre(world, me_car) if me_car is not None else None
+        tyre = pitplan.next_tyre(world, me)
         if tyre is not None:
             out["if_we_box_now"]["tyre"] = ("fresh " if tyre.fresh else "used ") + tyre.compound
     t = tyres(world)
@@ -316,7 +314,7 @@ def strategy(world: World) -> dict[str, Any]:
                 {
                     "name": c.name,
                     "position": pos,
-                    "tyres": names.compound_name(c.compound or 0),
+                    "tyres": names.compound_name(c.compound) if c.compound else None,
                     "tyre_age": c.status.tyre_age_laps,
                     "stops": c.pit_stops,
                 }

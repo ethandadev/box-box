@@ -9,6 +9,7 @@ credit, unknown model).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import re
@@ -195,6 +196,7 @@ class AnthropicBackend:
                             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                             tools=tools,
                             messages=messages,
+                            **({"tool_choice": {"type": "none"}} if _round == MAX_TOOL_ROUNDS - 1 else {}),
                             **self._opts(model),
                         ) as stream:
                             async for event in stream:
@@ -241,8 +243,6 @@ class AnthropicBackend:
                     if self._effort_rejected(e, model):
                         continue
                     raise
-            else:
-                raise LLMError(f"{model} kept rejecting the request.")
         if msg.stop_reason == "refusal":
             raise LLMError("The model declined to answer.")
         return " ".join(b.text for b in msg.content if b.type == "text")
@@ -317,7 +317,9 @@ def _error_message(body: str) -> str:
     if isinstance(data, dict):
         err = data.get("error", data)
         if isinstance(err, dict):
-            return str(err.get("message") or err.get("msg") or err)[:300]
+            msg = str(err.get("message") or err.get("msg") or err)[:300]
+            code = err.get("code") or err.get("type")
+            return f"{msg} [{code}]" if isinstance(code, str) and code and code not in msg else msg
         return str(err)[:300]
     return str(data)[:300]
 
@@ -356,6 +358,15 @@ class OpenAICompatBackend:
 
         loop = asyncio.get_running_loop()
         if self._session is None or self._session.closed or self._session_loop is not loop:
+            stale = self._session
+            if (
+                stale is not None
+                and not stale.closed
+                and self._session_loop is not None
+                and not self._session_loop.is_closed()
+            ):
+                with contextlib.suppress(RuntimeError):
+                    asyncio.run_coroutine_threadsafe(stale.close(), self._session_loop)
             self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60, connect=5, sock_read=30))
             self._session_loop = loop
         return self._session
@@ -436,7 +447,10 @@ class OpenAICompatBackend:
         bad_key = "api key" in low and ("invalid" in low or "not valid" in low)  # Gemini says this with a 400
         if e.status == 401 or bad_key:
             return LLMError(f"The {label} API key was rejected. Check it in Settings > AI.", fatal=True)
-        if e.status == 402 or "credit" in low or "billing" in low or "insufficient" in low:
+        if e.status == 429 and "insufficient_quota" not in low:
+            # A plain rate limit (Gemini's free tier says "check your plan and billing" on every one): wait.
+            return LLMError(f"Rate limited by {label}: {msg}")
+        if e.status in (402, 429) or "credit" in low or "billing" in low or "insufficient" in low:
             return LLMError(f"Your {label} account is out of credit ({msg}).", fatal=True)
         if e.status == 403:
             return LLMError(f"{label} refused: {msg}", fatal=True)
@@ -444,8 +458,6 @@ class OpenAICompatBackend:
             return LLMError(
                 f"Model '{model}' wasn't found on {self._where()}. Check the model in Settings > AI.", fatal=True
             )
-        if e.status == 429:
-            return LLMError(f"Rate limited by {label}: {msg}")
         return LLMError(f"{label} error {e.status}: {msg}")
 
     # ---- request shaping ----------------------------------------------------------------------------
@@ -465,6 +477,7 @@ class OpenAICompatBackend:
         tools: list[dict[str, Any]] | None,
         max_tokens: int,
         stream: bool,
+        last_round: bool = False,
     ) -> dict[str, Any]:
         q = self._quirks.get(model, set()) | self._trial.get(model, set())
         if "system_as_user" in q and messages and messages[0].get("role") == "system":
@@ -485,6 +498,8 @@ class OpenAICompatBackend:
             body["max_completion_tokens" if use_completion_tokens else "max_tokens"] = max_tokens
         if tools and "no_tools" not in q:
             body["tools"] = tools
+            if last_round and "no_tool_choice" not in q:
+                body["tool_choice"] = "none"  # out of lookups: answer with what it has
         effort = self._reasoning_effort(model)
         if effort and "no_effort" not in q:
             body["reasoning_effort"] = "low" if "effort_low" in q else effort
@@ -515,9 +530,10 @@ class OpenAICompatBackend:
                     log.info("%s %s: server error %s, retrying without %s", self.provider.id, model, e.status, quirk)
                     return True
             return False
-        if e.status not in (400, 422):
-            return False
         low = e.message.lower()
+        if e.status not in (400, 422) and not (e.status == 404 and "tool" in low and "tools" in body):
+            return False  # (OpenRouter answers "no endpoints that support tool use" with a 404)
+        mid_tools = any(m.get("role") == "tool" for m in body.get("messages", []))
         if "reasoning_effort" in body and ("reasoning" in low or "effort" in low):
             if body["reasoning_effort"] != "low" and "effort_low" not in q:
                 q.add("effort_low")
@@ -527,8 +543,10 @@ class OpenAICompatBackend:
             q.add("swap_max_tokens")
         elif "max_tokens" in low or "max_completion_tokens" in low:
             q.add("no_max_tokens")
-        elif "tools" in body and ("tool" in low or "function" in low):
-            q.add("no_tools")
+        elif "tool_choice" in body and "tool_choice" in low:
+            q.add("no_tool_choice")
+        elif "tools" in body and ("tool" in low or "function" in low) and not mid_tools:
+            q.add("no_tools")  # only learned from a first request: later rounds' errors may be about the results
         if q != before:
             log.info("%s %s: adjusting request after: %s (%s)", self.provider.id, model, e.message, sorted(q))
             return True
@@ -539,7 +557,10 @@ class OpenAICompatBackend:
         if model:
             return model
         if self._auto_model is None:
-            models = await self.list_models()
+            try:
+                models = await self.list_models()
+            except LLMError:
+                models = []  # no model list on this server either: same advice as an empty one
             if not models:
                 raise LLMError(
                     f"No model is loaded on {self._where()}. Load one, or type a model name in Settings > AI.",
@@ -577,7 +598,7 @@ class OpenAICompatBackend:
             calls: dict[int, dict[str, str]] = {}
             text_parts: list[str] = []
             for attempt in range(6):
-                body = self._body(model, messages, tools, 1024, stream=True)
+                body = self._body(model, messages, tools, 1024, stream=True, last_round=_round == MAX_TOOL_ROUNDS - 1)
                 got_any = False
                 try:
                     async for chunk in self._chunks(body):
@@ -605,6 +626,8 @@ class OpenAICompatBackend:
                                     new_id = tc.get("id") and (last < 0 or calls[last]["id"] not in ("", tc["id"]))
                                     idx = last + 1 if new_id or last < 0 else last
                                 entry = calls.setdefault(idx, {"id": "", "name": "", "args": ""})
+                                if tc.get("extra_content"):  # Gemini's thought signature: must come back
+                                    entry["extra"] = tc["extra_content"]
                                 if tc.get("id"):
                                     entry["id"] = tc["id"]
                                 fn = tc.get("function") or {}
@@ -638,6 +661,7 @@ class OpenAICompatBackend:
                             "id": c["id"],
                             "type": "function",
                             "function": {"name": c["name"], "arguments": c["args"] or "{}"},
+                            **({"extra_content": c["extra"]} if c.get("extra") else {}),
                         }
                         for c in ordered
                     ],

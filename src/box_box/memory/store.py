@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from box_box import paths
+from box_box.engineer.radio import lap_time
 from box_box.state.model import LapRecord
 
 log = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS radio (
     who TEXT NOT NULL,
     text TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS radio_at ON radio(at);
 """
 
 
@@ -68,32 +70,42 @@ class Memory:
     def _open(self) -> None:
         db = None
         try:
-            db = sqlite3.connect(self.path, check_same_thread=False, timeout=5)
-            db.execute("PRAGMA journal_mode=WAL")
-            db.execute("PRAGMA foreign_keys=ON")
-            db.executescript(SCHEMA)
-            db.commit()
-            self._db = db
+            self._db = db = self._connect()
         except sqlite3.DatabaseError as e:
             if db is not None:
                 db.close()  # Windows can't move a file that's still open
+            corrupt = "malformed" in str(e).lower() or "not a database" in str(e).lower()
+            if not corrupt:  # locked by another copy of the app, say: leave the file alone
+                log.error("memory unavailable this session: %s", e)
+                self.error = f"Memory is off this session ({e}). Is Box Box already running?"
+                return
             log.error("memory database unusable (%s); moving it aside and starting fresh", e)
-            self.error = str(e)
             try:
-                self.path.replace(self.path.with_suffix(f".broken-{int(time.time())}.sqlite3"))
-                db = sqlite3.connect(self.path, check_same_thread=False, timeout=5)
-                db.executescript(SCHEMA)
-                self._db = db
-                self.error = None
+                stamp = int(time.time())
+                for suffix in ("", "-wal", "-shm"):
+                    old = Path(f"{self.path}{suffix}")
+                    if old.exists():
+                        old.replace(Path(f"{self.path.with_suffix(f'.broken-{stamp}.sqlite3')}{suffix}"))
+                self._db = self._connect()
+                self.error = f"The memory file was damaged ({e}); it was set aside and a fresh one started."
             except Exception as e2:  # noqa: BLE001
                 log.error("memory disabled: %s", e2)
+                self.error = f"Memory is off: {e2}"
                 self._db = None
 
+    def _connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.path, check_same_thread=False, timeout=5)
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA foreign_keys=ON")
+        db.executescript(SCHEMA)
+        db.commit()
+        return db
+
     def _exec(self, sql: str, args: tuple = (), fetch: bool = False) -> list[tuple] | int | None:
-        if self._db is None:
-            return [] if fetch else None
         try:
-            with self._lock:
+            with self._lock:  # checked inside the lock: close() may be running on another thread
+                if self._db is None:
+                    return [] if fetch else None
                 cur = self._db.execute(sql, args)
                 if fetch:
                     return cur.fetchall()
@@ -104,10 +116,10 @@ class Memory:
             return [] if fetch else None
 
     def close(self) -> None:
-        if self._db is not None:
-            with self._lock:
+        with self._lock:
+            if self._db is not None:
                 self._db.close()
-            self._db = None
+                self._db = None
 
     # ---- sessions ---------------------------------------------------------------------------------
 
@@ -158,15 +170,6 @@ class Memory:
         keys = ("id", "started_at", "track", "session_type", "best_lap_ms", "position", "laps", "recording")
         return [dict(zip(keys, row, strict=True)) for row in rows]  # type: ignore[union-attr]
 
-    def track_best(self, track: str) -> int | None:
-        rows = self._exec(
-            "SELECT MIN(l.lap_ms) FROM laps l JOIN sessions s ON s.id = l.session_id "
-            "WHERE s.track = ? AND l.valid = 1 AND l.pit_lap = 0 AND l.lap_ms > 0",
-            (track,),
-            fetch=True,
-        )
-        return rows[0][0] if rows and rows[0][0] else None  # type: ignore[index]
-
     # ---- notes & radio log ------------------------------------------------------------------------
 
     def add_note(self, kind: str, text: str) -> None:
@@ -198,6 +201,10 @@ class Memory:
         for s in self.recent_sessions(5):
             if s["best_lap_ms"] or s["position"]:
                 when = time.strftime("%b %d", time.localtime(s["started_at"]))
-                best = f", best {s['best_lap_ms'] / 1000:.3f}s" if s["best_lap_ms"] else ""
-                lines.append(f"- {when}: {s['track']} {s['session_type']}, finished P{s['position']}{best}")
+                race = any(w in (s["session_type"] or "").lower() for w in ("race", "sprint"))
+                bits = [f"finished P{s['position']}"] if race and s["position"] else []
+                if s["best_lap_ms"]:
+                    bits.append(f"best {lap_time(s['best_lap_ms'])}")
+                if bits:
+                    lines.append(f"- {when}: {s['track']} {s['session_type']}, {', '.join(bits)}")
         return "\n".join(lines)

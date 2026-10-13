@@ -282,7 +282,15 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
     elif s.telemetry.auto_record:
         out.append(check("recording", "Session recording", "ok", f"Recording sessions to {s.recordings_dir()}."))
     if engine.memory.error:
-        out.append(check("memory", "Engineer's memory", "warn", engine.memory.error, "It was reset; nothing to do."))
+        out.append(
+            check(
+                "memory",
+                "Engineer's memory",
+                "warn",
+                engine.memory.error,
+                "If another copy of Box Box is open, close it and restart.",
+            )
+        )
     return out
 
 
