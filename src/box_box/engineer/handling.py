@@ -109,8 +109,8 @@ class HandlingDetector(Detector):
 
     def _advise(self, ctx: Context, me: CarState, kind: str, corner: str | None) -> list[RadioCall]:
         world = ctx.world
-        if corner is None or (world.is_race and me.lap is not None and me.lap.lap_num <= 2):
-            return []
+        if corner is None or me.setup is None or (world.is_race and me.lap is not None and me.lap.lap_num <= 2):
+            return []  # (no setup data: we can't say what to change, so say nothing)
         if kind == "wheelspin" and me.status is not None and me.status.visual_compound in WET_TYRES:
             return []
         same = [s for s in advice.recent(world, kind) if s.corner == corner]

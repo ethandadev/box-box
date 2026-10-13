@@ -514,8 +514,8 @@ PHRASES: dict[str, dict[str, list[str]]] = {
     },
     "wrong_tyres_wet": {
         "calm": [
-            "Track's wet, slicks won't work. Box for inters.",
-            "It's getting wet. Inters are the tyre, box this lap.",
+            "Track's wet, slicks won't work. Box for {tyre}.",
+            "It's properly wet now. Box this lap, {tyre}.",
         ],
     },
     "wrong_tyres_dry": {

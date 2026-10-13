@@ -55,7 +55,7 @@ def pit_loss(world: World, me: CarState) -> float:
     if lost < 0 or lost > len(behind):
         return DEFAULT_PIT_LOSS_S
     if lost == 0:
-        return min(DEFAULT_PIT_LOSS_S, behind[0][1] - 0.5)
+        return max(12.0, min(DEFAULT_PIT_LOSS_S, behind[0][1] - 0.5))
     lo = behind[lost - 1][1]
     hi = behind[lost][1] if lost < len(behind) else lo + 4.0
     return min(max((lo + hi) / 2, 12.0), 40.0)
@@ -72,7 +72,7 @@ def rejoin(world: World, me: CarState) -> Rejoin | None:
     if ahead is None:  # nobody gets by: we'd still be behind the car that's ahead of us now
         front = world.car_at_position(me.lap.position - 1)
         gap = world.race_gap_s(front, me) if front is not None else None
-        ahead = (front, round(gap, 1)) if front is not None and gap is not None else None
+        ahead = (front, round(gap + loss, 1)) if front is not None and gap is not None else None
     behind_car = (still_behind[0][0], round(still_behind[0][1] - loss, 1)) if still_behind else None
     return Rejoin(me.lap.position + len(passed), len(passed), ahead, behind_car, loss)
 
@@ -89,7 +89,8 @@ def next_tyre(world: World, me: CarState) -> NextTyre | None:
     if me.history:
         used |= {st[2] for st in me.history.stints}
     used_dry = {c for c in used if c in DRY}
-    need_other = world.is_race and len(used_dry) < 2 and not world.is_sprint
+    wet_race = bool(used & {7, 8})  # inters or wets used: the two-compound rule no longer applies
+    need_other = world.is_race and len(used_dry) < 2 and not world.is_sprint and not wet_race
     remaining = world.laps_remaining or 0
     candidates = [t for t in sets if t.available and not t.fitted and t.visual_compound in DRY]
     if need_other:

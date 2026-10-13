@@ -95,7 +95,9 @@ class CornerCoach:
                 for i, (c, at) in enumerate(pts):
                     prev_at = pts[i - 1][1] if i else pts[-1][1] - length
                     next_at = pts[i + 1][1] if i + 1 < len(pts) else pts[0][1] + length
-                    self._segments.append((c, (prev_at + at) / 2, at, (at + next_at) / 2))
+                    # Clamped to the lap: a segment that ends past the line would never be closed.
+                    start, end = max(0.0, (prev_at + at) / 2), min(length - 5, (at + next_at) / 2)
+                    self._segments.append((c, start, at, end))
         return bool(self._segments)
 
     def sample(self, world: World, me: CarState) -> None:
@@ -116,8 +118,8 @@ class CornerCoach:
             if not start - 30 <= d <= end + 30:
                 continue
             cs = self._trace.corners.setdefault(corner.turn, CornerSample())
-            if cs.t_in is None and d >= start:
-                cs.t_in = t
+            if cs.t_in is None and start <= d <= start + 60:
+                cs.t_in = t  # only from the segment's start: joining mid-corner (a flashback) would time it short
             if d >= end and cs.t_out is None and cs.t_in is not None:
                 cs.t_out = t
             if cs.entry is None and d >= at - ENTRY_M:

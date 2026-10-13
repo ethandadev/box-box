@@ -60,9 +60,11 @@ class WeatherDetector(Detector):
             )
             if coming is not None:
                 arrive = ctx.now + coming.time_offset_min * 60
+                # The forecast comes in coarse slots (0/5/10/15/30/45/60 min), so the same rain drifts later
+                # by minutes between updates: only speak again if it's now coming sooner than we said.
                 if (
                     self._announced_rain_at is None
-                    or abs(arrive - self._announced_rain_at) > 300
+                    or self._announced_rain_at - arrive > 300
                     or ctx.now > self._announced_rain_at
                 ):
                     self._announced_rain_at = arrive
@@ -79,7 +81,15 @@ class WeatherDetector(Detector):
             return []
         if weather >= 4 and compound in SLICKS:
             self._last_tyre_call_lap = lap
-            return [ctx.call("tyre_choice", Priority.STRATEGY, ctx.say("wrong_tyres_wet"), ttl=30, category="weather")]
+            return [
+                ctx.call(
+                    "tyre_choice",
+                    Priority.STRATEGY,
+                    ctx.say("wrong_tyres_wet", tyre="wets"),
+                    ttl=30,
+                    category="weather",
+                )
+            ]
         if weather <= 1 and compound in WETS:
             self._dry_laps_on_wets += 1
             if self._dry_laps_on_wets >= 2:

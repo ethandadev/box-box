@@ -162,3 +162,16 @@ def test_off_track_spin_and_changed_diff_dont_count() -> None:
 
 def test_traction_control_isnt_a_diff_question() -> None:
     assert advice.answer("should i turn traction control off", sim_with_setup().world, random.Random(5)) is None
+
+
+@pytest.mark.parametrize("said", ["the rear is locking into turn 1", "rear's locking", "rear wheels locking up"])
+def test_rear_lock_phrasings_move_the_bias_forward(said: str) -> None:
+    text = advice.answer(said, sim_with_setup().world, random.Random(6))
+    assert text and "forward" in text.lower()
+
+
+def test_damage_questions_match_whole_words() -> None:
+    from box_box.engineer.damage import parts_named
+
+    assert parts_named("engineer, any damage?") == ()
+    assert set(parts_named("check the front wing and floor")) == {"front_left_wing", "front_right_wing", "floor"}

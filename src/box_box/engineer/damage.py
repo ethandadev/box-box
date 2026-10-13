@@ -8,6 +8,7 @@ that's a few tenths, box this lap". This turns the numbers into that, with plent
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass
 
 from box_box.engineer.radio import expand, tenths
@@ -78,6 +79,17 @@ RELIABILITY = {
     "heavy": "[nurse it home, short shift everywhere|really look after it, we're worried|it may not last, go gently]",
     "severe": "[it might not make it|we may have to retire it|it's on its way out]",
 }
+# Engine and gearbox wear isn't "hanging off": said as wear, not as broken bodywork.
+RELIABILITY_SEVERITY = {
+    "cosmetic": "[a tiny bit of wear|a little wear]",
+    "slight": "[some wear|a bit of wear]",
+    "moderate": "[a fair bit of wear|noticeable wear]",
+    "heavy": "[heavy wear|a lot of wear]",
+    "severe": "[serious wear|it's badly worn]",
+}
+NOTHING_NEW = [
+    "[Nothing new from that one|No new damage from that|That one didn't add anything], [the car's as it was|same as before]."
+]
 CLEAN = [
     "[{part} looks fine|No damage on the {part}, it's clean|{part}'s all good from here|"
     "Nothing on the {part}, you're fine|{part} looks clean on the data]."
@@ -117,10 +129,6 @@ def _entries(dmg: CarDamage, keys: tuple[str, ...] | None = None) -> list[tuple[
     return out
 
 
-def cost_s(dmg: CarDamage) -> float:
-    return sum(getattr(dmg, p.key) * p.cost_per_pct for p in PARTS)
-
-
 def _cost_words(seconds: float) -> str:
     return "a tenth" if seconds < 0.15 else tenths(seconds)
 
@@ -131,7 +139,7 @@ def part_line(part: Part, pct: int, rng: random.Random) -> str:
     if level is None:
         text = expand(rng.choice(CLEAN), rng).format(part=part.name)
         return text[:1].upper() + text[1:]
-    how = _how_bad(level, rng)
+    how = expand(RELIABILITY_SEVERITY[level], rng) if part.reliability else _how_bad(level, rng)
     verdict = expand((RELIABILITY if part.reliability else VERDICT)[level], rng)
     verdict = verdict.format(cost=_cost_words(pct * part.cost_per_pct))
     if how.startswith("it's") or how.startswith("there's"):
@@ -142,7 +150,7 @@ def part_line(part: Part, pct: int, rng: random.Random) -> str:
                 "We've got {how} on the {part}, {verdict}.",
                 "{How} on the {part}. {Verdict}.",
                 "The {part} has {how}, {verdict}.",
-                "[Right|So|And the], {part}: {how}. {Verdict}.",
+                "[So|And the], {part}: {how}. {Verdict}.",
                 "There's {how} on the {part}. {Verdict}.",
             ]
         )
@@ -182,12 +190,21 @@ def report(
     if parts:
         text = " ".join(part_line(p, pct, rng) for p, pct in _entries(dmg, parts))
     else:
-        before = dict(_entries(since)) if since is not None else {}
-        hurt = [
-            (p, pct) for p, pct in _entries(dmg) if pct - before.get(p, 0) >= NOTICE_PCT and severity(pct) is not None
-        ]
+
+        def grew(p: Part, pct: int) -> bool:
+            if since is None:
+                return True
+            if p.key in ("front_wing", "front_left_wing", "front_right_wing"):  # each side on its own
+                return (
+                    max(dmg.front_left_wing - since.front_left_wing, dmg.front_right_wing - since.front_right_wing)
+                    >= NOTICE_PCT
+                )
+            return pct - getattr(since, p.key) >= NOTICE_PCT
+
+        hurt = [(p, pct) for p, pct in _entries(dmg) if severity(pct) is not None and grew(p, pct)]
         if not hurt:
-            return expand(rng.choice(ALL_CLEAN), rng)
+            already = since is not None and any(severity(pct) is not None for _, pct in _entries(dmg))
+            return expand(rng.choice(NOTHING_NEW if already else ALL_CLEAN), rng)
         hurt.sort(key=lambda e: e[1] * (e[0].cost_per_pct or 0.012), reverse=True)
         text = " ".join(part_line(p, pct, rng) for p, pct in hurt[:max_parts])
         if len(hurt) > max_parts:
@@ -204,7 +221,9 @@ def report(
 def parts_named(text: str) -> tuple[str, ...]:
     """Which parts the driver asked about ("check the front wing", "how's the floor?"), longest match first."""
     t = text.lower()
-    for word in sorted(BY_WORD, key=len, reverse=True):
-        if word in t:
-            return BY_WORD[word]
-    return ()
+    found: list[str] = []
+    for word in sorted(BY_WORD, key=len, reverse=True):  # "front wing" before "wing"
+        if re.search(rf"\b{re.escape(word)}s?\b", t):  # "engineer" isn't "engine"
+            t = re.sub(rf"\b{re.escape(word)}s?\b", " ", t)
+            found += [k for k in BY_WORD[word] if k not in found]
+    return tuple(found)

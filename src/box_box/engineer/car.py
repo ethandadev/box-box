@@ -46,7 +46,8 @@ class CarDetector(Detector):
 
     def _cooldown(self, key: str, now: float, seconds: float) -> bool:
         """True (and arms the timer) if `key` hasn't been called in the last `seconds`."""
-        if now - self._last_call.get(key, -1e9) < seconds:
+        last = self._last_call.get(key)
+        if last is not None and 0 <= now - last < seconds:  # (a call from before a flashback doesn't count)
             return False
         self._last_call[key] = now
         return True
@@ -120,7 +121,9 @@ class CarDetector(Detector):
             )
             if fresh or big_hit:
                 race = ctx.world.is_race
-                urgent = damage.needs_box(dmg, race) and not ctx.world.is_time_trial
+                left = ctx.world.laps_remaining if race else None
+                last_laps = left is not None and left <= 2  # a new nose costs more than it gains now
+                urgent = damage.needs_box(dmg, race) and not ctx.world.is_time_trial and not last_laps
                 # Told to box a moment ago: don't repeat it with every bit of extra damage.
                 advise = urgent and self._cooldown("advise_box", now, 90)
                 text = damage.report(dmg, ctx.say.rng, race=race, since=base, advise_box=advise)
@@ -163,7 +166,7 @@ class CarDetector(Detector):
                         ctx.call(
                             key,
                             Priority.INFO,
-                            ctx.say("tyres_overheating", axle=axle, where=where),
+                            ctx.say("tyres_overheating", axle=axle.lower(), where=where),
                             ttl=15,
                             category="tyres",
                             verbosity=Verbosity.NORMAL,
@@ -205,6 +208,9 @@ class CarDetector(Detector):
             if avg >= threshold and threshold not in self._wear_called:
                 self._wear_called |= {t for t in (30, 50, 70) if t <= threshold}
                 if threshold >= 70:
+                    left = ctx.world.laps_remaining
+                    if left is not None and left <= 2:
+                        return []  # "box soon" with the flag in sight: just bring it home
                     text = ctx.say("tyre_wear_high", pct=round(avg), me=ctx.me)
                     return [ctx.call("wear", Priority.STRATEGY, text, ttl=30, category="tyres")]
                 text = ctx.say("tyre_wear", pct=round(avg), worst=worst)
@@ -219,7 +225,7 @@ class CarDetector(Detector):
         if tel.brake_temps[hottest] > BRAKES_HOT:
             since = self._hot_since.setdefault(key, ctx.now)
             if ctx.now - since > 5 and self._cooldown(key, ctx.now, 300):
-                text = ctx.say("brakes_hot", corner=CORNERS[hottest].capitalize())
+                text = ctx.say("brakes_hot", corner=CORNERS[hottest])
                 return [ctx.call(key, Priority.INFO, text, ttl=10, category="tyres", verbosity=Verbosity.NORMAL)]
         else:
             self._hot_since.pop(key, None)

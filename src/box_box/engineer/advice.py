@@ -12,7 +12,7 @@ import random
 import re
 from collections import Counter
 
-from box_box.engineer.radio import expand, no_data
+from box_box.engineer.radio import expand, gap, no_data
 from box_box.state import tracks
 from box_box.state.model import CarState, Slide, World
 from box_box.telemetry.packets import DriverStatus
@@ -74,7 +74,9 @@ EXIT_UNDERSTEER = re.compile(r"understeer (?:on|out of) (?:the )?exits?|exit und
 FRONT_LOCK = re.compile(
     r"lock(?:ing|s|ed)? (?:up )?(?:the )?fronts?|fronts? (?:are |keep )?lock|front lock|lock(?:ing|s)? up|lock-?ups?|locking"
 )
-REAR_LOCK = re.compile(r"lock(?:ing|s|ed)? (?:up )?(?:the )?rears?|rears? (?:are |keep )?lock|rear lock")
+REAR_LOCK = re.compile(
+    r"lock(?:ing|s|ed)? (?:up )?(?:the )?rears?|rear(?:s|'s| end| wheels?| tyres?)? (?:is |are |keeps? )?lock|rear lock"
+)
 UNSTABLE_ENTRY = re.compile(
     r"unstable (?:on|under|into) (?:the )?brak|loose (?:on|into) (?:the )?entry|rear (?:is )?(?:loose|light) (?:on|into)|"
     r"(?:snap|oversteer) (?:on|into) (?:the )?entry|entry oversteer"
@@ -167,6 +169,7 @@ def bias(world: World, me: CarState, rng: random.Random, symptom: str | None = N
     if symptom == "front_lock":
         corner = corner or worst_corner(fronts)
         new = max(BIAS_MIN, now - 2)
+        n = NUMBERS.get(now - new, str(now - new))
         why = (
             f"[Should stop the fronts locking into {corner}|That should sort the lock-ups into {corner}|"
             f"Should help the braking into {corner}]"
@@ -177,7 +180,7 @@ def bias(world: World, me: CarState, rng: random.Random, symptom: str | None = N
             return expand(f"Bias is already back at {now}. [Brake a touch earlier|Ease off the pedal as you turn in]"
                           f"{f' into {corner}' if corner else ''}.", rng)  # fmt: skip
         return expand(
-            f"[Bias back two, to {new}|Brake bias back two, {new}|Take two off the bias, so {new}|Bias back two clicks, {new}]. {why}.",
+            f"[Bias back {n}, to {new}|Brake bias back {n}, {new}|Take {n} off the bias, so {new}|Bias back {n}, {new}]. {why}.",
             rng,
         )
     if symptom in ("rear_lock", "unstable_entry"):
@@ -199,6 +202,10 @@ def bias(world: World, me: CarState, rng: random.Random, symptom: str | None = N
         )
     if symptom == "entry_understeer":
         new = max(BIAS_MIN, now - 1)
+        if new >= now:
+            return expand(
+                f"Bias is already back at {now}. [Trail the brake into the apex|Release the brake a touch later].", rng
+            )
         return expand(
             f"[Bias back one, to {new}|Take one off the bias, {new}]. [Should help it turn in|Gives you a bit more rotation on entry].",
             rng,
@@ -227,11 +234,11 @@ def ers(world: World, me: CarState, rng: random.Random) -> str:
         g_behind = world.race_gap_s(me, behind) if behind else None
         if g_ahead is not None and g_ahead < 1.0 and pct > 30:
             return expand(f"[{top.capitalize()} mode on the straight|Use {top} on the straight|Go {top} down the straight], "
-                          f"[{ahead.name}'s {g_ahead:.1f} ahead|you're {g_ahead:.1f} off {ahead.name}]. "  # type: ignore[union-attr]
+                          f"[{ahead.name}'s {gap(g_ahead)} ahead|you're {gap(g_ahead)} off {ahead.name}]. "  # type: ignore[union-attr]
                           "[Back to medium after|Medium again once you're through].", rng)  # fmt: skip
         if g_behind is not None and g_behind < 1.0:
             return expand(f"[Stay in medium|Medium's right], [keep some for defending|save it for defending], "
-                          f"[{behind.name}'s {g_behind:.1f} behind|{behind.name}'s close].", rng)  # type: ignore[union-attr]  # fmt: skip
+                          f"[{behind.name}'s {gap(g_behind)} behind|{behind.name}'s close].", rng)  # type: ignore[union-attr]  # fmt: skip
         if pct > 80 and mode < 2:
             return expand(
                 f"[Battery's full|You've got {pct} percent], [hotlap mode for a lap or two|use it, hotlap for a lap].",
@@ -256,7 +263,8 @@ def ers(world: World, me: CarState, rng: random.Random) -> str:
             f"[You've got {pct} percent|Battery's at {pct}], [hotlap mode for the push|go hotlap mode for this one].",
             rng,
         )
-    return expand(f"[You're in {name}|Mode's {name}], battery's {pct}. [That's fine|Happy with that].", rng)
+    said = "no deploy" if mode == 0 else f"{name} mode"
+    return expand(f"[You're in {said}|It's {said}], battery's {pct}. [That's fine|Happy with that].", rng)
 
 
 def fuel(world: World, me: CarState, rng: random.Random) -> str:
