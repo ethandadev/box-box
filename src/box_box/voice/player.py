@@ -19,6 +19,13 @@ from box_box.voice.fx import resample
 
 log = logging.getLogger(__name__)
 
+# Bluetooth headsets (and some Windows drivers) go to sleep on digital silence and take a few hundred ms
+# to wake when sound starts again, eating the start of every message. A noise floor far below hearing
+# (-80 dBFS) keeps them awake; a short pad in front of the first clip after a long quiet covers the rest.
+KEEP_ALIVE_LEVEL = 1e-4
+WAKE_AFTER_IDLE_S = 4.0
+WAKE_PAD_S = 0.15
+
 
 @dataclass
 class Device:
@@ -91,6 +98,9 @@ class AudioPlayer:
         self.device_name = ""
         self.error: str | None = None
         self.level = 0.0  # output level for the UI meter
+        self.keep_alive = True
+        self._last_sound = 0.0  # monotonic time the last clip finished playing
+        self._noise = np.random.default_rng(0)
 
     @property
     def ok(self) -> bool:
@@ -147,6 +157,9 @@ class AudioPlayer:
             return fut
         data = resample(np.asarray(samples, dtype=np.float32), samplerate, self.samplerate)
         with self._lock:
+            idle = not self._clips and time.monotonic() - self._last_sound > WAKE_AFTER_IDLE_S
+            if idle:  # the output may have dozed off: give it a moment of silence to wake into
+                data = np.concatenate([np.zeros(int(self.samplerate * WAKE_PAD_S), dtype=np.float32), data])
             self._clips.append(_Clip(data, fut))
         return fut
 
@@ -190,8 +203,12 @@ class AudioPlayer:
                 clip.pos += take
                 if clip.pos >= len(clip.data):
                     self._overlay.remove(clip)
+            if self._clips or filled:
+                self._last_sound = time.monotonic()
         out *= self.volume
         self.level = float(np.sqrt(np.mean(out**2))) if frames else 0.0
+        if self.keep_alive and filled < frames:  # keep a sleepy Bluetooth output awake between messages
+            out[filled:] += self._noise.standard_normal(frames - filled).astype(np.float32) * KEEP_ALIVE_LEVEL
         outdata[:] = out[:, None] if outdata.shape[1] == 1 else np.repeat(out[:, None], outdata.shape[1], axis=1)
         for c in finished:
             if not c.future.done():

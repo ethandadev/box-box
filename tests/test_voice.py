@@ -396,3 +396,17 @@ def test_trimming_keeps_a_soft_first_sound() -> None:
     audio = np.concatenate([np.zeros(sr // 10, dtype=np.float32), soft, loud])
     out = tighten(audio, sr)
     assert len(out) >= len(soft) + len(loud)  # the quiet onset survives the trim
+
+
+def test_output_kept_awake_and_woken_gently() -> None:
+    from box_box.voice import player as player_mod
+
+    p = player_mod.AudioPlayer()
+    p._stream = object()  # no real device: drive the callback by hand
+    p.samplerate = 48_000
+    out = np.zeros((480, 1), dtype=np.float32)
+    p._callback(out, 480, None, None)
+    assert 0 < np.abs(out).max() < 1e-3  # an inaudible floor, not digital silence
+    p._last_sound = 0.0  # long quiet: the next message gets a wake-up pad in front
+    p.play(np.ones(100, dtype=np.float32), 48_000)
+    assert len(p._clips[0].data) == 100 + int(48_000 * player_mod.WAKE_PAD_S)
