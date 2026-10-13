@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 import time
+from datetime import datetime
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -56,11 +57,21 @@ async def guard(request: web.Request, handler):  # type: ignore[no-untyped-def]
         return _json({"ok": False, "error": str(e)}, status=500)
 
 
+def _started_at(name: str) -> float | None:
+    """When a recording began, from its name ("2026-10-13 171817 ..."), so the zip gets that session's radio
+    and not the one before it."""
+    try:
+        return datetime.strptime(name[:17].replace("_", " "), "%Y-%m-%d %H%M%S").timestamp()
+    except ValueError:
+        return None
+
+
 class UIServer:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
         self.app = web.Application(middlewares=[guard])
         self._learning = False
+        self._learning_wanted = False
         r = self.app.router
         r.add_get("/", self.index)
         r.add_get("/static/{name}", self.static)
@@ -71,10 +82,12 @@ class UIServer:
         r.add_post("/api/voice/test", self.voice_test)
         r.add_post("/api/voice/download", self.voice_download)
         r.add_post("/api/ptt/learn", self.ptt_learn)
+        r.add_post("/api/ptt/learn/cancel", self.ptt_learn_cancel)
         r.add_post("/api/ptt/udp", self.ptt_udp)
         r.add_post("/api/ptt/clear", self.ptt_clear)
         r.add_post("/api/ptt/ui", self.ptt_ui)
         r.add_post("/api/ask", self.ask)
+        r.add_post("/api/mute", self.mute)
         r.add_get("/api/diagnostics", self.diag)
         r.add_get("/api/report", self.report)
         r.add_post("/api/fix", self.fix)
@@ -162,7 +175,7 @@ class UIServer:
                 "settings": e.settings.to_dict(redact=True),
                 "schema": config.schema(),
                 "providers": providers.public(),
-                "devices": self._devices(),
+                "devices": await asyncio.to_thread(self._devices),
                 "home": str(paths.app_home()),
                 "recordings_dir": str(e.settings.recordings_dir()),
             }
@@ -205,13 +218,15 @@ class UIServer:
             return _json({"ok": False, "error": "Push-to-talk is disabled."}, 400)
         if self._learning:
             return _json({"ok": False, "error": "Already listening for a button."}, 409)
-        self._learning = True
+        self._learning = self._learning_wanted = True
         try:
             binding = await asyncio.to_thread(self.engine.ptt.learn, 15.0)
         finally:
             self._learning = False
         if binding is None:
             return _json({"ok": False, "error": "No button press detected. Is the wheel on and connected?"})
+        if not self._learning_wanted:
+            return _json({"ok": False, "cancelled": True, "error": "Cancelled."})
         self.engine.store.update(
             {
                 "ptt": {
@@ -225,9 +240,18 @@ class UIServer:
         )
         return _json({"ok": True, "binding": binding.describe()})
 
+    async def ptt_learn_cancel(self, request: web.Request) -> web.Response:
+        self._learning_wanted = False
+        if self.engine.ptt is not None:
+            self.engine.ptt.cancel_learn()
+        return _json({"ok": True})
+
     async def ptt_udp(self, request: web.Request) -> web.Response:
         body = await request.json()
-        action = max(1, min(12, int(body.get("action", 1))))
+        try:
+            action = max(1, min(12, int(body.get("action", 1))))
+        except (TypeError, ValueError):
+            return _json({"ok": False, "error": "action must be 1 to 12"}, 400)
         self.engine.store.update({"ptt": {"kind": "udp_action", "udp_action": action, "mode": "hold"}})
         return _json({"ok": True})
 
@@ -251,7 +275,20 @@ class UIServer:
         text = str(body.get("text", "")).strip()[:500]
         if not text:
             return _json({"ok": False, "error": "Say something first."}, 400)
-        asyncio.ensure_future(self.engine.respond(text))
+        self.engine._spawn(self.engine.respond(text))
+        return _json({"ok": True})
+
+    async def mute(self, request: web.Request) -> web.Response:
+        """The dashboard's radio silence button: straight to the director, not via the conversation."""
+        body = await request.json()
+        try:
+            minutes = max(0.0, min(120.0, float(body.get("minutes", 5))))
+        except (TypeError, ValueError):
+            return _json({"ok": False, "error": "minutes must be a number"}, 400)
+        if minutes:
+            self.engine.mute(minutes)
+        else:
+            self.engine.unmute()
         return _json({"ok": True})
 
     # ---- diagnostics ------------------------------------------------------------------------------
@@ -282,7 +319,6 @@ class UIServer:
             await asyncio.to_thread(e.mic.open, s.mic.input_device)
             return _json({"ok": e.mic.error is None, "message": e.mic.error or "Microphone reopened."})
         if action == "reload_stt":
-            e.stt._model = None
             e.stt.load_async(s.mic.stt_model, s.mic.stt_device)
             return _json({"ok": True, "message": "Reloading speech recognition..."})
         if action == "retry_ai":
@@ -294,7 +330,6 @@ class UIServer:
         if action == "install_gpu_speech":
             ok, message = await asyncio.to_thread(diagnostics.install_gpu_speech)
             if ok:
-                e.stt._model = None
                 from box_box.voice.stt import add_nvidia_dll_dirs
 
                 add_nvidia_dll_dirs()
@@ -360,7 +395,7 @@ class UIServer:
             import zipfile
 
             st = path.stat()
-            start = st.st_ctime if sys.platform == "win32" else st.st_mtime - 4 * 3600
+            start = _started_at(path.name) or (st.st_ctime if sys.platform == "win32" else st.st_mtime - 4 * 3600)
             radio = self.engine.memory.radio_between(start - 60, st.st_mtime + 300)
             lines = [f"{time.strftime('%H:%M:%S', time.localtime(r['at']))}  {r['who']:8}  {r['text']}" for r in radio]
             import tempfile
@@ -404,7 +439,10 @@ class UIServer:
         path = (folder / name).resolve()
         if path.parent != folder.resolve() or not path.is_file():
             return _json({"ok": False, "error": "Recording not found."}, 404)
-        speed = float(body.get("speed", 1.0))
+        try:
+            speed = float(body.get("speed", 1.0))
+        except (TypeError, ValueError):
+            speed = 1.0
         self.engine.start_replay(path, max(0.25, min(speed, 20.0)))
         return _json({"ok": True})
 

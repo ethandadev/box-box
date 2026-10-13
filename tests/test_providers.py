@@ -340,3 +340,16 @@ def test_unknown_model_is_explained() -> None:
 def test_untouched_old_speed_moves_to_the_new_default_but_a_chosen_one_stays() -> None:
     assert config.from_dict({"voice": {"speed": 1.15}}).voice.speed == 1.25
     assert config.from_dict({"voice": {"speed": 1.4}}).voice.speed == 1.4
+
+
+def test_old_default_voice_migrates_once_not_on_every_save() -> None:
+    old = config.from_dict({"version": 1, "voice": {"speed": 1.15, "radio_effect": 0.7}})
+    assert old.voice.speed == config.VoiceSettings.speed and old.voice.radio_effect == 0.5
+    # Picking 1.15 on purpose today must stick.
+    s = config.merge(config.Settings(), {"voice": {"speed": 1.15, "radio_effect": 0.7}})
+    assert s.voice.speed == 1.15 and s.voice.radio_effect == 0.7
+
+
+def test_out_of_range_numbers_fall_back() -> None:
+    s = config.merge(config.Settings(), {"telemetry": {"port": float("inf")}, "ui": {"port": 99999}})
+    assert s.telemetry.port == config.TelemetrySettings.port and s.ui.port == 65535

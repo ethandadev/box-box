@@ -216,6 +216,7 @@ class PushToTalk:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
+        self._learn_cancel = threading.Event()
 
     def configure(self, binding: Binding, mode: str) -> None:
         self.binding, self.mode = binding, mode
@@ -313,8 +314,13 @@ class PushToTalk:
         return False
 
     # learning a new binding
+    def cancel_learn(self) -> None:
+        self._learn_cancel.set()
+
     def learn(self, timeout: float = 15.0) -> Binding | None:
-        """Wait for the driver to press a wheel button or a key; return the binding. Blocking."""
+        """Wait for the driver to press a wheel button or a key; return the binding. Blocking.
+        Returns None on timeout, on Esc, or when cancel_learn() is called."""
+        self._learn_cancel.clear()
         self.joystick.start()
         self.keyboard.start()
         time.sleep(0.3)  # let the reader see the devices
@@ -322,7 +328,7 @@ class PushToTalk:
         self.keyboard.last_pressed = None
         deadline = time.monotonic() + timeout
         latched: set[tuple[str, int]] = set()  # switches that stayed on: never a push-to-talk button
-        while time.monotonic() < deadline:
+        while time.monotonic() < deadline and not self._learn_cancel.is_set():
             for guid, (name, buttons) in self.joystick.snapshot().items():
                 # Buttons already held when learning started don't count until they're released.
                 held = baseline.get(guid, (name, []))[1]
@@ -337,7 +343,9 @@ class PushToTalk:
                         latched.add((guid, i))
                 baseline[guid] = (name, [i < len(held) and held[i] and d for i, d in enumerate(buttons)])
             key = self.keyboard.last_pressed
-            if key and key not in ("esc",):
+            if key == "esc":
+                return None
+            if key:
                 return Binding("keyboard", key=key)
             time.sleep(0.01)
         return None

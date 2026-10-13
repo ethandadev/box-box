@@ -127,6 +127,7 @@ class Engine:
         self._tts_wanted: str | None = None
         self._ptt_pressed_at = 0.0
         self._ai_check: asyncio.Task | None = None
+        self._voice_lock = threading.Lock()
         self.started_at = time.time()
         store.on_change(self._settings_changed_from_any_thread)
 
@@ -189,11 +190,13 @@ class Engine:
         try:
             sock = bind_udp(port, host)
         except PortUnavailable as e:
-            self.port_error = (
+            error = (
                 f"UDP port {port} is in use or blocked ({e.cause}). Close other telemetry apps (SimHub, Crew Chief...) "
                 f"or pick another port in Settings > Telemetry and set the same port in F1 25."
             )
-            log.error(self.port_error)
+            if error != self.port_error:
+                log.error(error)  # housekeeping retries every couple of seconds: say it once, not every time
+            self.port_error = error
             return
         self.port_error = None
         self._udp_sock = sock
@@ -222,7 +225,7 @@ class Engine:
             if packet is None:
                 return
             if packet.id == PacketId.EVENT and packet.data.code == "BUTN":  # type: ignore[union-attr]
-                if self.ptt:
+                if self.ptt and live:  # a recording's button presses aren't the driver's
                     self.ptt.game_buttons(int(packet.data.detail.get("buttons", 0)))  # type: ignore[union-attr]
                 return
             self.world.apply(packet)
@@ -482,10 +485,17 @@ class Engine:
         finally:
             self.director.release_hold()
 
-    def _spawn(self, coro) -> None:  # type: ignore[no-untyped-def]
+    def _spawn(self, coro) -> asyncio.Task:  # type: ignore[no-untyped-def]
         task = asyncio.ensure_future(coro)
         self._tasks.append(task)
-        task.add_done_callback(lambda t: self._tasks.remove(t) if t in self._tasks else None)
+        task.add_done_callback(self._task_done)
+        return task
+
+    def _task_done(self, task: asyncio.Task) -> None:
+        if task in self._tasks:
+            self._tasks.remove(task)
+        if not task.cancelled() and task.exception() is not None:
+            log.error("background task failed", exc_info=task.exception())
 
     # ================================================================================================
     # intents.Actions: things the driver can change by voice
@@ -539,9 +549,10 @@ class Engine:
         self.tts.status = f"loading the {engine} voice"
 
         def load() -> None:
-            self.tts.choose(engine)
-            if status:
-                self.tts.status = status
+            with self._voice_lock:  # two quick switches mustn't load side by side and finish in the wrong order
+                self.tts.choose(engine)
+                if status:
+                    self.tts.status = status
 
         threading.Thread(target=load, name="voice-load", daemon=True).start()
 
@@ -596,8 +607,7 @@ class Engine:
             if old.mic.input_device != new.mic.input_device:
                 self.mic.open(new.mic.input_device)
             if (old.mic.stt_model, old.mic.stt_device) != (new.mic.stt_model, new.mic.stt_device):
-                self.stt._model = None
-                self._load_stt()
+                self._load_stt()  # the old model keeps answering until the new one is ready
             if old.ptt != new.ptt:
                 self._configure_ptt()
             if (old.telemetry.port, old.telemetry.listen_on_network) != (
@@ -605,12 +615,11 @@ class Engine:
                 new.telemetry.listen_on_network,
             ):
                 self._open_udp()
-            if (
-                old.telemetry.recordings_dir != new.telemetry.recordings_dir
-                or old.telemetry.keep_recordings != new.telemetry.keep_recordings
-            ):
+            if old.telemetry.recordings_dir != new.telemetry.recordings_dir:
                 self.recorder.close()
                 self.recorder = AutoRecorder(new.recordings_dir(), new.telemetry.keep_recordings)
+            else:
+                self.recorder.keep = new.telemetry.keep_recordings  # no need to split the recording in progress
             if old.ai != new.ai:
                 self.brain.reset_errors()
                 self._check_ai()

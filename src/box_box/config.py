@@ -20,7 +20,7 @@ from box_box.brain import providers
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def opt(default: Any, label: str, help: str = "", **meta: Any) -> Any:
@@ -280,7 +280,7 @@ class CalloutSettings:
 
 @dataclass
 class UISettings:
-    port: int = opt(8777, "Web UI port", "", min=1024, max=65535)
+    port: int = opt(8777, "Web UI port", "Takes effect the next time Box Box starts.", min=1024, max=65535)
     open_browser: bool = opt(True, "Open the browser on start", "")
 
 
@@ -368,7 +368,7 @@ def _coerce(value: Any, default: Any, meta: dict[str, Any]) -> Any:
         if "max" in meta:
             v = min(meta["max"], v)
         return v
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
@@ -378,7 +378,12 @@ def from_dict(data: dict[str, Any]) -> Settings:
         return s
     s.onboarded = bool(data.get("onboarded", False))
     voice = data.get("voice")
-    if isinstance(voice, dict) and (voice.get("speed") in OLD_DEFAULT_SPEEDS or voice.get("radio_effect") == 0.7):
+    old_file = not isinstance(data.get("version"), int) or data["version"] < 2
+    if (
+        old_file
+        and isinstance(voice, dict)
+        and (voice.get("speed") in OLD_DEFAULT_SPEEDS or voice.get("radio_effect") == 0.7)
+    ):
         # Old defaults: too slow and drawn-out, and too much distortion. Untouched ones move to the new defaults.
         voice = {**voice}
         if voice.get("speed") in OLD_DEFAULT_SPEEDS:
@@ -402,10 +407,9 @@ def merge(settings: Settings, patch: dict[str, Any]) -> Settings:
     data = settings.to_dict()
     for key, value in patch.items():
         if key in SECTIONS and isinstance(value, dict):
+            # Keep stored keys when the UI sends back the redacted placeholder.
             value = {k: v for k, v in value.items() if not str(v).startswith(REDACTED)}
             if key == "ai":
-                # Keep stored keys when the UI sends back the redacted placeholder.
-                value = {k: v for k, v in value.items() if not str(v).startswith(REDACTED)}
                 # A model id from one service means nothing to another: switching service resets it.
                 if "provider" in value and value["provider"] != data["ai"]["provider"] and "model" not in value:
                     value["model"] = ""
@@ -488,14 +492,14 @@ class SettingsStore:
     def update(self, patch: dict[str, Any]) -> Settings:
         with self._lock:
             old = self.settings
-            self.settings = merge(old, patch)
+            new = self.settings = merge(old, patch)
         self.save()
         for listener in list(self._listeners):
             try:
-                listener(old, self.settings)
+                listener(old, new)
             except Exception:
                 log.exception("settings listener failed")
-        return self.settings
+        return new
 
     def on_change(self, listener: Any) -> None:
         self._listeners.append(listener)

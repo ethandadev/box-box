@@ -100,9 +100,27 @@ async function flushSave() {
   try {
     const res = await api("/api/settings", patch);
     state.settings = res.settings;
+    resyncInputs(patch);
     toast("Saved");
   } catch (e) {
     toast(`Couldn't save: ${e.message}`, "error");
+  }
+}
+
+// The server clamps and validates: show what was actually saved (a port of 99999 becomes 65535).
+function resyncInputs(patch) {
+  for (const [section, values] of Object.entries(patch)) {
+    if (typeof values !== "object" || values === null) continue;
+    for (const key of Object.keys(values)) {
+      const saved = getSetting(`${section}.${key}`);
+      for (const input of $$(`[name="${section}.${key}"]`)) {
+        if (input === document.activeElement || input.type === "password" || saved === undefined) continue;
+        if (input.type === "radio") input.checked = input.value === saved;
+        else if (input.type === "checkbox") input.checked = !!saved;
+        else input.value = saved;
+        syncOutput(input);
+      }
+    }
   }
 }
 
@@ -139,12 +157,17 @@ function bindAutosaveForm(form) {
     input.dataset.bound = "1";
     if (input.type === "password") {
       // A saved key shows as ••••abcd; clicking in clears it so a pasted key replaces it cleanly.
-      input.addEventListener("focus", () => { if (input.value.startsWith("••••")) input.value = ""; });
+      input.addEventListener("focus", () => {
+        input.dataset.edited = "";
+        if (input.value.startsWith("••••")) input.value = "";
+      });
+      input.addEventListener("input", () => (input.dataset.edited = "1"));
       input.addEventListener("blur", () => {
         if (input.value) return;
         const saved = getSetting(input.name) || "";
-        // Left empty on purpose: offer to remove the key (the only way to clear one).
-        if (saved && confirm("Remove this saved key?")) queueSave(input.name, "");
+        // Only when the field was emptied on purpose (typed in, then cleared), not just clicked through:
+        // offer to remove the key (the only way to clear one).
+        if (saved && input.dataset.edited && confirm("Remove this saved key?")) queueSave(input.name, "");
         else input.value = saved;
       });
     }
@@ -349,6 +372,12 @@ function addRadio(event) {
   if (nearBottom) log.scrollTop = log.scrollHeight;
 }
 
+const imperial = () => getSetting("engineer.units") === "imperial";
+function temperature(c, unit = true) {
+  const v = imperial() ? Math.round(c * 9 / 5 + 32) : c;
+  return unit ? `${v}°${imperial() ? "F" : "C"}` : `${v}°`;
+}
+
 function setText(sel, text) {
   const el = $(sel);
   if (el && el.textContent !== String(text)) el.textContent = text;
@@ -384,7 +413,7 @@ function renderStatus(st) {
     setText("#s-session", s.session);
     setText("#s-track", s.track);
     setText("#s-weather", s.weather);
-    setText("#s-temp", `${s.track_temp}°C`);
+    setText("#s-temp", temperature(s.track_temp));
     if (s.is_race) {
       setText("#s-remaining-label", "Laps");
       setText("#s-remaining", st.player ? `${st.player.lap}/${s.total_laps}` : s.total_laps);
@@ -402,7 +431,7 @@ function renderStatus(st) {
     setText("#c-pos", `P${p.position}`);
     setText("#c-lap", p.lap);
     setText("#c-status", p.in_pits ? "Pit lane" : p.status);
-    setText("#c-speed", `${p.speed} km/h`);
+    setText("#c-speed", imperial() ? `${Math.round(p.speed * 0.621371)} mph` : `${p.speed} km/h`);
     setText("#c-compound", p.compound ? `${p.compound} · ${p.tyre_age} laps` : "–");
     setText("#c-best", p.best_lap || "–");
     setText("#c-last", p.last_lap || "–");
@@ -429,7 +458,7 @@ function renderStatus(st) {
       const wear = p.wear?.[i];
       const temp = p.tyre_temps?.[i];
       setText(`#t-${i} .w`, wear != null ? `${wear}%` : "–");
-      setText(`#t-${i} .t`, temp != null ? `${temp}°` : "");
+      setText(`#t-${i} .t`, temp != null ? temperature(temp, false) : "");
       el.dataset.temp = temp == null ? "" : temp < 75 ? "cold" : temp > 112 ? "hot" : "ok";
     }
   }
@@ -445,9 +474,6 @@ function renderStatus(st) {
   const muted = st.radio.muted_for;
   setText("#mute-btn", muted > 0 ? `Radio silence: ${Math.ceil(muted / 60)} min (end)` : "Radio silence 5 min");
   $("#talk-btn").setAttribute("aria-pressed", st.ptt.active || st.mic.recording ? "true" : "false");
-  // speaking highlight
-  $$(".msg.speaking").forEach((m) => m.classList.remove("speaking"));
-
   if (state.page === "setup") updateWizardLive(st);
 }
 
@@ -537,7 +563,7 @@ function bindTalk() {
   });
   $("#mute-btn").addEventListener("click", () => {
     const muted = state.status?.radio?.muted_for > 0;
-    api("/api/ask", { text: muted ? "you can talk again" : "radio silence for 5 minutes" }).catch((e) => toast(e.message, "error"));
+    api("/api/mute", { minutes: muted ? 0 : 5 }).catch((e) => toast(e.message, "error"));
   });
 }
 
@@ -674,16 +700,24 @@ function bindWizard() {
       if (!inside) dialog.close();
     });
   }
+  let learning = false;
+  dialog.addEventListener("close", () => {
+    if (learning) api("/api/ptt/learn/cancel", {}).catch(() => {});
+  });
   $("#learn-btn").addEventListener("click", async () => {
     const status = $("#learn-status");
+    learning = true;
     dialog.showModal();
     const progress = $("#learn-progress");
     progress.value = 0;
     const timer = setInterval(() => (progress.value = Math.min(15, progress.value + 0.25)), 250);
     try {
       const res = await api("/api/ptt/learn", {});
-      status.hidden = false;
-      if (res.ok) {
+      learning = false;
+      status.hidden = !!res.cancelled;
+      if (res.cancelled) {
+        // closed the dialog: nothing to report
+      } else if (res.ok) {
         status.dataset.state = "ok";
         status.textContent = `Bound to ${res.binding}. Hold it and say “radio check” to test.`;
         toast(`Push-to-talk: ${res.binding}`);
@@ -696,12 +730,15 @@ function bindWizard() {
       status.dataset.state = "error";
       status.textContent = e.message;
     } finally {
+      learning = false;
       clearInterval(timer);
       if (dialog.open) dialog.close();
     }
   });
-  $("#clear-btn").addEventListener("click", () => api("/api/ptt/clear", {}).then(() => toast("Push-to-talk cleared")));
-  $("#udp-btn").addEventListener("click", () => api("/api/ptt/udp", { action: 1 }).then(() => toast("Using the game's UDP Action 1 (hold to talk)")));
+  $("#clear-btn").addEventListener("click", () =>
+    api("/api/ptt/clear", {}).then(() => toast("Push-to-talk cleared")).catch((e) => toast(e.message, "error")));
+  $("#udp-btn").addEventListener("click", () =>
+    api("/api/ptt/udp", { action: 1 }).then(() => toast("Using the game's UDP Action 1 (hold to talk)")).catch((e) => toast(e.message, "error")));
   $("#ai-test").addEventListener("click", async () => {
     await flushSave();
     const el = $("#ai-status");

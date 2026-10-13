@@ -221,13 +221,15 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
         )
     elif p["kind"] == "joystick":
         names_seen = [c["name"] for c in p["controllers"]]
-        if s.ptt.device_name and names_seen and s.ptt.device_name not in names_seen:
+        reading = bool(engine.ptt and engine.ptt.joystick.available)  # controllers are being read at all
+        if s.ptt.device_name and (names_seen or reading) and s.ptt.device_name not in names_seen:
+            connected = f"Connected: {', '.join(names_seen)}." if names_seen else "No controllers are connected."
             out.append(
                 check(
                     "ptt",
                     "Push-to-talk",
                     "error",
-                    f"{s.ptt.device_name} isn't connected. Connected: {', '.join(names_seen)}.",
+                    f"{s.ptt.device_name} isn't connected. {connected}",
                     "Turn on your wheel base, or learn the button again.",
                 )
             )

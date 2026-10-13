@@ -50,8 +50,12 @@ async def _run(open_browser: bool) -> None:
     store = SettingsStore()
     engine = Engine(store)
     server = UIServer(engine)
-    await engine.start()
-    port = await server.start(store.settings.ui.port)
+    try:
+        await engine.start()
+        port = await server.start(store.settings.ui.port)
+    except BaseException:
+        await engine.stop()  # no UI port free: don't leave the audio devices and UDP socket open
+        raise
     url = f"http://127.0.0.1:{port}/" + ("" if store.settings.onboarded else "#setup")
     print(
         f"\n  Box Box {__version__} is running.\n  Open {url} if your browser didn't.\n  Close this window (or press Ctrl+C) to stop.\n"

@@ -166,7 +166,6 @@ meter, progress { width: 100%; height: .8rem; }
 .msg.safety .who { color: var(--err); }
 .msg.queued { opacity: .5; font-style: italic; font-size: .9rem; }
 .msg.queued .who { color: var(--muted); }
-.msg.speaking { box-shadow: 0 0 0 2px var(--radio); }
 .msg.system { align-self: center; background: transparent; border-style: dashed; color: var(--muted); font-size: .85rem; }
 @keyframes pop { from { transform: translateY(4px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .msg { animation: none; } }
