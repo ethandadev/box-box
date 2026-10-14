@@ -493,12 +493,20 @@ class SettingsStore:
         with self._lock:
             old = self.settings
             new = self.settings = merge(old, patch)
-        self.save()
+        save_error: Exception | None = None
+        try:
+            self.save()
+        except Exception as e:  # noqa: BLE001
+            # The change is live in memory either way, so the engine must still hear about it.
+            log.error("couldn't save settings to %s: %s", self.path, e)
+            save_error = e
         for listener in list(self._listeners):
             try:
                 listener(old, new)
             except Exception:
                 log.exception("settings listener failed")
+        if save_error is not None:
+            raise save_error  # so the UI says "Couldn't save"
         return new
 
     def on_change(self, listener: Any) -> None:

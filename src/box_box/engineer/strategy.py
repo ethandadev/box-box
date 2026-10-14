@@ -16,6 +16,7 @@ from box_box.engineer.base import Context, Detector
 from box_box.engineer.radio import Priority, RadioCall, Verbosity
 from box_box.state.model import CarState, LapCompleted
 from box_box.telemetry import names
+from box_box.telemetry.packets import ResultStatus
 
 TYRE_CLIFF_PCT = 70.0  # average wear where pace falls away
 MIN_GRID_CARS = 6
@@ -57,7 +58,7 @@ def tyre_offset(me: CarState, car: CarState, behind: bool = False) -> str | None
     age = f"{count_word(abs(diff))} laps {'older' if diff > 0 else 'newer'}" if abs(diff) >= 4 else ""
     if theirs != mine:
         note = f"He's on {theirs}" + (f", {age}." if age else ".")
-        if behind and SOFTNESS.get(theirs, 1) < SOFTNESS.get(mine, 1):
+        if behind and theirs in SOFTNESS and mine in SOFTNESS and SOFTNESS[theirs] < SOFTNESS[mine]:
             note += " He'll have higher deg."
         return note
     if age:
@@ -85,12 +86,15 @@ class StrategyDetector(Detector):
     def on_rewind(self) -> None:
         self._verdicts.clear()
         self._sc_boxed_stint = None
+        self._rhythm_lap = -10  # a rhythm call from the abandoned future mustn't hold the next one back
 
     def check(self, ctx: Context) -> list[RadioCall]:
         world = ctx.world
         me = world.player
         if me is None or me.lap is None or world.session is None:
             return []
+        if me.lap.result_status != ResultStatus.ACTIVE:
+            return []  # flag taken: no "reset, next lap" after "you've won it"
         out: list[RadioCall] = []
         if world.is_race:
             out += self._grid_tyres(ctx, me)

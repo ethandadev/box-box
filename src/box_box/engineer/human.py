@@ -22,7 +22,7 @@ COOLDOWN = {"off": 99, "subtle": 4, "human": 2}
 NUMBER_SLIP_EVERY = 12  # a misspoken number at most once in this many transmissions
 
 # Calls where a misspoken number is harmless and immediately corrected.
-NUMBER_SLIP_KEYS = {"gaps", "pit_done", "rival", "time_left", "laps_to_go", "tyre_plan"}  # never a lap time
+NUMBER_SLIP_KEYS = {"gaps", "pit_done", "rival", "tyre_plan"}  # calls that carry a decimal, never a lap time
 COMPOUND_WORDS = ["softs", "mediums", "hards"]
 
 # Saying the important bit twice, the way engineers do to make sure it lands: "Tyres are 9 laps old,
@@ -44,7 +44,6 @@ BOX_CONFIRM = [
 BOX_CONFIRM_CHANCE = 0.35
 
 _DECIMAL = re.compile(r"(?<![\d:.])(\d+)\.(\d)(?!\d)")
-_LAP_TIME = re.compile(r"\b(\d):(\d{2})\.(\d)\b")
 
 
 class Humanizer:
@@ -108,34 +107,33 @@ class Humanizer:
         return out
 
     def _repeat_first(self, text: str) -> str:
-        m = re.match(r"(.+?)[.!?](?=\s|$)", text)
+        m = re.match(r"(.+?)([.!?])(?=\s|$)", text)
         if not m:
             return text
-        first, rest = m.group(1).strip(), text[m.end() :].strip()
+        first, stop, rest = m.group(1).strip(), m.group(2), text[m.end() :].strip()
         words = first.split()
-        if not 3 <= len(words) <= 7 or "," in first:
-            return text  # too short to matter, or too long to say twice
+        if not 3 <= len(words) <= 7 or "," in first or ":" in first:
+            return text  # too short to matter, too long to say twice, or a "Floor: ..." damage list
         lowered = first.lower()
         if text.lower().count(lowered) > 1:
             return text  # already said twice
         from box_box.engineer.radio import soften
 
         again = soften(words[0], self.proper) + (" " + " ".join(words[1:]) if len(words) > 1 else "")
-        said = f"{first}, {again}." if self._rng.random() < 0.6 else f"{first}. {first}."
+        said = f"{first}, {again}{stop}" if self._rng.random() < 0.6 else f"{first}{stop} {first}{stop}"
         return said + (" " + rest if rest else "")
 
     # ---- the slips ---------------------------------------------------------------------------------
 
     def _okay_so(self, text: str) -> str | None:
         """'Okay, so gap to Leclerc...': a spoken lead-in, without a stumble the voice can't pull off."""
-        if text.startswith(
-            ("Okay", "So", "And", "Just for info", "For info", "Yeah", "Right", "Heads up", "Careful", "Copy")
-        ):
+        from box_box.engineer.radio import OPENERS, soften
+
+        if text.startswith(OPENERS):
             return None
         first, _, rest = text.partition(" ")
         if not rest or not first[:1].isalpha():
             return None
-        from box_box.engineer.radio import soften
 
         return self._rng.choice(["Okay, so ", "So, "]) + soften(first, self.proper) + " " + rest
 
@@ -164,17 +162,14 @@ class Humanizer:
 
     def _number_slip(self, text: str) -> str | None:
         """Misread a number by one digit and correct it straight away; the correction is the real value."""
-        m = _LAP_TIME.search(text)
-        if m:
-            wrong_tenth = (int(m.group(3)) + self._rng.choice([1, -1])) % 10
-            wrong = f"{m.group(1)}:{m.group(2)}.{wrong_tenth}"
-            return text[: m.start()] + f"{wrong}, sorry, {m.group(0)}" + text[m.end() :]
         m = _DECIMAL.search(text)
         if m:
             whole, tenth = int(m.group(1)), int(m.group(2))
             wrong_tenth = tenth + self._rng.choice([1, -1])
             if not 0 <= wrong_tenth <= 9:
                 wrong_tenth = tenth - 1 if tenth > 0 else tenth + 1
+            if whole == 0 and wrong_tenth == 0:
+                wrong_tenth = tenth + 1  # never "zero point zero"
             wrong = f"{whole}.{wrong_tenth}"
             return text[: m.start()] + f"{wrong}, sorry, {m.group(0)}" + text[m.end() :]
         return None

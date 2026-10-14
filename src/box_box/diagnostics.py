@@ -6,6 +6,7 @@ import logging
 import os
 import platform
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -20,8 +21,31 @@ log = logging.getLogger(__name__)
 
 GAME_SETUP = (
     "In F1 25 go to Settings > Telemetry Settings: UDP Telemetry On, UDP Broadcast Mode Off, "
-    "UDP IP Address 127.0.0.1, UDP Port {port}, UDP Send Rate 20Hz or more, UDP Format 2026."
+    "UDP IP Address {ip}, UDP Port {port}, UDP Send Rate 20Hz or more, UDP Format 2026."
 )
+PORT_IN_USE_FIX = (
+    "Close the other telemetry app (SimHub, Crew Chief...), or change the port in Settings > Telemetry "
+    "and set the same UDP Port in F1 25."
+)
+
+
+def lan_ip() -> str | None:
+    """This PC's address on the local network (what a console or another PC should send to)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("10.255.255.255", 1))  # UDP connect sends nothing: it only picks the outgoing interface
+            ip = sock.getsockname()[0]
+    except OSError:
+        return None
+    return None if ip.startswith(("127.", "0.")) else ip
+
+
+def game_setup(engine: Engine) -> str:
+    t = engine.settings.telemetry
+    ip = "127.0.0.1"
+    if t.listen_on_network:  # the game runs on another PC or a console: it sends to this PC's network address
+        ip = lan_ip() or "this PC's network IP address (run ipconfig to find it)"
+    return GAME_SETUP.format(ip=ip, port=t.port)
 
 
 def check(id: str, label: str, status: str, detail: str, fix: str = "", action: str | None = None) -> dict[str, Any]:
@@ -36,7 +60,7 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
     # ---- telemetry --------------------------------------------------------------------------------
     t = st["telemetry"]
     if t["error"]:
-        out.append(check("telemetry", "Game telemetry", "error", t["error"], GAME_SETUP.format(port=s.telemetry.port)))
+        out.append(check("telemetry", "Game telemetry", "error", t["error"], PORT_IN_USE_FIX))
     elif t["replaying"]:
         out.append(check("telemetry", "Game telemetry", "ok", f"Playing the recording {t['replaying']}."))
     elif t["connected"]:
@@ -54,9 +78,7 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
         else:
             out.append(check("telemetry", "Game telemetry", "ok", f"Receiving {t['rate']} packets/s (format {fmt})."))
     elif t["warning"]:
-        out.append(
-            check("telemetry", "Game telemetry", "error", t["warning"], GAME_SETUP.format(port=s.telemetry.port))
-        )
+        out.append(check("telemetry", "Game telemetry", "error", t["warning"], game_setup(engine)))
     else:
         detail = (
             "Nothing received yet."
@@ -69,7 +91,7 @@ def run_checks(engine: Engine) -> list[dict[str, Any]]:
                 "Game telemetry",
                 "warn",
                 detail + " That's normal until you're in a session.",
-                GAME_SETUP.format(port=s.telemetry.port),
+                game_setup(engine),
             )
         )
 
@@ -314,12 +336,14 @@ def gpu_name() -> str | None:
 def install_gpu_speech() -> tuple[bool, str]:
     """Install NVIDIA's cuBLAS/cuDNN wheels into this environment so speech recognition can use the GPU."""
     packages = ["nvidia-cublas-cu12", "nvidia-cudnn-cu12==9.*"]
-    uv = shutil.which("uv")
-    cmd = (
-        [uv, "pip", "install", "--python", sys.executable, *packages]
-        if uv
-        else [sys.executable, "-m", "pip", "install", *packages]
-    )
+    # Box Box runs in a uv environment, which has no pip: uv itself does the install.
+    uv = os.environ.get("UV") or shutil.which("uv")
+    if not uv:
+        return False, (
+            "Installing GPU support needs uv, which wasn't found. Run 'Update Box Box.bat' (or install uv), "
+            "then click Fix again."
+        )
+    cmd = [uv, "pip", "install", "--python", sys.executable, *packages]
     log.info("installing GPU speech support: %s", " ".join(cmd))
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)

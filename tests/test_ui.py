@@ -126,3 +126,47 @@ def test_feedback_bundle_has_recording_radio_and_report(tmp_path) -> None:  # ty
         names = z.namelist()
         assert "race-2026-monza-finish.f1raw.gz" in names and "radio.txt" in names and "support-report.txt" in names
         assert "Box this lap" in z.read("radio.txt").decode()
+
+
+def test_origin_must_match_exactly_and_bodies_must_be_objects(tmp_path: Path) -> None:
+    async def scenario(client, engine) -> None:  # type: ignore[no-untyped-def]
+        own = f"http://127.0.0.1:{client.port}"
+        r = await client.post("/api/mute", json={"minutes": 0}, headers={"Origin": own})
+        assert r.status == 200
+        for other in (f"http://127.0.0.1:{client.port + 1}", f"https://127.0.0.1:{client.port}", "http://localhost"):
+            r = await client.post("/api/mute", json={"minutes": 0}, headers={"Origin": other})
+            assert r.status == 403, other
+        r = await client.post("/api/ask", json=["not", "an", "object"])
+        assert r.status == 400  # treated as an empty body, not a 500
+        r = await client.post("/api/fix", json="reopen_mic")
+        assert r.status == 400
+
+    run_with_client(tmp_path, scenario)
+
+
+def test_cancelled_button_learning_says_cancelled(tmp_path: Path) -> None:
+    async def scenario(client, engine) -> None:  # type: ignore[no-untyped-def]
+        import time
+
+        engine.ptt.learn = lambda timeout: time.sleep(0.4)  # nothing pressed: returns None
+        learning = asyncio.create_task(client.post("/api/ptt/learn", json={}))
+        await asyncio.sleep(0.1)
+        await client.post("/api/ptt/learn/cancel", json={})
+        body = await (await learning).json()
+        assert body["cancelled"] is True
+
+    run_with_client(tmp_path, scenario)
+
+
+def test_shutdown_closes_open_websockets_quickly(tmp_path: Path) -> None:
+    async def scenario(client, engine) -> None:  # type: ignore[no-untyped-def]
+        import time
+
+        ws = await client.ws_connect("/ws")
+        await ws.receive()  # the first status
+        started = time.monotonic()
+        await asyncio.wait_for(client.server.close(), 10)
+        assert time.monotonic() - started < 5
+        await ws.close()
+
+    run_with_client(tmp_path, scenario)

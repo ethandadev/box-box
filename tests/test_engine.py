@@ -50,6 +50,9 @@ class FakeMic:
     def open(self, device_name=""):  # type: ignore[no-untyped-def]
         pass
 
+    def reopen_if_lost(self, device_name=None) -> bool:  # type: ignore[no-untyped-def]
+        return False
+
     def close(self) -> None:
         pass
 
@@ -242,3 +245,38 @@ def test_no_second_recording_from_the_results_screen(tmp_path: Path) -> None:
         rec.feed(packet, 7, 10, 15)
     assert first is not None and rec.close() is None
     assert len(list(tmp_path.glob("*.f1raw*"))) == 1
+
+
+def test_replays_stay_out_of_the_drivers_history(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+
+    async def scenario() -> None:
+        await engine.start()
+        engine.replaying = FIXTURE.name
+        for _, data in read_records(FIXTURE):
+            engine.ingest(data)
+        await engine.respond("radio check")
+        await asyncio.sleep(1.0)
+        await engine.stop()
+
+    asyncio.run(scenario())
+    memory = Memory(tmp_path / "m.sqlite3")
+    try:
+        assert memory.recent_sessions(30) == []
+        assert memory.radio_between(0, 1e12) == []
+    finally:
+        memory.close()
+
+
+def test_settings_listeners_hear_a_change_that_could_not_be_saved(tmp_path: Path) -> None:
+    store = config.SettingsStore(tmp_path / "settings.json")
+    heard = []
+    store.on_change(lambda old, new: heard.append(new.driver.name))
+
+    def broken_save() -> None:
+        raise OSError("disk full")
+
+    store.save = broken_save  # type: ignore[method-assign]
+    with pytest.raises(OSError):
+        store.update({"driver": {"name": "Kimi"}})
+    assert heard == ["Kimi"] and store.settings.driver.name == "Kimi"

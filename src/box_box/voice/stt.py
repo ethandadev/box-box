@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
 import re
 import sys
 import threading
-from concurrent.futures import Future, ThreadPoolExecutor
+import time
+from collections.abc import Callable
+from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -99,7 +102,10 @@ class Transcript:
 class SpeechToText:
     def __init__(self) -> None:
         self._model = None
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="stt")
+        # Transcription gets its own worker so a model download never holds up a radio call. Daemon threads
+        # (here and for loading) so quitting mid-download or mid-transcription doesn't hang.
+        self._jobs: queue.Queue[tuple[Future, Callable[[], object]]] = queue.Queue()
+        threading.Thread(target=self._work, name="stt", daemon=True).start()
         self._load_lock = threading.Lock()
         self.status = "not loaded"
         self.device = ""
@@ -112,8 +118,26 @@ class SpeechToText:
     def ready(self) -> bool:
         return self._model is not None
 
+    @staticmethod
+    def _run(fut: Future, job: Callable[[], object]) -> None:
+        if not fut.set_running_or_notify_cancel():
+            return
+        try:
+            fut.set_result(job())
+        except BaseException as e:  # noqa: BLE001
+            fut.set_exception(e)
+
+    def _work(self) -> None:
+        while True:
+            fut, job = self._jobs.get()
+            self._run(fut, job)
+
     def load_async(self, model: str = "auto", device: str = "auto") -> Future[None]:
-        return self._executor.submit(self.load, model, device)
+        fut: Future[None] = Future()
+        threading.Thread(
+            target=self._run, args=(fut, lambda: self.load(model, device)), name="stt-load", daemon=True
+        ).start()
+        return fut
 
     def load(self, model: str = "auto", device: str = "auto") -> None:
         with self._load_lock:
@@ -155,11 +179,11 @@ class SpeechToText:
             self.status, self.error = "failed to load", "; ".join(errors)
 
     def transcribe_async(self, audio: np.ndarray) -> Future[Transcript]:
-        return self._executor.submit(self.transcribe, audio)
+        fut: Future[Transcript] = Future()
+        self._jobs.put((fut, lambda: self.transcribe(audio)))
+        return fut
 
     def transcribe(self, audio: np.ndarray) -> Transcript:
-        import time
-
         seconds = len(audio) / SAMPLE_RATE
         start = time.perf_counter()
         if self._model is None:
@@ -167,6 +191,7 @@ class SpeechToText:
         if seconds < 0.25 or float(np.sqrt(np.mean(audio**2))) < 0.003:
             return Transcript("", seconds, 0.0)  # nothing said: don't let Whisper invent something
         audio = audio / max(1e-3, float(np.max(np.abs(audio)))) * 0.9
+        prompt = (F1_VOCAB + " " + self.extra_vocab).strip()
         segments, _ = self._model.transcribe(
             audio,
             language="en",
@@ -175,9 +200,8 @@ class SpeechToText:
             condition_on_previous_text=False,
             without_timestamps=True,
             vad_filter=False,
-            initial_prompt=(F1_VOCAB + " " + self.extra_vocab).strip(),  # vocabulary hint
+            initial_prompt=prompt,  # vocabulary hint
         )
-        prompt = (F1_VOCAB + " " + self.extra_vocab).strip()
         # Noise or a breath can come back as words: Whisper's own "probably not speech" plus low confidence
         # means it was guessing. A guess is worse than "say again", above all when it guesses "box box".
         kept = [
@@ -187,6 +211,8 @@ class SpeechToText:
         clean = re.sub(r"[^\w ]", "", text.lower()).strip()
         if clean in HALLUCINATIONS:
             text = ""
-        elif len(clean.split()) >= 3 and clean in re.sub(r"[^\w ]", "", prompt.lower()):
-            text = ""  # the prompt echoed back on non-speech, not something the driver said
+        elif len(clean.split()) >= 6 and clean in re.sub(r"[^\w ]", "", prompt.lower()):
+            # The prompt echoed back on non-speech. Only long runs count: "box this lap" is in the prompt
+            # too, and that's Ethan asking for a stop, not an echo.
+            text = ""
         return Transcript(text, seconds, time.perf_counter() - start)

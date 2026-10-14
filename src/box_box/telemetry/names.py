@@ -89,6 +89,7 @@ TEAMS: dict[int, str] = {
 VISUAL_COMPOUNDS: dict[int, str] = {
     7: "inters",
     8: "wets",
+    15: "wets",  # F2
     16: "softs",
     17: "mediums",
     18: "hards",

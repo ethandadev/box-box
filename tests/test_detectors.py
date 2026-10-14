@@ -403,3 +403,24 @@ def test_flashback_to_before_a_stop_undoes_it() -> None:
     sim.lap(0, num_pit_stops=0)
     sim.run(0.3)
     assert sim.world.player.pit_stops == 0
+
+
+def test_gap_trend_restarts_after_a_stop_and_stays_quiet_under_safety_car() -> None:
+    sim = Sim([RaceDetector()])
+    sim.lap(0, position=2, grid_position=2, delta_to_leader_ms=2000)
+    sim.lap(1, position=1, delta_to_leader_ms=0)
+    sim.lap(2, position=3, delta_to_leader_ms=3500)
+    sim.complete_lap(0, 90_000)
+    sim.run(1)
+    texts = []
+    # Norris stops and comes out 3 s further up the road: that's the stop, not pace.
+    for d, stops in ((1000, 0), (1000, 0), (4000, 1), (4100, 1)):
+        sim.world.cars[1].pit_stops = stops
+        sim.lap(0, delta_to_leader_ms=d)
+        sim.complete_lap(0, 90_000)
+        texts += [c.text for c in sim.run(0.5) if c.key == "gaps"]
+    assert not any("pulling away" in t.lower() for t in texts), texts
+    sim.set_session(safety_car_status=1)
+    for _ in range(2):
+        sim.complete_lap(0, 90_000)
+        assert [c for c in sim.run(0.5) if c.key == "gaps"] == []

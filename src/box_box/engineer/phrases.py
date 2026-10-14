@@ -277,6 +277,9 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         "calm": ["Good stop, {seconds} seconds. Out in P{pos}.", "{seconds} second stop. You're P{pos}."],
         "fired_up": ["Great stop! {seconds} seconds, P{pos}!"],
     },
+    "pit_stop_slow": {
+        "calm": ["{seconds} second stop, we lost a bit there. P{pos}.", "Slow one, {seconds} seconds. You're P{pos}."],
+    },
     "pit_stop_done": {
         "calm": [
             "Good stop, {seconds} seconds. Out in P{pos}.",
@@ -413,28 +416,6 @@ PHRASES: dict[str, dict[str, list[str]]] = {
         ],
     },
     # ---- car ------------------------------------------------------------------------------------
-    "wing_damage": {
-        "calm": ["We have front wing damage, {side}, {pct} percent.", "Front wing damage, {side} side. {pct} percent."],
-    },
-    "wing_damage_box": {
-        "calm": [
-            "Heavy front wing damage. Box this lap for a new nose.",
-            "Front wing's badly damaged. Box, box for a new wing.",
-        ],
-    },
-    "wing_damage_practice": {
-        "calm": [
-            "Front wing damage, {side} side, {pct} percent. Bring it in, we'll change the nose.",
-            "That's {pct} percent on the {side} front wing. Box this lap, new wing.",
-        ],
-        "dry": ["Front wing's {pct} percent missing. Bring what's left back to the garage, please."],
-    },
-    "floor_damage": {
-        "calm": [
-            "We've got {part} damage, {pct} percent. We'll see what it costs.",
-            "{part} damage, {pct} percent. Car's still okay to continue.",
-        ],
-    },
     "pit_entry_plan": {
         "calm": [
             "[Okay|Right], we're going to {tyre}. [You'll come out|Should rejoin|Rejoin] P{pos}, {near}.",
@@ -490,9 +471,6 @@ PHRASES: dict[str, dict[str, list[str]]] = {
     },
     "drs_fault": {
         "calm": ["DRS fault. You'll have to do without it."],
-    },
-    "engine_damage": {
-        "calm": ["We're seeing engine damage, {pct} percent. Short shift where you can."],
     },
     # ---- weather --------------------------------------------------------------------------------
     "rain_coming": {
@@ -686,60 +664,15 @@ _CLIPPED: dict[str, list[str]] = {
         "That's the session. {best}, P{pos}. Good work.",
         "Session's done. Best was {best}, P{pos}.",
     ],
-    "behind_close": [
-        "{name} right behind, push lap. Let him through.",
-        "Mirrors, {name} on a push lap. Let him by.",
-        "{name} right behind you, he's on it. Stay off the line.",
-    ],
-    "ahead_slow": [
-        "Traffic ahead, {name} on {kind}, {gap}.",
-        "{name} ahead on {kind}, {gap}. He knows you're coming.",
-        "Slow car ahead, {name}, {gap}.",
-    ],
-    "vsc": ["VSC, VSC. Stay positive to the delta.", "Virtual safety car. Positive delta."],
-    "green_flag": ["Green, green, green.", "And we're green. Go."],
-    "after_lap_one_gained": ["P{pos}. Good start, up {n}.", "Nice start. P{pos}, up {n}."],
-    "after_lap_one_lost": ["P{pos}. Lost {n}, long race. Stay calm.", "P{pos}. We'll get them back."],
-    "after_lap_one_same": ["P{pos}. Good, settle in.", "Held position, P{pos}. Settle in."],
-    "car_ahead_pitted": ["{name} has boxed. Clear air, push now.", "{name} pitting. This is your chance, push."],
-    "car_behind_pitted": ["{name} behind has boxed. Undercut threat.", "{name} pitted behind. Watch the undercut."],
-    "pit_window_soon": [
-        "Box window opens in {n} laps. Target lap {ideal}.",
-        "Window opens in {n} laps, we're looking at lap {ideal}.",
-    ],
-    "lap_slower": ["{time}. {delta} off, sector {sector}.", "{time}, {delta} down. Lost it in sector {sector}."],
-    "lap_position": ["P{pos}, {delta} off {name}.", "That's P{pos}, {delta} to {name}."],
     "long_run_summary": [
         "Good run. Average {avg}, deg about {deg} a lap.",
         "That run averaged {avg}. Deg {deg} a lap.",
     ],
-    "wing_damage": ["Front wing damage, {side} side, {pct} percent.", "Front wing damage, {side} side. {pct} percent."],
-    "floor_damage": [
-        "{part} damage, {pct} percent. We'll keep an eye on it.",
-        "{part} damage, {pct} percent. Car's okay, keep going.",
-    ],
-    "tyres_overheating": [
-        "{axle} are running hot. Manage them in the {where}.",
-        "{axle} hot. Look after them in the {where}.",
-    ],
-    "tyre_wear": ["Tyres at {pct} percent.", "Wear's {pct} percent, {worst} the worst."],
-    "tyre_wear_high": [
-        "{pct} percent wear. They're going off, box soon.",
-        "Tyres are done, {pct} percent. Think about boxing.",
-    ],
-    "fuel_ok": ["Fuel's fine, no saving.", "Fuel's good, push if you need to."],
-    "plan_a_target": ["Plan A, target lap {lap}. Tyres look good.", "Still plan A, lap {lap}. Deg's fine."],
     "tyres_to_the_end": ["These will go to the end. Happy to push.", "Tyres will make the end. Push on them."],
-    "tyres_robust": [
-        "These tyres are robust, happy to push on them.",
-        "Deg's under control. Happy for you to push.",
-        "Tyres look good. Lean on them.",
-    ],
     "plan_b": [
         "Deg's higher than we thought. Thinking plan B, about {n} laps on these.",
         "Thinking plan B. Plan B. Maybe {n} laps left in these.",
     ],
-    "pit_stop_done": ["Good stop, {seconds} seconds. P{pos}.", "{seconds} second stop. P{pos}. Tyres need a lap."],
 }
 for _key, _lines in _CLIPPED.items():
     PHRASES.setdefault(_key, {})["calm"] = _lines

@@ -424,6 +424,12 @@ function renderStatus(st) {
     const sc = { 1: "SAFETY CAR", 2: "VIRTUAL SAFETY CAR", 3: "FORMATION LAP" }[s.safety_car];
     $("#sc-banner").hidden = !sc;
     if (sc) setText("#sc-banner", sc);
+  } else {
+    // Session over (or a replay stopped): don't leave the last one's numbers on screen.
+    setText("#s-session", "Waiting for the game…");
+    setText("#s-track", "No session");
+    for (const id of ["#s-weather", "#s-temp", "#s-remaining"]) setText(id, "–");
+    $("#sc-banner").hidden = true;
   }
   // car
   const p = st.player;
@@ -461,12 +467,25 @@ function renderStatus(st) {
       setText(`#t-${i} .t`, temp != null ? temperature(temp, false) : "");
       el.dataset.temp = temp == null ? "" : temp < 75 ? "cold" : temp > 112 ? "hot" : "ok";
     }
+  } else {
+    for (const id of ["#c-pos", "#c-lap", "#c-status", "#c-speed", "#c-compound", "#c-best", "#c-last", "#c-fuel",
+      "#g-ahead-name", "#g-behind-name"]) setText(id, "–");
+    setText("#g-ahead-label", "Ahead");
+    setText("#g-behind-label", "Behind");
+    setText("#g-ahead", "");
+    setText("#g-behind", "");
+    $("#c-battery").value = 0;
+    for (let i = 0; i < 4; i++) {
+      setText(`#t-${i} .w`, "–");
+      setText(`#t-${i} .t`, "");
+      $(`#t-${i}`).dataset.temp = "";
+    }
   }
   // why he's quiet (calls waiting and what's holding them)
   const why = $("#why-quiet");
   if (why) {
     why.hidden = !st.radio.why_quiet;
-    setText("#why-quiet", st.radio.why_quiet ? `Holding ${st.radio.pending.length} message(s): ${st.radio.why_quiet}` : "");
+    setText("#why-quiet", st.radio.why_quiet ? `Holding ${st.radio.pending_count ?? st.radio.pending.length} message(s): ${st.radio.why_quiet}` : "");
   }
   // verbosity
   const verbosity = st.radio.verbosity;
@@ -520,11 +539,14 @@ function connect() {
 // ---------------------------------------------------------------------------------------- talking
 
 let talking = false;
-async function setTalk(down) {
-  if (down === talking) return;
+// Presses and releases go out one at a time, in order: a release overtaking its press would leave the radio keyed.
+let talkChain = Promise.resolve();
+function setTalk(down) {
+  if (down === talking) return talkChain;
   talking = down;
   $("#talk-btn").setAttribute("aria-pressed", down ? "true" : "false");
-  try { await api("/api/ptt/ui", { down }); } catch (e) { toast(e.message, "error"); }
+  talkChain = talkChain.then(() => api("/api/ptt/ui", { down })).catch((e) => toast(e.message, "error"));
+  return talkChain;
 }
 
 function bindTalk() {
@@ -662,7 +684,15 @@ function renderDoneSummary() {
 }
 
 function bindWizard() {
-  $$("#steps li").forEach((li) => li.addEventListener("click", () => showStep(li.dataset.step)));
+  $$("#steps li").forEach((li) => {
+    li.addEventListener("click", () => showStep(li.dataset.step));
+    li.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        showStep(li.dataset.step);
+      }
+    });
+  });
   document.addEventListener("click", (e) => {
     const next = e.target.closest("[data-next]");
     const prev = e.target.closest("[data-prev]");
@@ -755,8 +785,13 @@ function bindWizard() {
     }
   });
   $("#finish-btn").addEventListener("click", async () => {
-    await flushSave();
-    await api("/api/settings", { onboarded: true });
+    try {
+      await flushSave();
+      await api("/api/settings", { onboarded: true });
+    } catch (e) {
+      toast(`Couldn't finish setup: ${e.message}`, "error");
+      return;
+    }
     state.settings.onboarded = true;
     location.hash = "#dashboard";
     toast("All set. Go drive!");

@@ -1,4 +1,5 @@
 """Text-to-speech engines: Kokoro (natural neural voice, local), Windows SAPI (fallback), and silent.
+The cloud voices (OpenAI, ElevenLabs, Gemini) live in cloud.py and plug in here as extra engines.
 
 All synthesis happens on one worker thread (neither Kokoro's ONNX session nor SAPI likes being called
 from several threads), and results are cached so repeated phrases are instant.
@@ -301,15 +302,21 @@ class TTS:
 
     @property
     def degraded(self) -> bool:
-        """A cloud voice refused us and lines are being said by the local voice instead."""
+        """A cloud voice is benched (it refused us, or the network kept failing) and the local voice is
+        saying lines instead."""
         return bool(self._dead)
 
     def clear_cache(self) -> None:
         with self._lock:
             self._cache.clear()
 
+    def _kokoro_model(self) -> str | None:
+        return getattr(self.engines.get("kokoro"), "model", None)
+
     def submit(self, text: str, voice: str, speed: float, urgent: bool = True) -> Future[Audio]:
-        key = (self.active, voice, round(speed, 2), text)
+        # The Kokoro model is part of the key: a line still being said by the old model when the full one
+        # is swapped in lands under the old key, so it can't sneak back into the freshly cleared cache.
+        key = (self.active, voice, round(speed, 2), text, self._kokoro_model())
         with self._lock:
             cached = self._cache.get(key)
             if cached is not None:

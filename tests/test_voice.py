@@ -209,6 +209,8 @@ def test_names_are_said_the_paddock_way() -> None:
     out = to_phonemes("Gap to Leclerc, 1.2. Ocon's closing at Eau Rouge.", fake)
     assert "ləklˈɛɹ," in out and "oʊkˈɔnz" in out and "ˌoʊ ɹˈuːʒ" in out
     assert out.startswith("[Gap to]") and "Leclerc" not in out
+    curly = to_phonemes("Leclerc\u2019s pace", fake)  # a curly apostrophe is still a possessive
+    assert curly.startswith("ləklˈɛɹz") and "s pace" not in curly
 
 
 def test_long_pauses_are_tightened() -> None:
@@ -276,6 +278,14 @@ def test_driver_key_sounds() -> None:
         ("1:00.5", "one oh oh five"),
         ("Confirm on the MFD.", "Confirm on the M F D."),
         ("The LEADERS", "The LEADERS"),
+        ("Gap 1.2-1.5s.", "Gap one point two to one point five seconds."),
+        ("Delta 0.2-0.3", "Delta point two to point three"),
+        ("Careful T1-T3.", "Careful turn one to turn three."),
+        ("1:00 to go", "one minute to go"),
+        ("2:00 to go", "two minutes to go"),
+        ("Target 1:30.2", "Target one thirty point two"),
+        ("Target 1:40.05", "Target one forty point zero five"),
+        ("Target 1:26.7", "Target one twenty-six seven"),
     ],
 )
 def test_radio_text_edge_cases(text: str, spoken: str) -> None:

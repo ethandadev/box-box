@@ -97,7 +97,7 @@ VARIETY: dict[str, list[str]] = {
     ],
     # ---- tyres ------------------------------------------------------------------------------------
     "tyre_wear": [
-        "[Tyres at|Wear's at|Tyre wear] {pct} percent.",
+        "[Wear's at|Tyre wear's at|Tyre wear] {pct} percent.",
         "Wear's {pct} percent, {worst} the worst.",
         "{pct} percent [wear|worn], {worst} [leading|is the worst one|taking the most].",
         "[Just for info|For info], tyres {pct} percent[, {worst} worst|].",
@@ -110,7 +110,7 @@ VARIETY: dict[str, list[str]] = {
     "tyres_overheating": [
         "{axle} are running hot. [Manage them in the {where}|Look after them in the {where}].",
         "{axle} hot. [Look after them|Go easy] in the {where}.",
-        "[Seeing|We've got] {axle} [hot|overheating]. [Smooth in the {where}|Gentle in the {where}].",
+        "[Seeing the|We've got the] {axle} [running hot|overheating]. [Smooth in the {where}|Gentle in the {where}].",
     ],
     "tyres_cold": [
         "Tyres are cold, {axle}. [Get some temperature in|Work them a bit].",
@@ -156,6 +156,11 @@ VARIETY: dict[str, list[str]] = {
         "{seconds} second stop. P{pos}. [Tyres need a lap|Build the temps].",
         "[Nice|Good|Clean] stop, {seconds}. [Out in P{pos}|You're P{pos}].",
         "[Stop was|That was] {seconds} seconds. P{pos}[, good work from the boys|].",
+    ],
+    "pit_stop_slow": [
+        "{seconds} second stop, [we lost a bit there|bit slow, sorry|not our best]. P{pos}.",
+        "[Slow one|Bit of a slow one], {seconds} seconds. [You're P{pos}|P{pos}], [let's get it back|heads down].",
+        "{seconds} seconds, [sorry about that|that cost us a bit]. Out in P{pos}.",
     ],
     "pit_stop_time": [
         "[Good|Clean|Nice] stop, {seconds} seconds. [Out in P{pos}|Back out in P{pos}|You're P{pos}].",

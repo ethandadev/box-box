@@ -101,7 +101,6 @@ class Speaker:
         self.has_followup: Callable[[RadioCall], bool] = lambda call: False  # more of the same reply queued?
         self._generation = 0  # bumped by stop(); a call whose generation is stale must not play
         self._open_tx: str | None = None  # reply whose transmission is still keyed (more of it coming)
-        self.spoken = 0
 
     def _voice(self) -> tuple[str, float]:
         v = self._settings().voice
@@ -203,7 +202,6 @@ class Speaker:
                 log.warning("audio output stalled; cutting the line")
                 self.player.stop()
                 return False
-            self.spoken += 1
             return bool(done) and generation == self._generation
         finally:
             if self.speaking is call:  # an interrupting call may already have taken over

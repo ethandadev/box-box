@@ -243,6 +243,8 @@ class RadioDirector:
         if not s.callouts.straights_only or world is None:
             return True
         me = world.player
-        if me is None or me.lap is None or me.telemetry is None or not me.on_track or me.speed_kph < 60:
-            return True  # garage, pit lane, menus, parked: no workload
+        if me is None or me.lap is None or me.telemetry is None or not me.on_track:
+            return True  # garage, pit lane, menus: no workload
+        if me.speed_kph < 10 and now - self._last_busy > 2.0:
+            return True  # parked (a spin, the grid): slow isn't enough, the hairpins are slow too
         return now - self._last_busy >= STRAIGHT_HOLD_S

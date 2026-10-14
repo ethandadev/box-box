@@ -52,8 +52,7 @@ def spoken_seconds(seconds: float) -> str:
     if seconds >= 10:
         return f"{round(seconds)} seconds"
     if seconds >= 3:
-        n = round(seconds)
-        return "one second" if n == 1 else f"{n} seconds"
+        return f"{round(seconds)} seconds"
     return f"{seconds:.1f}"
 
 
@@ -88,6 +87,8 @@ def tenths(seconds: float) -> str:
     t = round(s * 10)
     if t == 0:
         hundredths = round(s * 100)
+        if hundredths == 0:
+            return "nothing"
         return "a couple of hundredths" if hundredths <= 3 else f"{hundredths} hundredths"
     if t == 1:
         return "a tenth"
@@ -96,6 +97,8 @@ def tenths(seconds: float) -> str:
     if t < 10:
         words = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
         return f"{words[t]} tenths"
+    if t == 10:
+        return "a second"  # not "1.0 seconds"
     return f"{s:.1f} seconds"
 
 
@@ -120,6 +123,12 @@ def lap_time(ms: int) -> str:
 # are added by the engineer as they become known; the rest is lower-cased after an opener.
 TEAMS = {"Mercedes", "Ferrari", "McLaren", "Red", "Williams", "Alpine", "Aston", "Haas", "Sauber", "Audi",
          "Cadillac", "Racing", "Kick", "Visa"}  # fmt: skip
+
+
+_SINGULAR = re.compile(r"(?<![\d.])\b(1|one) (lap|minute|second|place|position|stop)s\b")
+
+# A call that already opens like this gets no second opener.
+OPENERS = ("Okay", "So", "And", "Just for info", "For info", "Yeah", "Right", "Heads up", "Careful", "Copy")
 
 
 def soften(word: str, proper: set[str] | frozenset[str] = frozenset()) -> str:
@@ -176,6 +185,7 @@ class Phrasebook:
         self._recent: dict[str, list[str]] = {}
         self.proper: set[str] = set()  # names that keep their capital: the driver's, the other cars'
         self.human = Humanizer(random.Random(None if seed is None else seed + 1), self.proper)
+        self._since_lead = 9
 
     def __call__(self, key: str, **fmt: object) -> str:
         table = PHRASES[key]
@@ -204,6 +214,7 @@ class Phrasebook:
         recent.append(text)
         del recent[:-RECENT_MEMORY]
         text = re.sub(r"\s+([,.!?])", r"\1", re.sub(r"\s{2,}", " ", text)).strip()  # an empty choice leaves gaps
+        text = _SINGULAR.sub(r"\1 \2", text)  # "1 laps left" -> "1 lap left"
         # A sentence-opening placeholder ("{part} damage", "... rain. {intensity}.") still gets a capital.
         text = re.sub(r"([.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
         return text[:1].upper() + text[1:]
@@ -218,14 +229,12 @@ class Phrasebook:
     def lead(self, text: str, me: str = "", p: float = 0.3) -> str:
         """Sometimes open a call the way engineers do ("Okay, ...", "And Ethan, ..."), so not every
         transmission starts cold. Proper names and numbers keep their capitals."""
-        self._since_lead = getattr(self, "_since_lead", 9) + 1
+        self._since_lead += 1
         if (
             not text
             or self._since_lead <= 2
             or not self.chance(p)
-            or text.startswith(
-                ("Okay", "So", "And", "Just for info", "For info", "Yeah", "Right", "Heads up", "Careful", "Copy")
-            )  # never "Just for info, for info, ..."
+            or text.startswith(OPENERS)  # never "Just for info, for info, ..."
         ):
             return text
         self._since_lead = 0

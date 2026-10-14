@@ -3,7 +3,7 @@
 "1:26.7"  -> "one twenty-six seven"      (lap times, the way engineers read them)
 "P4"      -> "P four"
 "1.2"     -> "one point two"             (gaps)
-"+0.3"    -> "plus zero point three"
+"+0.3"    -> "plus point three"
 "FP1"     -> "F P one"
 "5 km/h"  -> "five k p h"                (never "slash")
 "T14"     -> "turn fourteen"
@@ -41,6 +41,9 @@ def _seconds_part(sec: str) -> str:
     if w == 0 and not frac:
         return "minutes"  # "10:00" (time left) is "ten minutes", not "ten oh zero"
     words = ("oh " + (ONES[w] if w else "oh")) if whole.startswith("0") and len(whole) == 2 else number_words(w)
+    if frac and w and w % 10 == 0:
+        # "1:30.2" as "one thirty two" sounds like 1:32, so say the point.
+        return words + " point " + " ".join(ONES[int(d)] for d in frac)
     if frac:
         words += " " + " ".join(ONES[int(d)] for d in frac)
     return words
@@ -48,7 +51,10 @@ def _seconds_part(sec: str) -> str:
 
 def _lap_time(m: re.Match[str]) -> str:
     minutes, seconds = m.group(1), m.group(2)
-    return f"{number_words(int(minutes))} {_seconds_part(seconds)}"
+    rest = _seconds_part(seconds)
+    if rest == "minutes" and int(minutes) == 1:
+        rest = "minute"  # "1:00 to go"
+    return f"{number_words(int(minutes))} {rest}"
 
 
 def _decimal(m: re.Match[str]) -> str:
@@ -65,7 +71,9 @@ def _symbols(t: str) -> str:
     t = re.sub(r"\b50\s*/\s*50\b", "fifty-fifty", t)
     t = re.sub(r"\band\s*/\s*or\b", "and or", t)
     t = re.sub(r"\b(bias|balance) (\d{2})\s*[-/]\s*(\d{2})\b", r"\1 \2 \3", t)  # "brake bias 56-44"
-    t = re.sub(r"(?<![\w.])(P?\d{1,3})\s*[-\u2013]\s*(P?\d{1,3})(?!\w|\.\d)", r"\1 to \2", t)  # "turns 1-3"
+    t = re.sub(
+        r"(?<![\w.])([PT]?\d{1,3}(?:\.\d+)?)\s*[-\u2013]\s*([PT]?\d{1,3}(?:\.\d+)?)(?=s\b|(?!\w|\.\d))", r"\1 to \2", t
+    )  # "turns 1-3", "T1-T3", "gap 1.2-1.5s"
     t = re.sub(r"(\d:\d{2}(?:\.\d+)?)s\b", r"\1", t)  # "1:30.2s" is just a lap time
     t = re.sub(r"\s*km\s*/\s*h\b|\bkph\b", " k p h", t, flags=re.IGNORECASE)
     t = re.sub(r"\bmph\b", "m p h", t, flags=re.IGNORECASE)
@@ -89,7 +97,7 @@ def _symbols(t: str) -> str:
 
 
 def for_speech(text: str) -> str:
-    t = text.replace("...", ",")
+    t = text.replace("...", ",").replace("\u2019", "'")  # curly apostrophes: "Leclerc’s" is "Leclerc's"
     t = re.sub(
         r"(?<=\d),(?=\d{3}(?!\d))", "", t
     )  # "1,000" is a thousand, not "one, zero"  # long pauses sound like the voice is stuck on a word

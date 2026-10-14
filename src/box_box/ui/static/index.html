@@ -49,7 +49,7 @@
     <section data-page="dashboard" class="page dashboard" aria-labelledby="dash-title">
       <h1 id="dash-title" class="visually-hidden">Dashboard</h1>
       <div class="col">
-        <article class="card session-card" aria-live="polite">
+        <article class="card session-card">
           <div class="session-head">
             <div>
               <div class="eyebrow" id="s-session">Waiting for the game…</div>
@@ -61,7 +61,7 @@
               <div><span class="label" id="s-remaining-label">Remaining</span><span id="s-remaining">–</span></div>
             </div>
           </div>
-          <div id="sc-banner" class="sc" hidden></div>
+          <div id="sc-banner" class="sc" aria-live="polite" hidden></div>
           <p id="no-telemetry" class="hint">
             Start a session in F1 25. Telemetry must be on: <a href="#setup" data-step="game">see setup</a>.
           </p>
@@ -131,13 +131,13 @@
     <section data-page="setup" class="page setup" aria-labelledby="setup-title" hidden>
       <h1 id="setup-title">Setup</h1>
       <ol class="steps" id="steps">
-        <li data-step="you">You</li>
-        <li data-step="voice">Voice</li>
-        <li data-step="game">Game</li>
-        <li data-step="mic">Microphone</li>
-        <li data-step="ptt">Button</li>
-        <li data-step="ai">AI</li>
-        <li data-step="done">Done</li>
+        <li data-step="you" tabindex="0">You</li>
+        <li data-step="voice" tabindex="0">Voice</li>
+        <li data-step="game" tabindex="0">Game</li>
+        <li data-step="mic" tabindex="0">Microphone</li>
+        <li data-step="ptt" tabindex="0">Button</li>
+        <li data-step="ai" tabindex="0">AI</li>
+        <li data-step="done" tabindex="0">Done</li>
       </ol>
 
       <div class="card step" data-step="you">
@@ -221,7 +221,7 @@
         </form>
         <details class="more">
           <summary>Wheel not detected? Use the game's own button binding</summary>
-          <p>In F1 25, bind a wheel button to <strong>UDP Action 1</strong> (Settings → Controls), then click below. The game sends the press over telemetry. Toggle mode works best this way.</p>
+          <p>In F1 25, bind a wheel button to <strong>UDP Action 1</strong> (Settings → Controls), then click below. The game sends the press over telemetry.</p>
           <button class="btn" type="button" id="udp-btn">Use UDP Action 1</button>
         </details>
         <p class="hint">Test it: hold the button and say <em>“radio check”</em>. He should answer.</p>

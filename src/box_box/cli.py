@@ -34,12 +34,20 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 # ---- run: the app -------------------------------------------------------------------------------
 
 
-def _already_running(port: int) -> bool:
+def _answers(port: int) -> bool:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state", timeout=1.5) as resp:
             return resp.status == 200 and "version" in json.loads(resp.read().decode("utf-8"))
     except Exception:  # noqa: BLE001
         return False
+
+
+def _already_running(port: int) -> int | None:
+    """The port a running Box Box answers on: the UI falls back to the next nine when its port is taken."""
+    for candidate in [port, *range(port + 1, port + 10)]:
+        if _answers(candidate):
+            return candidate
+    return None
 
 
 async def _run(open_browser: bool) -> None:
@@ -74,10 +82,10 @@ def run(open_browser: bool = True, verbose: bool = False) -> int:
     logs.setup(verbose)
     from box_box.config import SettingsStore
 
-    ui_port = SettingsStore().settings.ui.port
-    if _already_running(ui_port):
+    running = _already_running(SettingsStore().settings.ui.port)
+    if running is not None:
         print("Box Box is already running; opening it.")
-        webbrowser.open(f"http://127.0.0.1:{ui_port}/")
+        webbrowser.open(f"http://127.0.0.1:{running}/")
         return 0
     try:
         asyncio.run(_run(open_browser))
@@ -234,41 +242,46 @@ Another program is already using it, or Windows has reserved it. Try, in order:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="box-box", description="Box Box: an AI race engineer for F1 25")
-    parser.add_argument("-v", "--verbose", action="store_true", help="more logging")
+    # -v works before or after the subcommand. SUPPRESS: a subcommand's unset -v mustn't undo one given before it.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("-v", "--verbose", action="store_true", default=argparse.SUPPRESS, help="more logging")
+    parser = argparse.ArgumentParser(
+        prog="box-box", description="Box Box: an AI race engineer for F1 25", parents=[common]
+    )
     parser.add_argument("--version", action="version", version=f"box-box {__version__}")
     sub = parser.add_subparsers(dest="cmd")
 
-    run_p = sub.add_parser("run", help="start the engineer and the UI (default)")
+    run_p = sub.add_parser("run", parents=[common], help="start the engineer and the UI (default)")
     run_p.add_argument("--no-browser", action="store_true", help="don't open the browser")
 
-    sub.add_parser("doctor", help="check the setup without starting anything")
+    sub.add_parser("doctor", parents=[common], help="check the setup without starting anything")
 
-    rec = sub.add_parser("record", help="record the game's UDP telemetry to an .f1raw.gz file")
+    rec = sub.add_parser("record", parents=[common], help="record the game's UDP telemetry to an .f1raw.gz file")
     rec.add_argument("-p", "--port", type=int, default=DEFAULT_PORT)
     rec.add_argument("-o", "--out", type=Path)
 
-    watch = sub.add_parser("watch", help="print the engineer's radio calls, live or from a recording")
+    watch = sub.add_parser("watch", parents=[common], help="print the engineer's radio calls, live or from a recording")
     watch.add_argument("-p", "--port", type=int, default=DEFAULT_PORT)
     watch.add_argument("-f", "--file", type=Path, help="read a recording instead of listening")
     watch.add_argument("-s", "--speed", type=float, default=1.0, help="replay speed (0 = flat out)")
     watch.add_argument("-q", "--quiet", action="store_true", help="radio calls only")
 
-    rep = sub.add_parser("replay", help="resend a recording over UDP as if the game were running")
+    rep = sub.add_parser("replay", parents=[common], help="resend a recording over UDP as if the game were running")
     rep.add_argument("file", type=Path)
     rep.add_argument("--host", default="127.0.0.1")
     rep.add_argument("-p", "--port", type=int, default=DEFAULT_PORT)
     rep.add_argument("-s", "--speed", type=float, default=1.0)
 
     args = parser.parse_args(argv)
+    verbose = getattr(args, "verbose", False)
     cmd = args.cmd or "run"
     if cmd == "run":
-        return run(open_browser=not getattr(args, "no_browser", False), verbose=args.verbose)
+        return run(open_browser=not getattr(args, "no_browser", False), verbose=verbose)
     if cmd == "doctor":
         logging.basicConfig(level=logging.ERROR)
         return doctor()
 
-    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
+    logging.basicConfig(level=logging.INFO if verbose else logging.WARNING, format="%(levelname)s %(message)s")
     try:
         if cmd == "record":
             sock = bind_udp(args.port)

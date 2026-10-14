@@ -150,7 +150,7 @@ class LapFeedbackDetector(Detector):
         xs = range(n)
         mx = (n - 1) / 2
         slope = sum((x - mx) * (t - avg) for x, t in zip(xs, times, strict=True)) / sum((x - mx) ** 2 for x in xs)
-        text = ctx.say("long_run_summary", avg=lap_time(round(avg * 1000)), deg=tenths(max(0.0, slope)))
+        text = ctx.say("long_run_summary", avg=lap_time(round(avg * 1000)), deg=tenths(max(0.01, slope)))
         return [
             ctx.call("run_summary", Priority.INFO, text, ttl=60, category="lap_feedback", verbosity=Verbosity.NORMAL)
         ]

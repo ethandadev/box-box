@@ -91,11 +91,6 @@ class SessionChanged:
 
 
 @dataclass(frozen=True, slots=True)
-class TimelineRewound:
-    """Flashback or save reload: anything remembered from the future is now wrong."""
-
-
-@dataclass(frozen=True, slots=True)
 class Slide:
     """A moment the player's car lost grip: rears spinning up on a corner exit, or a wheel locking."""
 
@@ -105,7 +100,7 @@ class Slide:
     time: float  # session time
 
 
-Change = LapCompleted | PitEntered | PitExited | PositionChanged | Retired | SessionChanged | TimelineRewound
+Change = LapCompleted | PitEntered | PitExited | PositionChanged | Retired | SessionChanged
 
 
 @dataclass
@@ -214,7 +209,7 @@ class World:
     changes: list[Change] = field(default_factory=list)  # derived changes since the last drain
     # Bumped whenever time jumps backwards (flashback, save reload), so detectors can drop their memory.
     timeline: int = 0
-    _rewound_at: float = -1e9  # session time of the last flashback we handled
+    _rewound_at: float = -1e9  # session time the last flashback (or clock jump) took us back to
     lights_out: bool = False
     chequered_flag: bool = False
     session_ended: bool = False
@@ -382,7 +377,8 @@ class World:
             if packet.id != PacketId.SESSION:
                 return  # wait for the Session packet before trusting a new session
             self._reset(h.session_uid, h.packet_format)
-        if h.session_time + 0.5 < self.session_time:
+        if h.session_time + 0.5 < self.session_time and abs(h.session_time - self._rewound_at) > 1.0:
+            # The clock went back. Skip it if a flashback event already rewound us to this time.
             self._rewind()
             self._rewound_at = h.session_time
         self.session_time = h.session_time
@@ -451,15 +447,14 @@ class World:
         self.coach_note = None
         self.wheel_slip = None
         self.slides = []
+        self._rewound_at = -1e9
 
     def _rewind(self) -> None:
         """The clock went backwards: forget laps from the abandoned future."""
         self.timeline += 1
-        self.changes.append(TimelineRewound())
         for car in self.cars:
             if car.lap is not None:
-                car.laps = [r for r in car.laps if r.lap_num < car.lap.lap_num]
-                car._rewound = True
+                car._rewound = True  # the next lap packet drops the abandoned laps
 
     def _ensure_cars(self, packet: Packet) -> None:
         data = packet.data
@@ -547,7 +542,12 @@ class World:
             car._lap_start_fuel = fuel
             car._lap_had_pit = lap.pit_status != 0
 
-        if prev.position and lap.position and prev.position != lap.position and lap.result_status == 2:
+        if (
+            prev.position
+            and lap.position
+            and prev.position != lap.position
+            and lap.result_status == ResultStatus.ACTIVE
+        ):
             self.changes.append(PositionChanged(car.index, prev.position, lap.position))
         if prev.result_status == ResultStatus.ACTIVE and lap.result_status in (
             ResultStatus.DNF,
@@ -571,8 +571,12 @@ class World:
                 if event.vehicle_idx is not None and event.value:
                     self.fastest_lap = (event.vehicle_idx, float(event.value))
             case "FLBK":
-                # The clock jumping back usually caught it already; don't rewind the same flashback twice.
-                if abs(self.session_time - self._rewound_at) > 1.0:
+                # The event is sent before the jump (its header has the old time) and carries the time it
+                # goes back to. Remember that, so the clock jump that follows isn't a second rewind. If the
+                # clock is already back at the target and that jump rewound us, it's the same flashback.
+                target = float(event.value) if event.value is not None else self.session_time
+                already = self.session_time < target + 0.5 and abs(target - self._rewound_at) <= 1.0
+                if not already:
                     self._rewind()
-                    self._rewound_at = self.session_time
+                self._rewound_at = target
         self.events.append(event)

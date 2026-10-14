@@ -14,6 +14,7 @@ from box_box.telemetry.packets import ResultStatus
 
 POINTS_POSITIONS = 10
 SPRINT_POINTS_POSITIONS = 8
+SLOW_STOP_MS = 4500  # stationary longer than this: a slow stop, not a "good" one
 PIT_EXIT_QUIET_S = 8.0  # after rejoining, places still settle (cars passing on cold tyres) before we commentate
 
 
@@ -52,6 +53,7 @@ class RaceDetector(Detector):
         # Keep the one-off calls (start, finish); drop pending moves and gap trends from the rewound future.
         self._pending.clear()
         self._gap_history.clear()
+        self._told_gap.clear()  # "down from 1.4" about a gap he heard in the abandoned future
         self._prev_pos = 0
 
     def check(self, ctx: Context) -> list[RadioCall]:
@@ -79,6 +81,10 @@ class RaceDetector(Detector):
         calls += self._overtakes(ctx, me)
         calls += self._fastest_lap(ctx, me)
         calls += self._finish(ctx, me)
+        if world.chequered_flag and not done and not self._last_lap_called:
+            # Lapped: the leader took the flag, so this lap is our last whatever the lap count says.
+            self._last_lap_called = True
+            calls.append(ctx.call("last_lap", Priority.STRATEGY, ctx.say("last_lap", me=ctx.me), ttl=30))
         if not done:
             calls += self._within_second(ctx, me)
         return calls
@@ -141,14 +147,21 @@ class RaceDetector(Detector):
         behind = world.car_at_position(me.lap.position + 1)
         g_ahead = world.race_gap_s(ahead, me) if ahead else None
         g_behind = world.race_gap_s(me, behind) if behind else None
+        sc = ctx.world.session is not None and ctx.world.session.safety_car_status in (1, 2)
         for car, g, side in ((ahead, g_ahead, "ahead"), (behind, g_behind, "behind")):
-            if car is not None and g is not None and g >= 0:
-                self._gap_history.setdefault((car.index, side), []).append((lap, g))
+            if car is None or g is None or g < 0:
+                continue
+            stops = (me.pit_stops, car.pit_stops)
+            hist = self._gap_history.setdefault((car.index, side), [])
+            if sc or me.in_pit_lane or car.in_pit_lane or (hist and (hist[-1][2] != stops or hist[-1][0] < lap - 1)):
+                # A stop, the safety car or a gap in the series: the old gaps say nothing about pace now.
+                hist.clear()
+            if not sc:
+                hist.append((lap, g, stops))
         return ahead, g_ahead, behind, g_behind
 
     def _gaps(self, ctx: Context, me: CarState, lap: int) -> list[RadioCall]:
         every = max(1, ctx.settings.callouts.gap_every_laps)
-        prev_hist = {k: list(v) for k, v in self._gap_history.items()}
         ahead, g_ahead, behind, g_behind = self._record_gaps(ctx, me, lap)
         # A flashback can put us before the last update's lap: count from here rather than from the
         # abandoned future (which would stall the updates) or from zero (a fresh call after every rewind).
@@ -156,17 +169,17 @@ class RaceDetector(Detector):
         if lap - self._last_gap_lap < every:
             return []
         self._last_gap_lap = lap
-        if me.in_pit_lane:
-            return []
+        if me.in_pit_lane or ctx.world.session is not None and ctx.world.session.safety_car_status in (1, 2):
+            return []  # under the safety car the gaps mean nothing, and there's no racing
 
         def rate_of(car: CarState | None, g: float | None, side: str) -> float | None:
             """Seconds per lap the gap is changing (negative: shrinking)."""
             if car is None or g is None:
                 return None
-            hist = [h for h in prev_hist.get((car.index, side), []) if h[0] < lap]
+            hist = [h for h in self._gap_history.get((car.index, side), []) if h[0] < lap]
             if not hist:
                 return None
-            then_lap, then_gap = hist[-min(every, len(hist))]
+            then_lap, then_gap, _ = hist[-min(every, len(hist))]
             return (g - then_gap) / max(1, lap - then_lap)
 
         valid_ahead = ahead is not None and g_ahead is not None and 0 <= g_ahead < 60
@@ -437,24 +450,26 @@ class RaceDetector(Detector):
         if me.lap is None or car.lap is None or me.in_pit_lane:
             return []
         world = ctx.world
+        if world.is_sprint or (world.session is not None and world.session.safety_car_status in (1, 2)):
+            return []  # half the field boxes under a safety car; in a sprint a stop is damage, not strategy
         if car.lap.position == me.lap.position - 1:
             return [
                 ctx.call(
                     f"pit:{car.index}",
                     Priority.STRATEGY,
-                    ctx.say("car_ahead_pitted", name=ctx.name(car, "The car ahead")),
+                    ctx.say("car_ahead_pitted", name=ctx.name(car, "the car ahead")),
                     ttl=15,
                     category="pit",
                 )
             ]
-        if car.lap.position == me.lap.position + 1:
+        if car.lap.position == me.lap.position + 1 and me.pit_stops == 0:  # once we've stopped it's no undercut
             g = world.race_gap_s(me, car)
             if g is not None and g < 4.0:
                 return [
                     ctx.call(
                         f"pit:{car.index}",
                         Priority.STRATEGY,
-                        ctx.say("car_behind_pitted", name=ctx.name(car, "The car")),
+                        ctx.say("car_behind_pitted", name=ctx.name(car, "the car")),
                         ttl=15,
                         category="pit",
                     )
@@ -472,7 +487,9 @@ class RaceDetector(Detector):
             return []
         secs = f"{change.stationary_ms / 1000:.1f}"
         tyre = names.compound_name(change.new_compound) if change.new_compound else "unknown tyres"
-        if tyre != "unknown tyres":
+        if change.stationary_ms > SLOW_STOP_MS:
+            text = ctx.say("pit_stop_slow", seconds=secs, pos=me.lap.position)
+        elif tyre != "unknown tyres":
             text = ctx.say("pit_stop_time", seconds=secs, pos=me.lap.position) + " " + ctx.say("new_tyres", tyre=tyre)
         else:
             text = ctx.say("pit_stop_done", seconds=secs, pos=me.lap.position)

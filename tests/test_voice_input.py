@@ -45,6 +45,17 @@ def test_stt_skips_silence_and_filters_hallucinations() -> None:
     assert stt.transcribe(speech).text == ""
 
 
+def test_stt_keeps_short_requests_that_are_also_in_the_prompt() -> None:
+    stt = SpeechToText()
+    speech = (np.sin(np.arange(SAMPLE_RATE) / 5) * 0.2).astype(np.float32)
+    for said in ("Box this lap.", "overtake mode battery"):
+        stt._model = FakeWhisper(said)
+        assert stt.transcribe(speech).text == said
+    stt._model = FakeWhisper("gap, delta, tyres, softs, mediums, hards, inters")  # a long echo of the prompt
+    assert stt.transcribe(speech).text == ""
+    assert stt.transcribe_async(np.zeros(SAMPLE_RATE, dtype=np.float32)).result(timeout=5).text == ""
+
+
 def test_learn_picks_up_a_newly_pressed_wheel_button() -> None:
     ptt = PushToTalk(lambda pressed: None)
     states = {"g1": ("MOZA R9 Base", [False, True, False, False])}  # button 1 already held: must be ignored

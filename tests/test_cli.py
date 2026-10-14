@@ -17,3 +17,22 @@ def test_taken_port_gives_help_instead_of_a_traceback(capsys, tmp_path) -> None:
         assert not out.exists()  # fails before creating an empty recording
     finally:
         squatter.close()
+
+
+def test_verbose_works_after_the_subcommand(monkeypatch) -> None:
+    from box_box import cli
+
+    seen = []
+    monkeypatch.setattr(cli, "run", lambda open_browser, verbose: seen.append(verbose) or 0)
+    for argv in (["-v", "run"], ["run", "-v"], ["run"], []):
+        main(argv)
+    assert seen == [True, True, False, False]
+
+
+def test_already_running_finds_the_fallback_port(monkeypatch) -> None:
+    from box_box import cli
+
+    monkeypatch.setattr(cli, "_answers", lambda port: port == 8779)
+    assert cli._already_running(8777) == 8779
+    monkeypatch.setattr(cli, "_answers", lambda port: False)
+    assert cli._already_running(8777) is None

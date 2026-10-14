@@ -4,8 +4,10 @@ Unlike a dashboard, the engineer needs every car on track (traffic, gaps, who's 
 per-car packets are decoded for all slots, not just the player's.
 
 Source of truth: EA's "F1 25: 2026 Season Pack UDP Specification". Layouts were cross-checked against
-MacManley/f1-26-udp and rdgonzaga/f1-game-telemetry (both MIT), and every packet size below is asserted
-against the struct definitions at import time, so a typo in a format string fails loudly.
+MacManley/f1-26-udp and rdgonzaga/f1-game-telemetry (both MIT). The per-car packets (motion, lap data,
+participants, car telemetry, car status, car damage and, in 2026, car telemetry 2) have their sizes
+asserted against the struct definitions at import time, so a typo in those format strings fails
+loudly. Every other packet is only checked against the spec's total size when it arrives.
 
 Everything is little-endian and packed. Wheel arrays are ordered RL, RR, FL, FR.
 """
@@ -138,8 +140,6 @@ LAYOUTS: dict[int, Layout] = {
         car_telemetry_2=struct.Struct("<BBHBBHBB"),  # 10
     ),
 }
-
-_TRAILERS = {PacketId.LAP_DATA: 2, PacketId.CAR_TELEMETRY: 3, PacketId.PARTICIPANTS: 0}
 
 
 def _check_layouts() -> None:
@@ -465,7 +465,8 @@ class Packet:
     header: Header
     id: PacketId
     # One of: list[CarMotion], Session, list[LapData], Event, list[Participant], list[CarTelemetry],
-    # list[CarStatus], list[CarDamage], list[CarTelemetry2], list[CarSetup], WheelSlip, TyreSets, or None for recognised-but-unparsed packets.
+    # list[CarStatus], list[CarDamage], list[CarTelemetry2], list[CarSetup], SessionHistory, WheelSlip,
+    # TyreSets, or None for recognised-but-unparsed packets.
     data: object
     num_active_cars: int | None = None
 

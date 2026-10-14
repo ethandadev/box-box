@@ -44,7 +44,7 @@ async def guard(request: web.Request, handler):  # type: ignore[no-untyped-def]
     # Any request from another site is refused, the live socket included: browsers let any page open a
     # WebSocket to localhost, and it carries the radio log and the transcripts.
     origin = request.headers.get("Origin")
-    if origin and origin.split("://", 1)[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
+    if origin is not None and origin != f"http://{request.host}":
         return web.Response(status=403, text="Cross-origin request refused.")
     if request.method == "POST" and request.content_type != "application/json":
         return web.Response(status=415, text="JSON only.")
@@ -55,6 +55,15 @@ async def guard(request: web.Request, handler):  # type: ignore[no-untyped-def]
     except Exception as e:
         log.exception("UI request %s failed", request.path)
         return _json({"ok": False, "error": str(e)}, status=500)
+
+
+async def _body(request: web.Request) -> dict[str, Any]:
+    """A POST's JSON body, or {} when it isn't an object (so handlers can call .get on it)."""
+    try:
+        body = await request.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
 
 
 def _started_at(name: str) -> float | None:
@@ -100,9 +109,12 @@ class UIServer:
         r.add_post("/api/open", self.open_folder)
         r.add_get("/api/logs", self.logs)
         self._runner: web.AppRunner | None = None
+        self._sockets: set[web.WebSocketResponse] = set()
+        self.app.on_shutdown.append(self._close_sockets)
 
     async def start(self, port: int) -> int:
-        self._runner = web.AppRunner(self.app, access_log=None)
+        # An open browser tab keeps its /ws handler running: don't wait the default minute for it on exit.
+        self._runner = web.AppRunner(self.app, access_log=None, shutdown_timeout=2.0)
         await self._runner.setup()
         for candidate in [port, *range(port + 1, port + 10)]:
             try:
@@ -117,6 +129,13 @@ class UIServer:
     async def stop(self) -> None:
         if self._runner:
             await self._runner.cleanup()
+
+    async def _close_sockets(self, app: web.Application) -> None:
+        """On shutdown, hang up on open browser tabs so their handlers end now (the page reconnects later)."""
+        await asyncio.gather(
+            *(ws.close(code=1001, message=b"Box Box is shutting down") for ws in list(self._sockets)),
+            return_exceptions=True,
+        )
 
     # ---- pages ------------------------------------------------------------------------------------
 
@@ -139,6 +158,7 @@ class UIServer:
     async def ws(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse(heartbeat=20)
         await ws.prepare(request)
+        self._sockets.add(ws)
         q = self.engine.bus.subscribe()
         try:
             await ws.send_str(json.dumps({"type": "status", "status": self.engine.status()}, default=str))
@@ -161,6 +181,7 @@ class UIServer:
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         finally:
+            self._sockets.discard(ws)
             self.engine.bus.unsubscribe(q)
         return ws
 
@@ -201,7 +222,7 @@ class UIServer:
     # ---- voice & push-to-talk ---------------------------------------------------------------------
 
     async def voice_test(self, request: web.Request) -> web.Response:
-        body = await request.json()
+        body = await _body(request)
         s = self.engine.settings
         text = (body.get("text") or "").strip()[
             :300
@@ -223,10 +244,10 @@ class UIServer:
             binding = await asyncio.to_thread(self.engine.ptt.learn, 15.0)
         finally:
             self._learning = False
-        if binding is None:
-            return _json({"ok": False, "error": "No button press detected. Is the wheel on and connected?"})
         if not self._learning_wanted:
             return _json({"ok": False, "cancelled": True, "error": "Cancelled."})
+        if binding is None:
+            return _json({"ok": False, "error": "No button press detected. Is the wheel on and connected?"})
         self.engine.store.update(
             {
                 "ptt": {
@@ -247,7 +268,7 @@ class UIServer:
         return _json({"ok": True})
 
     async def ptt_udp(self, request: web.Request) -> web.Response:
-        body = await request.json()
+        body = await _body(request)
         try:
             action = max(1, min(12, int(body.get("action", 1))))
         except (TypeError, ValueError):
@@ -262,7 +283,7 @@ class UIServer:
         return _json({"ok": True})
 
     async def ptt_ui(self, request: web.Request) -> web.Response:
-        body = await request.json()
+        body = await _body(request)
         down = bool(body.get("down"))
         if self.engine.ptt is not None:
             self.engine.ptt.ui_button(down)
@@ -271,7 +292,7 @@ class UIServer:
         return _json({"ok": True})
 
     async def ask(self, request: web.Request) -> web.Response:
-        body = await request.json()
+        body = await _body(request)
         text = str(body.get("text", "")).strip()[:500]
         if not text:
             return _json({"ok": False, "error": "Say something first."}, 400)
@@ -280,7 +301,7 @@ class UIServer:
 
     async def mute(self, request: web.Request) -> web.Response:
         """The dashboard's radio silence button: straight to the director, not via the conversation."""
-        body = await request.json()
+        body = await _body(request)
         try:
             minutes = max(0.0, min(120.0, float(body.get("minutes", 5))))
         except (TypeError, ValueError):
@@ -308,7 +329,7 @@ class UIServer:
         return _json({"lines": lines})
 
     async def fix(self, request: web.Request) -> web.Response:
-        body = await request.json()
+        body = await _body(request)
         action = body.get("action")
         e = self.engine
         s = e.settings
@@ -433,7 +454,7 @@ class UIServer:
         )
 
     async def replay(self, request: web.Request) -> web.Response:
-        body = await request.json()
+        body = await _body(request)
         name = str(body.get("name", ""))
         folder = self.engine.settings.recordings_dir()
         path = (folder / name).resolve()
@@ -451,7 +472,7 @@ class UIServer:
         return _json({"ok": True})
 
     async def open_folder(self, request: web.Request) -> web.Response:
-        body = await request.json()
+        body = await _body(request)
         which = body.get("which")
         folder = {
             "recordings": self.engine.settings.recordings_dir(),

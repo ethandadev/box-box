@@ -134,6 +134,9 @@ class Memory:
         )
         return sid if isinstance(sid, int) else None
 
+    def rename_session(self, session_id: int, session_type: str) -> None:
+        self._exec("UPDATE sessions SET session_type = ? WHERE id = ?", (session_type, session_id))
+
     def end_session(self, session_id: int, best_lap_ms: int | None, position: int | None) -> None:
         self._exec(
             "UPDATE sessions SET ended_at = ?, best_lap_ms = ?, position = ?, "

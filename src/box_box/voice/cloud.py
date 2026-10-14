@@ -150,6 +150,10 @@ class GeminiVoice(CloudEngine):
     URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     MODELS = ["gemini-2.5-flash-tts", "gemini-2.5-flash-preview-tts"]  # newest first; the first that answers wins
 
+    def __init__(self, settings: Callable[[], Settings]) -> None:
+        super().__init__(settings)
+        self.MODELS = list(self.MODELS)  # our own copy: reordering it mustn't touch other instances
+
     def key(self) -> str:
         s = self._settings()
         return (

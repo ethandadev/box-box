@@ -186,11 +186,18 @@ def bias(world: World, me: CarState, rng: random.Random, symptom: str | None = N
     if symptom in ("rear_lock", "unstable_entry"):
         corner = corner or worst_corner(rears)
         new = min(BIAS_MAX, now + (2 if symptom == "rear_lock" else 1))
-        why = (
-            f"[Rears are locking into {corner}|That'll settle the rear into {corner}|Should calm the rear into {corner}]"
-            if corner
-            else "[Should settle the rear on entry|That'll calm the rear under braking]"
-        )
+        if symptom == "rear_lock":
+            why = (
+                f"[Rears are locking into {corner}|That'll settle the rear into {corner}|Should calm the rear into {corner}]"
+                if corner
+                else "[Should settle the rear on entry|That'll calm the rear under braking]"
+            )
+        else:  # he said it's loose on entry, not that it's locking
+            why = (
+                f"[That'll settle the rear into {corner}|Should calm the rear into {corner}]"
+                if corner
+                else "[Should settle the rear on entry|That'll calm the rear under braking]"
+            )
         if new <= now:
             return expand(
                 f"Bias is already forward at {now}. [Smooth on the release|Ease off the brake as you turn in].", rng
@@ -267,6 +274,13 @@ def ers(world: World, me: CarState, rng: random.Random) -> str:
     return expand(f"[You're in {said}|It's {said}], battery's {pct}. [That's fine|Happy with that].", rng)
 
 
+def _laps_of_fuel(laps: float) -> str:
+    n = round(laps)
+    if n < 1:
+        return "under a lap"
+    return "about a lap" if n == 1 else f"about {n} laps"
+
+
 def fuel(world: World, me: CarState, rng: random.Random) -> str:
     s = me.status
     if s is None:
@@ -274,7 +288,7 @@ def fuel(world: World, me: CarState, rng: random.Random) -> str:
     mix = MIX.get(s.fuel_mix, "standard")
     if not world.is_race:
         return expand(
-            f"{s.fuel_in_tank:.1f} kilos, about {s.fuel_remaining_laps:.0f} laps. [{mix.capitalize()} map's fine|Map's fine].",
+            f"{s.fuel_in_tank:.1f} kilos, {_laps_of_fuel(s.fuel_remaining_laps)}. [{mix.capitalize()} map's fine|Map's fine].",
             rng,
         )
     m = s.fuel_remaining_laps
@@ -353,10 +367,10 @@ def answer(text: str, world: World, rng: random.Random) -> str | None:
         return bias(world, me, rng, "unstable_entry", corner)
     if ENTRY_UNDERSTEER.search(t):
         return bias(world, me, rng, "entry_understeer", corner)
+    if EXIT_UNDERSTEER.search(t):  # first: "understeer on the power" isn't wheelspin
+        return diff(world, me, rng, "exit_understeer", corner)
     if WHEELSPIN.search(t):
         return diff(world, me, rng, "wheelspin", corner)
-    if EXIT_UNDERSTEER.search(t):
-        return diff(world, me, rng, "exit_understeer", corner)
     if DIFF_WORDS.search(t):
         return diff(world, me, rng, None, corner)
     if BIAS_WORDS.search(t):

@@ -123,6 +123,7 @@ class Engine:
         self._replay_task: asyncio.Task | None = None
         self._speak_task: asyncio.Task | None = None
         self._session_db_id: int | None = None
+        self._session_db_named = ""  # what the memory DB calls it: a sprint reads "Race" until the weekend arrives
         self._ended_sessions: set[int] = set()
         self._tts_wanted: str | None = None
         self._ptt_pressed_at = 0.0
@@ -262,13 +263,27 @@ class Engine:
                 self.brain.history.clear()
                 s = world.session
                 if s is not None:
-                    self._session_db_id = self.memory.start_session(
-                        world.session_uid, names.track_name(s.track_id), world.session_name
+                    # A replayed or shared recording isn't the driver's history: keep it out of memory.
+                    self._session_db_id = (
+                        None
+                        if self.replaying
+                        else self.memory.start_session(
+                            world.session_uid, names.track_name(s.track_id), world.session_name
+                        )
                     )
+                    self._session_db_named = world.session_name
                     self._update_vocab()
                     self.bus.publish("session", track=names.track_name(s.track_id), session=world.session_name)
-            elif isinstance(change, LapCompleted) and change.car_index == world.player_index and self._session_db_id:
+            elif (
+                isinstance(change, LapCompleted)
+                and change.car_index == world.player_index
+                and self._session_db_id
+                and not self.replaying
+            ):
                 self.memory.record_lap(self._session_db_id, change.record)
+        if self._session_db_id and world.weekend and world.session_name != self._session_db_named:
+            self._session_db_named = world.session_name  # the weekend's known now: "Race" was the sprint
+            self.memory.rename_session(self._session_db_id, world.session_name)
         if any(e.code == "SEND" for e in events) and world.session_uid not in self._ended_sessions:
             self._ended_sessions.add(world.session_uid)
             self._end_session()
@@ -284,7 +299,7 @@ class Engine:
 
     def _end_session(self) -> None:
         me = self.world.player
-        if self._session_db_id and me and me.lap:
+        if self._session_db_id and me and me.lap and not self.replaying:
             self.memory.end_session(self._session_db_id, me.session_best_ms, me.lap.position)
         if self.settings.telemetry.auto_record and not self.replaying:
             self.recorder.close(ended=True)
@@ -349,7 +364,8 @@ class Engine:
                     self.speaker.speaking = decision.call
                     if decision.call.key.startswith("ask:"):
                         self.conversation.expect_feedback(decision.call.key.split(":", 1)[1])
-                    self.memory.log_radio(self._session_db_id, "engineer", decision.call.text)
+                    if not self.replaying:
+                        self.memory.log_radio(self._session_db_id, "engineer", decision.call.text)
                     self._speak_task = asyncio.create_task(self.speaker.say(decision.call))
             except Exception:
                 log.exception("radio loop error")
@@ -472,7 +488,7 @@ class Engine:
     async def respond(self, text: str, reply_id: int | None = None) -> None:
         """Answer the driver (spoken via push-to-talk, or typed in the UI)."""
         reply_id = reply_id or next(_reply_ids)
-        if text.strip():
+        if text.strip() and not self.replaying:
             self.memory.log_radio(self._session_db_id, "driver", text)
         index = 0
         try:
@@ -651,6 +667,7 @@ class Engine:
                     self._choose_voice("kokoro")
                 if self.player.error and "disconnected" in self.player.error:
                     self.player.open(self.settings.voice.output_device)
+                self.mic.reopen_if_lost(self.settings.mic.input_device)  # a headset plugged back in
                 self._ptt_watchdog()
             except Exception:
                 log.exception("housekeeping failed")
@@ -725,6 +742,7 @@ class Engine:
             }
         p = self.settings.ptt
         binding = Binding(p.kind, p.device_name, p.device_guid, p.button, p.key, p.udp_action)
+        pending = self.director.pending()
         return {
             "telemetry": {
                 "connected": self.stats.connected,
@@ -781,7 +799,8 @@ class Engine:
                 "latency": round(self.brain.last_latency, 2) if self.brain.last_latency else None,
             },
             "radio": {
-                "pending": [c.text for c in self.director.pending()][:5],
+                "pending": [c.text for c in pending][:5],
+                "pending_count": len(pending),
                 "why_quiet": self.director.why_quiet(self.world),
                 "muted_for": max(0, round(self.director.muted_until - time.monotonic())),
                 "verbosity": self.settings.engineer.verbosity,

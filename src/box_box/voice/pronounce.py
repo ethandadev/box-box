@@ -142,7 +142,11 @@ JARGON: dict[str, str] = {
 _NAMES = sorted(LEXICON, key=len, reverse=True)  # longest first: "Eau Rouge" before "Rouge"
 _WORDS = sorted(JARGON, key=len, reverse=True)
 _PATTERN = re.compile(
-    r"\b(" + "|".join(re.escape(n) for n in _NAMES) + "|(?i:" + "|".join(re.escape(w) for w in _WORDS) + r"))('s)?\b"
+    r"\b("
+    + "|".join(re.escape(n) for n in _NAMES)
+    + "|(?i:"
+    + "|".join(re.escape(w) for w in _WORDS)
+    + r"))(['\u2019]s)?\b"
 )
 
 
@@ -159,7 +163,7 @@ def to_phonemes(text: str, phonemize: Callable[[str], str]) -> str:
         if before.strip():
             out.append(phonemize(before).strip())
         ipa = _ipa(m.group(1))
-        if m.group(2):  # possessive: Leclerc's
+        if m.group(2):  # possessive: Leclerc's (or Leclerc’s, with a curly apostrophe)
             ipa += "z"
         out.append(ipa)
         pos = m.end()

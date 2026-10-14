@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections import deque
 
 import numpy as np
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 SAMPLE_RATE = 16_000
 PRE_ROLL_S = 0.35
 MAX_UTTERANCE_S = 30.0
+REOPEN_EVERY_S = 3.0
 
 
 class Microphone:
@@ -28,6 +30,8 @@ class Microphone:
         self.level = 0.0  # RMS of the latest block, for the UI meter
         self.error: str | None = None
         self.device_name = ""
+        self._lost = False  # stopped on its own: housekeeping keeps trying to get it back
+        self._last_reopen = 0.0
 
     @property
     def ok(self) -> bool:
@@ -70,10 +74,27 @@ class Microphone:
             except Exception:  # noqa: BLE001
                 pass
 
+    def reopen_if_lost(self, device_name: str | None = None) -> bool:
+        """Housekeeping: if the mic dropped out (unplugged, driver reset), try opening it again.
+
+        Retries at most every REOPEN_EVERY_S until it comes back. Returns True if the mic is working."""
+        if not self._lost:
+            return self.ok
+        now = time.monotonic()
+        if now - self._last_reopen < REOPEN_EVERY_S:
+            return False
+        self._last_reopen = now
+        self.open(self.device_name if device_name is None else device_name)
+        if self.ok:
+            self._lost = False
+            log.info("microphone back")
+        return self.ok
+
     def _finished(self) -> None:
         # The stream stopped on its own: the mic was unplugged or the driver reset.
         if self._stream is not None:
             self.error = "microphone stopped (unplugged?)"
+            self._lost = True
             log.warning(self.error)
 
     def _callback(self, indata, frames, time_info, status) -> None:  # type: ignore[no-untyped-def]

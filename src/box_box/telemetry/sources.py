@@ -19,7 +19,8 @@ class _Queueing(asyncio.DatagramProtocol):
         self.queue = queue
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
-        # If we're behind, dropping beats lagging: drop the oldest frame (the new one supersedes it).
+        # If we're behind, dropping beats lagging: drop the oldest datagram. It can be any packet type
+        # (an event, a session update), not just a frame the newer one replaces.
         if self.queue.full():
             with contextlib.suppress(asyncio.QueueEmpty):
                 self.queue.get_nowait()

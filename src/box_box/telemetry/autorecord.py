@@ -34,6 +34,7 @@ class AutoRecorder:
         self._uid: int | None = None
         self._closed_uid: int | None = None  # a session that ended (chequered flag/results): don't reopen it
         self._label: str | None = None
+        self._weekend_seen = False  # the label was made with the weekend structure known
         self._started_ns = 0
         self._last_packet = 0.0
         self._last_flush = 0.0
@@ -67,9 +68,14 @@ class AutoRecorder:
             self._open(session_uid)
         if self._writer is None:
             return
-        if self._label is None and track_id is not None and session_type is not None:
+        # The first Session packet of a session can arrive before the game fills in the weekend
+        # structure, and without it a sprint reads as "Race". Keep relabelling until it shows up.
+        if (self._label is None or not self._weekend_seen) and track_id is not None and session_type is not None:
             self._label = f"{names.track_name(track_id)} {names.session_name(session_type, weekend)}"
+            self._weekend_seen = bool(weekend)
         try:
+            # Timestamps are taken when we process the packet, not when it arrived, so a backlog in
+            # the queue is squashed together on replay.
             self._writer.write(time.monotonic_ns() - self._started_ns, data)
             if now - self._last_flush > 2.0:
                 self._writer.flush()
@@ -93,7 +99,7 @@ class AutoRecorder:
             self.folder.mkdir(parents=True, exist_ok=True)
             self._path = self.folder / f"{datetime.now():%Y-%m-%d %H%M%S} recording.f1raw.gz"
             self._writer = RawWriter(self._path)
-            self._uid, self._label = uid, None
+            self._uid, self._label, self._weekend_seen = uid, None, False
             self._started_ns = time.monotonic_ns()
             self.error = None
             log.info("recording session to %s", self._path)
@@ -152,7 +158,10 @@ def _mtime(p: Path) -> float:
 
 def list_recordings(folder: Path) -> list[dict]:
     out = []
-    for p in sorted(folder.glob("*.f1raw*"), key=lambda p: p.stat().st_mtime, reverse=True):
-        st = p.stat()
+    for p in sorted(folder.glob("*.f1raw*"), key=_mtime, reverse=True):
+        try:
+            st = p.stat()
+        except OSError:  # pruned while we were listing
+            continue
         out.append({"name": p.name, "size_mb": round(st.st_size / 1e6, 1), "modified": st.st_mtime})
     return out

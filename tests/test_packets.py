@@ -56,7 +56,24 @@ def test_quantised_g_forces_are_scaled() -> None:
 
 def test_flashback_bumps_timeline() -> None:
     _, world, _ = replay("race-2026-spa-wet-flashback.f1raw")
-    assert world.timeline >= 3  # new session + two flashbacks
+    assert world.timeline == 3  # new session + two flashbacks
+
+
+def test_one_flashback_rewinds_once() -> None:
+    """The FLBK event arrives with the old session time, then the clock jumps back: that's one rewind."""
+    decoder, world = Decoder(), World()
+    bumps: list[int] = []  # timeline bumps between one flashback event and the next
+    for _, data in read_records(FIXTURES / "race-2026-spa-wet-flashback.f1raw"):
+        packet = decoder.decode(data)
+        if packet is None:
+            continue
+        before = world.timeline
+        world.apply(packet)
+        if packet.id == PacketId.EVENT and packet.data.code == "FLBK":
+            bumps.append(0)
+        if bumps:
+            bumps[-1] += world.timeline - before
+    assert bumps == [1, 1]
 
 
 def test_time_trial_player_on_push_lap() -> None:
